@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -23,6 +25,7 @@ import (
 
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/pkg/broker"
+	"github.com/kiflet/backend/pkg/console"
 )
 
 // rabbitImage is the version deployments/ runs.
@@ -71,6 +74,9 @@ func withRabbitMQ(url string) func(*setup) {
 		s.cfg.RabbitMQURL = url
 		s.cfg.WorkerTracking = "queue"
 		s.cfg.WorkerLive = "queue"
+		s.cfg.WorkerSMS = "queue"
+		s.cfg.WorkerMail = "queue"
+		s.cfg.WorkerWebhooks = "queue"
 	}
 }
 
@@ -87,13 +93,17 @@ func eventually(t *testing.T, what string, ok func() bool) {
 }
 
 func TestRabbitMQ(t *testing.T) {
-	url := rabbitURL(t)
-	first, second := newEnv(t, withRabbitMQ(url)), newEnv(t, withRabbitMQ(url))
+	amqpURL := rabbitURL(t)
+	first, second := newEnv(t, withRabbitMQ(amqpURL), privateWebhooks), newEnv(t, withRabbitMQ(amqpURL), privateWebhooks)
+	// Either instance's worker may send a text, as with one real provider:
+	// each reads both stand-ins' outboxes.
+	both := func(string) []console.Item { return append(first.inbox.Items(), second.inbox.Items()...) }
+	first.texts, second.texts = both, both
 	office := first.company("Rabbit Freight")
 	other := first.company("Other Rabbit Freight")
 
 	// Something listening to kiflet.events, as the consumers to come will.
-	conn, err := amqp.Dial(url)
+	conn, err := amqp.Dial(amqpURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,6 +142,46 @@ func TestRabbitMQ(t *testing.T) {
 			t.Errorf("another company's dashboard was sent %q", m)
 		case <-time.After(300 * time.Millisecond):
 		}
+	})
+
+	// The company was signed up with a code texted through notify.sms.
+	if n := scalar[int64](t, `SELECT count(*) FROM sms_messages WHERE purpose = 'otp' AND status = 'sent' AND phone = $1`, office.phone); n == 0 {
+		t.Error("the sign-up code wasn't sent")
+	}
+
+	t.Run("webhooks through webhook.deliver, retried by the sweeper", func(t *testing.T) {
+		rc := newReceiver(t)
+		p := office.mustPost("/app/settings/webhooks", url.Values{"url": {rc.srv.URL}, "events": {service.WebhookShipmentCreated}})
+		office.mustPost(p.Location+"/test", nil)
+		rc.next(service.WebhookTest)
+
+		rc.answer.Store(http.StatusServiceUnavailable)
+		id, _ := office.on(second).book("Addis Ababa", "Adama", "")
+		if h := rc.next(service.WebhookShipmentCreated); h.payload.Data.Shipment.ID != id {
+			t.Fatalf("created: %s", h.Body)
+		}
+		eventually(t, "the failed message waiting for its retry", func() bool {
+			return scalar[int64](t, `SELECT count(*) FROM webhook_deliveries WHERE shipment_id = $1 AND status = 'queued' AND attempts = 1`, id) == 1
+		})
+		// Its retry is due now rather than in a minute: the sweeper hands it
+		// to RabbitMQ.
+		rc.answer.Store(http.StatusOK)
+		exec(t, `UPDATE webhook_deliveries SET next_attempt_at = NOW() WHERE shipment_id = $1`, id)
+		if h := rc.next(service.WebhookShipmentCreated); h.payload.Data.Shipment.ID != id {
+			t.Fatalf("retried: %s", h.Body)
+		}
+		eventually(t, "the message delivered", func() bool {
+			return scalar[int64](t, `SELECT count(*) FROM webhook_deliveries WHERE shipment_id = $1 AND status = 'delivered' AND attempts = 2`, id) == 1
+		})
+	})
+
+	t.Run("a text whose message was lost", func(t *testing.T) {
+		// As if RabbitMQ had lost the message: queued, and nothing published.
+		smsID := scalar[string](t, `SELECT id::text FROM sms_messages WHERE phone = $1 AND status = 'sent' ORDER BY created_at DESC LIMIT 1`, office.phone)
+		exec(t, `UPDATE sms_messages SET status = 'queued', attempts = 0, next_attempt_at = NOW(), sent_at = NULL WHERE id = $1`, smsID)
+		eventually(t, "the sweeper's text sent", func() bool {
+			return scalar[int64](t, `SELECT count(*) FROM sms_messages WHERE id = $1 AND status = 'sent'`, smsID) == 1
+		})
 	})
 
 	driverID, phone, pin := office.addDriver("Rabbit Driver")

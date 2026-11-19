@@ -23,7 +23,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,6 +173,11 @@ func newEnv(t *testing.T, options ...func(*setup)) *env {
 		SupportPhone: "+251 11 000 0000", SupportTelegram: "kiflet_support",
 	}
 	s := &setup{base: base, cfg: cfg}
+	// TEST_RABBITMQ=1 runs every test with its work on RabbitMQ, as
+	// production runs.
+	if os.Getenv("TEST_RABBITMQ") != "" {
+		options = append([]func(*setup){withRabbitMQ(rabbitURL(t))}, options...)
+	}
 	for _, o := range options {
 		o(s)
 	}
@@ -184,6 +191,13 @@ func newEnv(t *testing.T, options ...func(*setup)) *env {
 		t.Fatal(err)
 	}
 	e := &env{t: t, srv: ts, app: a, svc: a.Services, inbox: inbox, texts: s.texts, seen: map[string]time.Time{}, files: cfg.StoragePath}
+	if os.Getenv("TEST_RABBITMQ") != "" && e.texts == nil {
+		// Any running app's worker may take a text from the shared queue,
+		// as with one real provider: every running app's outbox is read.
+		inboxes.add(inbox)
+		t.Cleanup(func() { inboxes.remove(inbox) })
+		e.texts = func(string) []console.Item { return inboxes.items() }
+	}
 	// Cleanups run last first: the server stops, then the workers finish
 	// what they hold, before the next test starts.
 	e.work()
@@ -438,7 +452,48 @@ func (d *driverApp) sync(req service.SyncRequest) (service.SyncResponse, int) {
 	req.DeviceID = d.device
 	var resp service.SyncResponse
 	code := d.e.api("POST", "/api/v1/driver/sync", d.token, req, &resp)
+	if os.Getenv("TEST_RABBITMQ") != "" && resp.LocationsStored > 0 {
+		// Through RabbitMQ the positions are written a moment later: the
+		// test goes on once they are, as it would without.
+		ids := make([]string, 0, len(req.Locations))
+		for _, l := range req.Locations {
+			ids = append(ids, l.ClientID)
+		}
+		eventually(d.e.t, "the positions written by the tracking worker", func() bool {
+			return scalar[int64](d.e.t, `SELECT count(DISTINCT client_id) FROM tracking_events WHERE client_id = ANY($1)`, ids) >= int64(resp.LocationsStored)
+		})
+	}
 	return resp, code
+}
+
+// inboxes are the outboxes of the apps running, for TEST_RABBITMQ.
+var inboxes = &inboxSet{}
+
+type inboxSet struct {
+	mu  sync.Mutex
+	all []*console.Console
+}
+
+func (s *inboxSet) add(c *console.Console) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.all = append(s.all, c)
+}
+
+func (s *inboxSet) remove(c *console.Console) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.all = slices.DeleteFunc(s.all, func(x *console.Console) bool { return x == c })
+}
+
+func (s *inboxSet) items() []console.Item {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []console.Item
+	for _, c := range s.all {
+		out = append(out, c.Items()...)
+	}
+	return out
 }
 
 // status reports one status change made now and returns the server's

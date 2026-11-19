@@ -24,6 +24,16 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Texts, email and webhooks through RabbitMQ** (`docs/deploy.md`,
+  "RabbitMQ"). With `RABBITMQ_URL`, the workers take them from
+  `notify.sms`, `notify.email` and `webhook.deliver`. Each is still written
+  to its table, which stays the record with its lease and retry schedule;
+  a message names the rows due and a worker claims them by ID, and each
+  worker's sweeper publishes what is due whenever its queue is empty.
+  A worker told to stop finishes what it has in hand and hands the rest
+  back. `WORKER_SMS`, `WORKER_MAIL` and `WORKER_WEBHOOKS` switch each back.
+  CI runs the integration tests a second time with every worker on
+  RabbitMQ.
 - **Separate processes** (`docs/deploy.md`, "Separate processes").
   `kiflet serve --roles=web,worker,scheduler,relay` (or `ROLES`) runs only
   some of Kiflet; all of it by default. Production's compose file has a

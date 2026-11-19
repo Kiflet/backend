@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 	"net/http"
 	"os"
@@ -132,10 +133,18 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 	if cfg.WorkerTracking == "queue" {
 		positions = brokerPositions{a.broker}
 	}
+	senders := map[string]bool{
+		service.WorkSMS: cfg.WorkerSMS == "queue", service.WorkMail: cfg.WorkerMail == "queue",
+		service.WorkWebhooks: cfg.WorkerWebhooks == "queue",
+	}
+	var work service.WorkQueue
+	if senders[service.WorkSMS] || senders[service.WorkMail] || senders[service.WorkWebhooks] {
+		work = brokerWork{b: a.broker, kinds: senders}
+	}
 	svc := service.New(service.Deps{
 		Pool: pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
-		RemoteWorkers: !roles.Has("worker"),
-		Storage:       store, SMS: smsSender{provider}, Mail: mailSender{mailer},
+		RemoteWorkers: !roles.Has("worker"), Work: work,
+		Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},
 		Payments: providers,
 		Settings: service.Settings{
 			AppName: cfg.AppName, BaseURL: cfg.PublicURL, Location: cfg.Timezone,
@@ -165,6 +174,17 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 			a.workers = append(a.workers, func(ctx context.Context) {
 				a.broker.Consume(ctx, "tracking.ingest", trackingPrefetch, storePositions(svc.Tracking))
 			})
+		}
+		deliver := map[string]func(context.Context, []pgtype.UUID) error{
+			service.WorkSMS: svc.SMS.DeliverQueued, service.WorkMail: svc.Mail.DeliverQueued,
+			service.WorkWebhooks: svc.Webhooks.DeliverQueued,
+		}
+		for kind, on := range senders {
+			if on {
+				a.workers = append(a.workers, func(ctx context.Context) {
+					a.broker.Consume(ctx, senderQueues[kind], senderPrefetch, deliverWork(deliver[kind]))
+				})
+			}
 		}
 	}
 	if roles.Has("scheduler") && !opts.NoJobs {

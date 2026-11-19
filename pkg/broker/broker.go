@@ -95,6 +95,20 @@ var Topology = []Queue{
 		Name: "tracking.ingest", Bindings: []Binding{{Commands, "tracking.positions"}},
 		RetryAfter: 10 * time.Second, MaxAttempts: 5,
 	},
+	// The senders. A message names rows in Postgres, which keep their own
+	// retry schedule: these retries are for the database being away.
+	{
+		Name: "notify.sms", Bindings: []Binding{{Commands, "notify.sms"}},
+		RetryAfter: 30 * time.Second, MaxAttempts: 5,
+	},
+	{
+		Name: "notify.email", Bindings: []Binding{{Commands, "notify.email"}},
+		RetryAfter: 30 * time.Second, MaxAttempts: 5,
+	},
+	{
+		Name: "webhook.deliver", Bindings: []Binding{{Commands, "webhook.deliver"}},
+		RetryAfter: 30 * time.Second, MaxAttempts: 5,
+	},
 }
 
 // Broker is a connection to RabbitMQ that comes back by itself when it is
@@ -376,6 +390,12 @@ func (b *Broker) handle(ctx context.Context, ch *amqp.Channel, q Queue, batch []
 		return
 	}
 	err := handler(ctx, items)
+	if err != nil && ctx.Err() != nil {
+		// Stopping: left unacknowledged, the messages go back to the queue
+		// as the connection closes, for another consumer at once. What the
+		// handler finished is done, and handlers ignore repeats.
+		return
+	}
 	for i, d := range good {
 		switch {
 		case err == nil:
@@ -436,6 +456,27 @@ func attempts(d amqp.Delivery) int {
 		}
 	}
 	return n
+}
+
+// Waiting is how many messages wait in a queue, not yet handed to a
+// consumer.
+func (b *Broker) Waiting(ctx context.Context, queue string) (int, error) {
+	if _, err := b.channel(); err != nil {
+		return 0, err
+	}
+	b.mu.Lock()
+	conn := b.conn
+	b.mu.Unlock()
+	ch, err := conn.Channel()
+	if err != nil {
+		return 0, err
+	}
+	defer ch.Close() //nolint:errcheck // closing
+	q, err := ch.QueueDeclarePassive(queue, true, false, false, false, nil)
+	if err != nil {
+		return 0, err
+	}
+	return q.Messages, ctx.Err()
 }
 
 // Ready says whether the publishing connection is open, for /readyz.

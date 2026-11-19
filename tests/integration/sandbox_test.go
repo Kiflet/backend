@@ -763,7 +763,10 @@ func TestProvidersWithOtherSettings(t *testing.T) {
 	}
 
 	// The gateway turns the app's key away: the sign-up code waits to be
-	// tried again.
+	// tried again. The first app stops first: with its texts on RabbitMQ
+	// (TEST_RABBITMQ), it could take the code from the shared queue and
+	// send it with its own, right key.
+	e.stop()
 	e2, _ := sandboxed(t, func(c *sandbox.Config) { c.SMS.APIKey = "another-api-key" })
 	b := e2.browser()
 	phone := phoneNumber()

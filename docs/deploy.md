@@ -242,6 +242,14 @@ runs beside the app with the `rabbitmq` profile. With it:
 - Every event in a shipment's history is written to `event_outbox` with
   the change, and published to the `kiflet.events` exchange once it
   commits, for the consumers to come.
+- Texts, email and webhooks reach the workers through `notify.sms`,
+  `notify.email` and `webhook.deliver`. Each is still written to its
+  table first, which keeps its record, its lease and its retry schedule:
+  a message names the rows to send, and a worker claims them by ID, so a
+  message seen twice sends nothing twice. Each worker's sweeper publishes
+  what is due whenever a queue is empty: retries whose time has come, and
+  anything whose message was lost. A worker holds at most five messages of
+  twenty rows, which caps how hard the workers press on the SMS gateway.
 
 To turn it on, in `.env`:
 
@@ -251,7 +259,8 @@ To turn it on, in `.env`:
 3. `docker compose … up -d --wait`.
 
 Each part can be switched back to the old way on its own, with
-`WORKER_TRACKING=inprocess` or `WORKER_LIVE=inprocess`. Without
+`WORKER_TRACKING`, `WORKER_LIVE`, `WORKER_SMS`, `WORKER_MAIL` or
+`WORKER_WEBHOOKS` set to `inprocess`. Without
 `RABBITMQ_URL` the app works as it did, and if RabbitMQ can't take a
 phone's fixes, the app writes them itself, so a phone never waits on it.
 

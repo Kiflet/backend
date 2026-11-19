@@ -88,6 +88,12 @@ type Config struct {
 	// (docs/migration.md, phase 2).
 	WorkerTracking string
 	WorkerLive     string
+	// WorkerSMS, WorkerMail and WorkerWebhooks, the same for texts, email
+	// and webhooks: through RabbitMQ's notify.sms, notify.email and
+	// webhook.deliver, or each worker drawing from Postgres.
+	WorkerSMS      string
+	WorkerMail     string
+	WorkerWebhooks string
 
 	SMSProvider          string
 	SMSNumber            string
@@ -311,7 +317,10 @@ func Load() (*Config, error) {
 	for _, w := range []struct {
 		name string
 		v    *string
-	}{{"WORKER_TRACKING", &c.WorkerTracking}, {"WORKER_LIVE", &c.WorkerLive}} {
+	}{
+		{"WORKER_TRACKING", &c.WorkerTracking}, {"WORKER_LIVE", &c.WorkerLive},
+		{"WORKER_SMS", &c.WorkerSMS}, {"WORKER_MAIL", &c.WorkerMail}, {"WORKER_WEBHOOKS", &c.WorkerWebhooks},
+	} {
 		*w.v = getEnv(w.name, "")
 		switch {
 		case *w.v == "" && c.RabbitMQURL != "":

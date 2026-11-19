@@ -44,6 +44,8 @@ type Querier interface {
 	// A person who has left: what identifies them goes, their history stays
 	// (AC-041.6).
 	AnonymiseUser(ctx context.Context, arg AnonymiseUserParams) (pgtype.UUID, error)
+	// As ClaimSMSByIDs (notify.email).
+	ClaimEmailsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Email, error)
 	// The next events to publish, oldest first. Run in a transaction that
 	// marks them sent or failed before it commits; SKIP LOCKED lets a second
 	// relay take others instead of waiting.
@@ -62,6 +64,12 @@ type Querier interface {
 	// The five-minute lease of ClaimQueuedEmails. A paused endpoint's messages
 	// wait for it.
 	ClaimQueuedWebhooks(ctx context.Context, limit int32) ([]WebhookDelivery, error)
+	// ClaimQueuedSMS for the messages RabbitMQ named (notify.sms): those still
+	// queued and due. One sent already, held by another worker or waiting for
+	// a retry is left alone.
+	ClaimSMSByIDs(ctx context.Context, ids []pgtype.UUID) ([]SmsMessage, error)
+	// As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
+	ClaimWebhooksByIDs(ctx context.Context, ids []pgtype.UUID) ([]WebhookDelivery, error)
 	ClearVehicleFromDrivers(ctx context.Context, arg ClearVehicleFromDriversParams) error
 	ConsumeVerificationCode(ctx context.Context, id pgtype.UUID) (int64, error)
 	CountActiveAPIKeys(ctx context.Context, tenantID pgtype.UUID) (int64, error)
@@ -165,13 +173,19 @@ type Querier interface {
 	// Retention: drops each day's partition that ends before the cut-off, and
 	// deletes older rows from the default partition. Returns how many days.
 	DropOldTrackingPartitions(ctx context.Context, before pgtype.Timestamptz) (int32, error)
+	DueEmailIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error)
+	// Messages due to be sent, for the sweeper to hand to RabbitMQ: retries
+	// whose time has come, and any whose message was lost.
+	DueSMSIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error)
+	// Not a paused endpoint's: they would go round until it is resumed.
+	DueWebhookIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error)
 	EnqueueEmail(ctx context.Context, arg EnqueueEmailParams) (Email, error)
 	EnqueueSMS(ctx context.Context, arg EnqueueSMSParams) (SmsMessage, error)
 	// A message to one endpoint, whatever it asked for: a test.
 	EnqueueWebhookTo(ctx context.Context, arg EnqueueWebhookToParams) (WebhookDelivery, error)
 	// One message to each of the company's endpoints that asked for this
 	// event. A paused endpoint's wait for it to be resumed.
-	EnqueueWebhooks(ctx context.Context, arg EnqueueWebhooksParams) (int64, error)
+	EnqueueWebhooks(ctx context.Context, arg EnqueueWebhooksParams) ([]pgtype.UUID, error)
 	// Once a reset link is used, the others sent to that person stop working.
 	ExpireEmailTokens(ctx context.Context, arg ExpireEmailTokensParams) error
 	// A prompt nobody answered. A late approval is still honoured.

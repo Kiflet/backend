@@ -11,6 +11,53 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimEmailsByIDs = `-- name: ClaimEmailsByIDs :many
+UPDATE emails
+SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
+WHERE id IN (
+    SELECT id FROM emails
+    WHERE id = ANY($1::uuid[]) AND status = 'queued' AND next_attempt_at <= NOW()
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING id, tenant_id, to_address, subject, body, purpose, sensitive, status, attempts, last_error, provider, next_attempt_at, sent_at, created_at
+`
+
+// As ClaimSMSByIDs (notify.email).
+func (q *Queries) ClaimEmailsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Email, error) {
+	rows, err := q.db.Query(ctx, claimEmailsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Email{}
+	for rows.Next() {
+		var i Email
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.ToAddress,
+			&i.Subject,
+			&i.Body,
+			&i.Purpose,
+			&i.Sensitive,
+			&i.Status,
+			&i.Attempts,
+			&i.LastError,
+			&i.Provider,
+			&i.NextAttemptAt,
+			&i.SentAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const claimQueuedEmails = `-- name: ClaimQueuedEmails :many
 UPDATE emails
 SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
@@ -67,6 +114,33 @@ DELETE FROM emails WHERE created_at < $1
 func (q *Queries) DeleteOldEmails(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldEmails, createdAt)
 	return err
+}
+
+const dueEmailIDs = `-- name: DueEmailIDs :many
+SELECT id FROM emails
+WHERE status = 'queued' AND next_attempt_at <= NOW()
+ORDER BY next_attempt_at
+LIMIT $1
+`
+
+func (q *Queries) DueEmailIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, dueEmailIDs, maxMessages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const enqueueEmail = `-- name: EnqueueEmail :one
