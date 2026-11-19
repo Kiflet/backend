@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kiflet/backend/internal/config"
 	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/platform/config"
+	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/internal/service"
-	"github.com/kiflet/backend/internal/text"
 )
 
 func testServer(t *testing.T) *Server {

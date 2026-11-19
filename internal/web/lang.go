@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/internal/service"
-	"github.com/kiflet/backend/internal/text"
 )
 
 // The pages customers see (tracking, and confirming a delivery) are in
-// English and Amharic, from the catalogue in internal/text. The rest of the
+// English and Amharic, from the catalogue in internal/platform/text. The rest of the
 // site is English, so its views keep Lang at "en".
 
 const langCookie = "lang"

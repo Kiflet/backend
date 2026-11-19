@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/rand/v2"
 
-	"github.com/kiflet/backend/internal/geo"
+	"github.com/kiflet/backend/internal/platform/geo"
 )
 
 // The demo's GPS trails follow the main roads, so a trip on the map looks

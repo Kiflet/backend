@@ -165,8 +165,9 @@ internal/web/        HTTP: routes, middleware, handlers, templates/, static/
 internal/service/    shipments, status rules, sync, auth, SMS, email, billing, alerts, reports, jobs
 internal/model/      statuses, transitions, reasons, roles, plans and prices
 internal/db/         sqlc-generated queries (from sqlc/queries)
-internal/geo/        Ethiopian towns, distances, transit-time estimates
-internal/phone/      Ethiopian phone number normalisation
+internal/platform/   no business rules: config (the settings), geo (Ethiopian towns, distances,
+                     transit-time estimates), phone (number normalisation), text (the words
+                     customers read, in English and Amharic)
 internal/sandbox/    the providers' side of the SMS, telebirr and CBE Birr contracts, with
                      phones, wallets and faults (standard library only)
 migrations/          goose migrations, embedded

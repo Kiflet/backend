@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/platform/config"
 )
 
 func withRoles(roles string) func(*setup) {

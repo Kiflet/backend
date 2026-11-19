@@ -101,7 +101,7 @@ the Go release, in CI and the Dockerfile, move by hand.
 - A part of a page that must stay current gets `data-live-region` and an
   `id`. `static/app.js` fetches it again and swaps it in when a WebSocket
   message says something changed. Don't render it in JavaScript.
-- What a customer reads comes from `internal/text`, in English and
+- What a customer reads comes from `internal/platform/text`, in English and
   Amharic: their texts, and the tracking and confirmation pages. Add the
   words to `en.go` and `am.go` under one key and write `{{.T "key"}}` in
   the template, or `{{.TH "key_html"}}` when the sentence carries markup.

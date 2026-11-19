@@ -11,10 +11,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/kiflet/backend/internal/geo"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/platform/geo"
+	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/internal/service"
-	"github.com/kiflet/backend/internal/text"
 )
 
 func (s *Server) landing(w http.ResponseWriter, r *http.Request) {

@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kiflet/backend/internal/db"
-	"github.com/kiflet/backend/internal/geo"
+	"github.com/kiflet/backend/internal/platform/geo"
 )
 
 // ReportService computes the performance reports (FR-034).

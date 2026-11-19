@@ -39,7 +39,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/kiflet/backend/internal/app"
-	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/platform/config"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/migrations"
 	"github.com/kiflet/backend/pkg/console"
