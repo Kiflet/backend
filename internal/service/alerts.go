@@ -11,6 +11,7 @@ import (
 
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/platform/events"
 )
 
@@ -109,11 +110,11 @@ type newAlert struct {
 // calls for, in the transaction of the change: it subscribes to
 // shipment.* on the bus.
 func (c *core) alertsFor(ctx context.Context, tx events.Tx, ev events.Event) error {
-	m, ok := ev.Payload.(ShipmentEventMessage)
+	m, ok := ev.Payload.(shipments.Changed)
 	if !ok {
-		return fmt.Errorf("%s carries %T, not a ShipmentEventMessage", ev.Type, ev.Payload)
+		return fmt.Errorf("%s carries %T, not a shipments.Changed", ev.Type, ev.Payload)
 	}
-	e, sh, a := m.event, m.shipment, m.actor
+	e, sh, a := m.Change, m.Shipment, m.Actor
 	q, after := db.New(tx.Conn), afterOf(tx)
 	clear := func(types ...string) {
 		_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{TenantID: sh.TenantID, ShipmentID: sh.ID, AlertTypes: types})
@@ -155,7 +156,7 @@ func (c *core) alertsFor(ctx context.Context, tx events.Tx, ev events.Event) err
 			clear(resolvedByCompletion...)
 		case model.StatusDelivered:
 			clear(resolvedByCompletion...)
-			if e.by == model.ActorDriverSMS {
+			if e.By == model.ActorDriverSMS {
 				raise(sh.DriverID, AlertDeliveredNoPOD, SeverityWarning, fmt.Sprintf(
 					"%s reported %s delivered by SMS, without a signature or photos. Confirm with the customer.", who("The driver"), sh.TrackingNumber))
 			}
@@ -165,8 +166,8 @@ func (c *core) alertsFor(ctx context.Context, tx events.Tx, ev events.Event) err
 			}
 			if t.AlertOnDelivery {
 				to := ""
-				if e.recipient != "" {
-					to = " to " + e.recipient
+				if e.Recipient != "" {
+					to = " to " + e.Recipient
 				}
 				raise(sh.DriverID, AlertDelivered, SeverityInfo, fmt.Sprintf("%s was delivered%s in %s.",
 					sh.TrackingNumber, to, place(sh.DestinationCity, sh.DestinationAddress)))
@@ -198,16 +199,16 @@ func (c *core) alertsFor(ctx context.Context, tx events.Tx, ev events.Event) err
 			who("A driver"), sh.TrackingNumber, recipient, e.OccurredAt.In(c.cfg.Location).Format("2 Jan 15:04"), HeldReasonLabel(held)))
 
 	case "pod_recorded":
-		if p := e.pod; p != nil {
+		if p := e.POD; p != nil {
 			switch {
-			case p.haveFix && !p.verified && sh.DestinationLat != nil:
-				msg := fmt.Sprintf("Delivery of %s was recorded %s from the destination.", sh.TrackingNumber, formatDistance(p.distance))
-				if p.reason != "" {
-					msg += " The driver's reason: " + model.ReasonLabel(p.reason) + "."
+			case p.HaveFix && !p.Verified && sh.DestinationLat != nil:
+				msg := fmt.Sprintf("Delivery of %s was recorded %s from the destination.", sh.TrackingNumber, formatDistance(p.Distance))
+				if p.Reason != "" {
+					msg += " The driver's reason: " + model.ReasonLabel(p.Reason) + "."
 				}
-				raise(p.driver, AlertPODLocation, SeverityWarning, msg)
-			case !p.haveFix:
-				raise(p.driver, AlertPODLocation, SeverityInfo, fmt.Sprintf(
+				raise(p.Driver, AlertPODLocation, SeverityWarning, msg)
+			case !p.HaveFix:
+				raise(p.Driver, AlertPODLocation, SeverityInfo, fmt.Sprintf(
 					"Delivery of %s was recorded without a GPS fix, so its location could not be checked.", sh.TrackingNumber))
 			}
 		}

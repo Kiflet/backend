@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kiflet/backend/internal/modules/shipments"
 )
 
 // The signature is Standard Webhooks', checked against the example in its
@@ -95,18 +97,18 @@ func TestCheckWebhookEvents(t *testing.T) {
 
 func TestWebhookTypes(t *testing.T) {
 	for _, c := range []struct {
-		e    shipmentEvent
+		e    shipments.Change
 		want []string
 	}{
-		{shipmentEvent{Type: "created", To: "pending"}, []string{WebhookShipmentCreated}},
-		{shipmentEvent{Type: "status_changed", From: "assigned", To: "in_transit"}, []string{WebhookStatusChanged}},
-		{shipmentEvent{Type: "status_changed", From: "arrived", To: "delivered"}, []string{WebhookStatusChanged, WebhookDelivered}},
-		{shipmentEvent{Type: "status_changed", From: "in_transit", To: "issue"}, []string{WebhookStatusChanged, WebhookIssueReported}},
-		{shipmentEvent{Type: "customer_issue"}, []string{WebhookIssueReported}},
-		{shipmentEvent{Type: "status_updated", From: "delayed", To: "delayed"}, nil},
-		{shipmentEvent{Type: "conflict", From: "delivered", To: "issue"}, nil},
-		{shipmentEvent{Type: "note"}, nil},
-		{shipmentEvent{Type: "assigned", To: "assigned"}, nil},
+		{shipments.Change{Type: "created", To: "pending"}, []string{WebhookShipmentCreated}},
+		{shipments.Change{Type: "status_changed", From: "assigned", To: "in_transit"}, []string{WebhookStatusChanged}},
+		{shipments.Change{Type: "status_changed", From: "arrived", To: "delivered"}, []string{WebhookStatusChanged, WebhookDelivered}},
+		{shipments.Change{Type: "status_changed", From: "in_transit", To: "issue"}, []string{WebhookStatusChanged, WebhookIssueReported}},
+		{shipments.Change{Type: "customer_issue"}, []string{WebhookIssueReported}},
+		{shipments.Change{Type: "status_updated", From: "delayed", To: "delayed"}, nil},
+		{shipments.Change{Type: "conflict", From: "delivered", To: "issue"}, nil},
+		{shipments.Change{Type: "note"}, nil},
+		{shipments.Change{Type: "assigned", To: "assigned"}, nil},
 	} {
 		if got := webhookTypes(c.e); !slices.Equal(got, c.want) {
 			t.Errorf("%+v: %v, want %v", c.e, got, c.want)

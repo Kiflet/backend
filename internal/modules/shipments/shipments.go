@@ -62,6 +62,7 @@ var ErrNoShipment = apperror.NotFound("Shipment not found.")
 
 // Shipments is what other modules may call.
 type Shipments interface {
+	History
 	// Get finds one of a company's shipments; one not there is ErrNoShipment.
 	Get(ctx context.Context, conn database.Conn, tenantID, id pgtype.UUID) (Shipment, error)
 

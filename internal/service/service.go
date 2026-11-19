@@ -86,8 +86,8 @@ type Deps struct {
 	Users     identity.Users
 	Fleet     fleet.Fleet
 	Shipments shipments.Shipments
-	// Bus carries the events modules publish to the modules that react.
-	// Nil is an in-process bus, writing to the outbox if Outbox is set.
+	// Bus carries the events modules publish to the modules that react:
+	// the one the modules were made with. The services subscribe to it.
 	Bus events.Bus
 	// ShipmentFiles are shipments' documents and charges.
 	ShipmentFiles shipments.Files
@@ -96,9 +96,6 @@ type Deps struct {
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
 	// stores them at once.
 	Positions PositionQueue
-	// Outbox writes events to event_outbox for the relay to publish. Off
-	// without RabbitMQ: nothing would read them.
-	Outbox bool
 	// Work, when set, carries the senders' work through RabbitMQ.
 	Work WorkQueue
 	// RemoteWorkers says the senders of texts, email and webhooks run in
@@ -152,9 +149,6 @@ func New(d Deps) *Services {
 	}
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
-	}
-	if d.Bus == nil {
-		d.Bus = events.New(d.Outbox, d.Now, d.Log)
 	}
 	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments, shipmentFiles: d.ShipmentFiles,
 		positions: d.Positions, bus: d.Bus, remoteWorkers: d.RemoteWorkers, work: d.Work}

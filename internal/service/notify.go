@@ -144,14 +144,14 @@ func (s *ShipmentService) notifyCustomer(ctx context.Context, q *db.Queries, aft
 // (FR-011, FR-016): it subscribes to shipment.* on the bus. Which texts a
 // company sends is in its settings.
 func (s *ShipmentService) notifyFor(ctx context.Context, tx events.Tx, ev events.Event) error {
-	m, ok := ev.Payload.(ShipmentEventMessage)
+	m, ok := ev.Payload.(shipments.Changed)
 	if !ok {
-		return fmt.Errorf("%s carries %T, not a ShipmentEventMessage", ev.Type, ev.Payload)
+		return fmt.Errorf("%s carries %T, not a shipments.Changed", ev.Type, ev.Payload)
 	}
-	e, sh := m.event, m.shipment
+	e, sh := m.Change, m.Shipment
 	switch {
 	case e.Type == "created", e.Type == "status_changed":
-	case e.Type == "assigned" && e.newDriver:
+	case e.Type == "assigned" && e.NewDriver:
 	case e.Type == "edited" && e.DriverID.Valid && editedFields(e).has("destination"):
 	default:
 		return nil
@@ -198,7 +198,7 @@ func (s *ShipmentService) notifyFor(ctx context.Context, tx events.Tx, ev events
 
 	case "status_changed":
 		if e.To != model.StatusCancelled {
-			toReceiver, toCustomer := s.customerStatusText(t, sh, e.To, e.firstDeparture, e.Reason, e.recipient)
+			toReceiver, toCustomer := s.customerStatusText(t, sh, e.To, e.FirstDeparture, e.Reason, e.Recipient)
 			s.notifyCustomer(ctx, q, after, t, sh, toReceiver, toCustomer)
 			return nil
 		}
@@ -219,7 +219,7 @@ type fieldList []string
 
 func (f fieldList) has(name string) bool { return contains(f, name) }
 
-func editedFields(e shipmentEvent) fieldList {
+func editedFields(e shipments.Change) fieldList {
 	f, _ := e.Details["fields"].([]string)
 	return f
 }

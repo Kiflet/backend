@@ -105,7 +105,7 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 		if !contains(model.ReasonsFor(ch.Status), reason) {
 			reason = ""
 		}
-		s.event(ctx, q, after, a, cur, shipmentEvent{
+		s.event(ctx, q, after, a, cur, shipments.Change{
 			Type: "conflict", From: cur.Status, To: ch.Status, Reason: reason, ClientID: ch.ClientID,
 			Lat: ch.Lat, Lng: ch.Lng, OccurredAt: occurred,
 			Note: fmt.Sprintf("%s update from %s was not applied: the shipment had already changed to %s.",
@@ -167,10 +167,10 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 		}
 	}
 
-	s.event(ctx, q, after, a, out, shipmentEvent{
+	s.event(ctx, q, after, a, out, shipments.Change{
 		Type: "status_changed", From: cur.Status, To: ch.Status, Reason: reason, Note: note,
 		Lat: ch.Lat, Lng: ch.Lng, Public: true, ClientID: ch.ClientID, OccurredAt: occurred,
-		DriverID: out.DriverID, firstDeparture: firstDeparture, recipient: ch.recipient, by: ch.By,
+		DriverID: out.DriverID, FirstDeparture: firstDeparture, Recipient: ch.recipient, By: ch.By,
 	})
 
 	return out, nil
@@ -205,7 +205,7 @@ func (s *ShipmentService) updateStatusDetail(ctx context.Context, q *db.Queries,
 		return cur, model.ErrSameStatus
 	}
 
-	if !s.event(ctx, q, after, a, cur, shipmentEvent{
+	if !s.event(ctx, q, after, a, cur, shipments.Change{
 		Type: "status_updated", From: cur.Status, To: ch.Status, Reason: reason, Note: note,
 		Lat: ch.Lat, Lng: ch.Lng, Public: true, ClientID: ch.ClientID, OccurredAt: occurred, DriverID: cur.DriverID,
 	}) {
@@ -265,7 +265,7 @@ func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, r
 		if err != nil {
 			return err
 		}
-		s.event(ctx, q, after, a, out, shipmentEvent{
+		s.event(ctx, q, after, a, out, shipments.Change{
 			Type: "status_changed", From: cur.Status, To: model.StatusCancelled, Reason: reason, Note: note, Public: true,
 			DriverID: cur.DriverID, VisibleToDriver: cur.DriverID.Valid,
 		})
@@ -320,12 +320,12 @@ func (s *ShipmentService) Reopen(ctx context.Context, a Actor, id pgtype.UUID) (
 		if err != nil {
 			return err
 		}
-		s.event(ctx, q, after, a, out, shipmentEvent{
+		s.event(ctx, q, after, a, out, shipments.Change{
 			Type: "status_changed", From: model.StatusCancelled, To: to, Note: "Reopened", Public: true,
 			DriverID: out.DriverID, VisibleToDriver: out.DriverID.Valid,
 		})
 		if to == model.StatusPending && cur.DriverID.Valid {
-			s.event(ctx, q, after, a, out, shipmentEvent{
+			s.event(ctx, q, after, a, out, shipments.Change{
 				Type: "unassigned", From: model.StatusCancelled, To: to, PreviousDriverID: cur.DriverID,
 				Note: "Reopened without the driver. " + why,
 			})
@@ -362,14 +362,14 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 			if sh.DriverID != a.UserID {
 				return ErrNotAssigned
 			}
-			s.event(ctx, q, after, a, sh, shipmentEvent{
+			s.event(ctx, q, after, a, sh, shipments.Change{
 				Type: "message", Note: text, DriverID: a.UserID, VisibleToDriver: true, ClientID: clientID, OccurredAt: at,
 			})
 			return nil
 		}
 
 		if !toDriver {
-			s.event(ctx, q, after, a, sh, shipmentEvent{Type: "note", Note: text})
+			s.event(ctx, q, after, a, sh, shipments.Change{Type: "note", Note: text})
 			return nil
 		}
 		if !sh.DriverID.Valid {
@@ -405,7 +405,7 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 		if sent {
 			details = map[string]any{"sms": true, "auto": auto}
 		}
-		s.event(ctx, q, after, a, sh, shipmentEvent{Type: "message", Note: text, DriverID: sh.DriverID, VisibleToDriver: true, Details: details})
+		s.event(ctx, q, after, a, sh, shipments.Change{Type: "message", Note: text, DriverID: sh.DriverID, VisibleToDriver: true, Details: details})
 		return nil
 	})
 	return sent, err

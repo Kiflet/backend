@@ -287,13 +287,13 @@ func (s *ShipmentService) CustomerRespond(ctx context.Context, token string, ok 
 			if _, err := s.shipmentData.SetCustomerConfirmation(ctx, q.Conn(), shipments.CustomerConfirmation{ID: sh.ID, TenantID: sh.TenantID, Feedback: toText(feedback)}); err != nil {
 				return err
 			}
-			s.event(ctx, q, after, a, sh, shipmentEvent{Type: "customer_confirmed", Note: feedback, Public: true})
+			s.event(ctx, q, after, a, sh, shipments.Change{Type: "customer_confirmed", Note: feedback, Public: true})
 			return nil
 		}
 		if _, err := s.shipmentData.SetCustomerFeedback(ctx, q.Conn(), shipments.CustomerFeedback{ID: sh.ID, TenantID: sh.TenantID, Feedback: &feedback}); err != nil {
 			return err
 		}
-		s.event(ctx, q, after, a, sh, shipmentEvent{Type: "customer_issue", Note: feedback})
+		s.event(ctx, q, after, a, sh, shipments.Change{Type: "customer_issue", Note: feedback})
 		return nil
 	})
 }
