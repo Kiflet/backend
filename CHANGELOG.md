@@ -17,6 +17,11 @@ What changed in each release, newest first.
   and user names instead of joining their tables. A test checks what
   each module imports, and CI checks that no generated file outlives its
   queries.
+- **The tenancy module**: `internal/modules/tenancy` owns `tenants`, the
+  companies, with the settings rules in its `domain` and their own unit
+  tests. Every read of a company goes through it; a missing company is now
+  "not found" rather than an internal error. The errors a person can act
+  on moved to `internal/platform/apperror`, shared by the modules.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

@@ -204,7 +204,7 @@ func (s *AuthService) ResetPasswordByCode(ctx context.Context, rawPhone, code, p
 			return errCodeInvalid
 		}
 		if u.Role != model.RolePlatformAdmin {
-			t, err := q.GetTenantByID(ctx, u.TenantID)
+			t, err := s.tenant(ctx, q, u.TenantID)
 			if err != nil {
 				return err
 			}

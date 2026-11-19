@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/kiflet/backend/internal/modules/audit"
+	"github.com/kiflet/backend/internal/modules/tenancy"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -72,8 +73,9 @@ type PositionQueue interface {
 // Deps is everything the services share.
 type Deps struct {
 	Pool *pgxpool.Pool
-	// Audit is the audit module (internal/modules/audit).
+	// Audit and Tenancy are modules (internal/modules).
 	Audit     audit.Log
+	Tenancy   tenancy.Companies
 	Log       zerolog.Logger
 	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
@@ -136,7 +138,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy,
 		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -181,6 +183,7 @@ type core struct {
 	alerts   *AlertService
 	webhooks *WebhookService
 	auditLog audit.Log
+	tenancy  tenancy.Companies
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	outbox        bool
@@ -383,4 +386,12 @@ func (c *core) emit(ctx context.Context, q *db.Queries, tenantID pgtype.UUID, ty
 		// change goes in without its event.
 		c.log.Error().Err(err).Str("type", typ).Msg("write event to the outbox")
 	}
+}
+
+// tenant loads a company through the tenancy module, on q's connection
+// (its transaction, if it has one), as the rest of internal/service knows
+// it until it moves into modules.
+func (c *core) tenant(ctx context.Context, q *db.Queries, id pgtype.UUID) (db.Tenant, error) {
+	t, err := c.tenancy.Get(ctx, q.Conn(), id)
+	return db.Tenant(t), err
 }

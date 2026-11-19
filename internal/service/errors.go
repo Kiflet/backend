@@ -1,95 +1,36 @@
 package service
 
 import (
-	"errors"
-	"net/http"
+	"github.com/kiflet/backend/internal/platform/apperror"
 )
 
-// Error is a failure the caller can act on: bad input, a missing record, a
-// rule that forbids the action. Its message is written for the person using
-// the product and is safe to show them. Anything that is not an *Error is an
-// internal fault, whose details belong in the log rather than the response.
-type Error struct {
-	Kind    Kind
-	Message string
-	// Field names the input field at fault, when there is one, so a form can
-	// show the message next to it.
-	Field string
-	// Key is the message's key in internal/platform/text, set on the errors a
-	// customer can meet, so that their pages can say it in Amharic.
-	Key string
-}
-
-func (e *Error) Error() string { return e.Message }
-
-// Kind classifies an Error for transport mapping.
-type Kind int
+// The errors a person can act on are internal/platform/apperror's, shared
+// with the modules.
+type (
+	Error = apperror.Error
+	Kind  = apperror.Kind
+)
 
 const (
-	KindInvalid Kind = iota
-	KindNotFound
-	KindConflict
-	KindForbidden
-	KindUnauthorized
-	KindLimit
+	KindInvalid      = apperror.KindInvalid
+	KindNotFound     = apperror.KindNotFound
+	KindConflict     = apperror.KindConflict
+	KindForbidden    = apperror.KindForbidden
+	KindUnauthorized = apperror.KindUnauthorized
+	KindLimit        = apperror.KindLimit
 )
 
-// HTTPStatus maps a Kind to a status code.
-func (k Kind) HTTPStatus() int {
-	switch k {
-	case KindNotFound:
-		return http.StatusNotFound
-	case KindConflict:
-		return http.StatusConflict
-	case KindForbidden:
-		return http.StatusForbidden
-	case KindUnauthorized:
-		return http.StatusUnauthorized
-	case KindLimit:
-		return http.StatusPaymentRequired
-	default:
-		return http.StatusBadRequest
-	}
-}
-
-// Code is the stable machine-readable form of a Kind for API clients.
-func (k Kind) Code() string {
-	switch k {
-	case KindNotFound:
-		return "NOT_FOUND"
-	case KindConflict:
-		return "CONFLICT"
-	case KindForbidden:
-		return "FORBIDDEN"
-	case KindUnauthorized:
-		return "UNAUTHORIZED"
-	case KindLimit:
-		return "PLAN_LIMIT"
-	default:
-		return "VALIDATION_ERROR"
-	}
-}
-
-func invalid(field, msg string) error { return &Error{Kind: KindInvalid, Field: field, Message: msg} }
-func notFound(msg string) error       { return &Error{Kind: KindNotFound, Message: msg} }
-func conflict(msg string) error       { return &Error{Kind: KindConflict, Message: msg} }
-func forbidden(msg string) error      { return &Error{Kind: KindForbidden, Message: msg} }
-func limitReached(msg string) error   { return &Error{Kind: KindLimit, Message: msg} }
-
-// AsError extracts a domain error, if err is one.
-func AsError(err error) (*Error, bool) {
-	var e *Error
-	if errors.As(err, &e) {
-		return e, true
-	}
-	return nil, false
-}
-
-// IsNotFound reports whether err is a not-found domain error.
-func IsNotFound(err error) bool {
-	e, ok := AsError(err)
-	return ok && e.Kind == KindNotFound
-}
+var (
+	invalid      = apperror.Invalid
+	notFound     = apperror.NotFound
+	conflict     = apperror.Conflict
+	forbidden    = apperror.Forbidden
+	limitReached = apperror.Limit
+	// AsError extracts a domain error, if err is one.
+	AsError = apperror.As
+	// IsNotFound reports whether err is a not-found domain error.
+	IsNotFound = apperror.IsNotFound
+)
 
 var (
 	ErrAccountLocked      = &Error{Kind: KindForbidden, Message: "Too many failed attempts. The account is locked for 15 minutes."}

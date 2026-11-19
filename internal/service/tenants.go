@@ -3,10 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
-	"net/mail"
+	"github.com/kiflet/backend/internal/modules/tenancy"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -14,8 +13,6 @@ import (
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/platform/geo"
-	"github.com/kiflet/backend/internal/platform/phone"
-	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/pkg/hash"
 )
 
@@ -269,27 +266,15 @@ func signupClash(ctx context.Context, q *db.Queries, email, phone string) error 
 // createCompany creates a company on a free trial and its first admin.
 func (s *TenantService) createCompany(ctx context.Context, q *db.Queries, c newCompany, ci ClientInfo) (db.User, error) {
 	trial, _ := model.PlanByCode(model.PlanTrial)
-	var tenant db.Tenant
-	var err error
-	base := slugify(c.name)
-	for attempt := 0; ; attempt++ {
-		slug := base
-		if attempt > 0 {
-			slug = base + "-" + randomDigits(4)
-		}
-		tenant, err = q.CreateTenant(ctx, db.CreateTenantParams{
-			Name: c.name, Slug: slug, Plan: model.PlanTrial, MaxDrivers: trial.MaxDrivers,
-			ContactPhone: c.admin.phone, ContactEmail: c.admin.email, RegionCity: c.city,
-			TrialEndsAt: toTimestamp(s.now().Add(TrialLength)),
-		})
-		if isNoRows(err) && attempt < 5 { // the slug is taken
-			continue
-		}
-		if err != nil {
-			return db.User{}, err
-		}
-		break
+	created, err := s.tenancy.Create(ctx, q.Conn(), tenancy.NewCompany{
+		Name: c.name, Plan: model.PlanTrial, MaxDrivers: trial.MaxDrivers,
+		ContactPhone: deref(c.admin.phone), ContactEmail: deref(c.admin.email), City: c.city,
+		TrialEndsAt: s.now().Add(TrialLength),
+	})
+	if err != nil {
+		return db.User{}, err
 	}
+	tenant := db.Tenant(created)
 	admin, err := q.CreateUser(ctx, db.CreateUserParams{
 		TenantID: tenant.ID, Role: model.RoleAdmin, FullName: c.admin.name,
 		Phone: c.admin.phone, Email: c.admin.email, PasswordHash: &c.passwordHash,
@@ -301,118 +286,25 @@ func (s *TenantService) createCompany(ctx context.Context, q *db.Queries, c newC
 	return admin, nil
 }
 
-func slugify(s string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(s) {
-		switch {
-		case r < unicode.MaxASCII && (unicode.IsLetter(r) || unicode.IsDigit(r)):
-			b.WriteRune(r)
-			dash = false
-		case !dash && b.Len() > 0:
-			b.WriteByte('-')
-			dash = true
-		}
-	}
-	out := strings.Trim(b.String(), "-")
-	if len(out) > 40 {
-		out = strings.Trim(out[:40], "-")
-	}
-	if out == "" {
-		out = "company"
-	}
-	return out
-}
-
 // Get loads a tenant.
 func (s *TenantService) Get(ctx context.Context, id pgtype.UUID) (db.Tenant, error) {
-	t, err := s.q.GetTenantByID(ctx, id)
-	if isNoRows(err) {
-		return t, notFound("Company not found.")
-	}
-	return t, err
+	return s.tenant(ctx, s.q, id)
 }
 
-// SettingsInput is the company settings form.
-type SettingsInput struct {
-	Name string
-	// TIN is the taxpayer identification number printed on invoices.
-	TIN                string
-	ContactPhone       string
-	ContactEmail       string
-	RegionCity         string
-	MaxActivePerDriver int
-	SMSOnCreated       bool
-	SMSOnDispatched    bool
-	SMSOnArrived       bool
-	SMSOnDelivered     bool
-	SMSOnCancelled     bool
-	SMSOnDelayed       bool
-	SMSDriverOnAssign  bool
-	// AlertOnDelivery raises an alert for every delivery.
-	AlertOnDelivery bool
-	// CustomerLanguage is the language customers are written to in.
-	CustomerLanguage string
-}
+// SettingsInput is the company settings form (tenancy.Settings).
+type SettingsInput = tenancy.Settings
 
 // UpdateSettings saves the company profile and notification preferences.
 func (s *TenantService) UpdateSettings(ctx context.Context, p *Principal, in SettingsInput, ci ClientInfo) (db.Tenant, error) {
 	if !p.CanManageCompany() {
 		return db.Tenant{}, ErrUnauthorized
 	}
-	name := strings.Join(strings.Fields(in.Name), " ")
-	if n := utf8.RuneCountInString(name); n < 2 || n > 120 {
-		return db.Tenant{}, invalid("name", "Enter the company name.")
-	}
-	var contactPhone, contactEmail *string
-	if strings.TrimSpace(in.ContactPhone) != "" {
-		ph, err := phone.Normalize(in.ContactPhone)
-		if err != nil {
-			return db.Tenant{}, invalid("contact_phone", err.Error())
-		}
-		contactPhone = &ph
-	}
-	if e := strings.TrimSpace(in.ContactEmail); e != "" {
-		if _, err := mail.ParseAddress(e); err != nil {
-			return db.Tenant{}, invalid("contact_email", "Enter a valid email address.")
-		}
-		contactEmail = &e
-	}
-	city, ok := geo.Lookup(in.RegionCity)
-	if !ok {
-		return db.Tenant{}, invalid("region_city", "Pick your base town from the list.")
-	}
-	if in.MaxActivePerDriver < 1 || in.MaxActivePerDriver > 50 {
-		return db.Tenant{}, invalid("max_active_per_driver", "Choose between 1 and 50.")
-	}
-	tin := strings.Join(strings.Fields(in.TIN), "")
-	if tin != "" && (len(tin) != 10 || strings.Trim(tin, "0123456789") != "") {
-		return db.Tenant{}, invalid("tin", "A TIN is 10 digits.")
-	}
-	cur, err := s.Get(ctx, p.TenantID)
+	cur, t, err := s.tenancy.UpdateSettings(ctx, s.q.Conn(), p.TenantID, in)
 	if err != nil {
-		return db.Tenant{}, err
-	}
-	// A form without the field leaves the language as it is.
-	if in.CustomerLanguage == "" {
-		in.CustomerLanguage = cur.CustomerLanguage
-	}
-	if !text.Valid(in.CustomerLanguage) {
-		return db.Tenant{}, invalid("customer_language", "Choose English or Amharic.")
-	}
-	t, err := s.q.UpdateTenantSettings(ctx, db.UpdateTenantSettingsParams{
-		ID: p.TenantID, Name: name, ContactPhone: contactPhone, ContactEmail: contactEmail,
-		RegionCity: city.Name, MaxActivePerDriver: int32(in.MaxActivePerDriver),
-		SmsOnCreated: in.SMSOnCreated, SmsOnDispatched: in.SMSOnDispatched, SmsOnArrived: in.SMSOnArrived,
-		SmsOnDelivered: in.SMSOnDelivered, SmsOnCancelled: in.SMSOnCancelled, SmsOnDelayed: in.SMSOnDelayed,
-		SmsDriverOnAssign: in.SMSDriverOnAssign, Tin: toText(tin), AlertOnDelivery: in.AlertOnDelivery,
-		CustomerLanguage: in.CustomerLanguage,
-	})
-	if err != nil {
-		return t, err
+		return db.Tenant(t), err
 	}
 	s.audit(ctx, s.q, p.Actor(SourceDashboard, ci.IP, ci.UserAgent), "settings_updated", "tenant", t.ID, cur, t)
-	return t, nil
+	return db.Tenant(t), nil
 }
 
 // Usage is a company's consumption against its plan.
@@ -491,7 +383,7 @@ func (s *TenantService) SetActive(ctx context.Context, p *Principal, id pgtype.U
 	if id == p.TenantID {
 		return invalid("", "You can't suspend the platform's own account.")
 	}
-	if err := s.q.SetTenantActive(ctx, db.SetTenantActiveParams{ID: id, IsActive: active}); err != nil {
+	if err := s.tenancy.SetActive(ctx, s.q.Conn(), id, active); err != nil {
 		return err
 	}
 	action := "tenant_suspended"

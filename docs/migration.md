@@ -258,7 +258,7 @@ throughout; only imports move.
       `http/` (still rendering templates for now).
    5. `make test test-integration`; one PR per module.
 
-   Done: audit. How it went, for the rest:
+   Done: audit, tenancy. How it went, for the rest:
    - **The server-rendered handlers stay in `internal/web`.** Phase 4
      replaces those pages with Kiflet/web and phase 6 deletes them, so
      moving them would be work thrown away. A module's `http/` holds the
@@ -272,6 +272,24 @@ throughout; only imports move.
      read company and user names by joining `tenants` and `users`; it now
      looks them up through the tenancy and identity services.
    - **Empty layers are left out:** audit has no `domain/`.
+   - **Errors** a person can act on are `internal/platform/apperror`'s;
+     `service.Error` is an alias of it, so the web layer shows a module's
+     errors as it did the service's.
+   - **A module's row type is its store's** (`tenancy.Tenant` is
+     `store.Tenant`). Until the code still in `internal/service` moves,
+     it converts to the `db` type with `db.Tenant(t)`: both are generated
+     from the same table, so the conversion compiles as long as they
+     agree.
+   - **What still reaches into a moved module's tables**, to go through
+     its interface when that code moves:
+     - `tenants`: billing's plan, trial and SMS-allowance updates
+       (`sqlc/queries/billing.sql`), the company's deletion (`data.sql`),
+       and joins in `billing`, `dashboard`, `shipments`, `platform`,
+       `sessions`, `accounts` and `api` queries. The platform's company
+       list with its figures (`tenants.sql`) is a read model for reports.
+     - Signing up a company stays in `internal/service` until identity
+       moves, since it creates the first user: it calls
+       `tenancy.Create` within its transaction.
    - `internal/service` keeps a thin service where the dashboard needs a
      check the module can't make yet (the platform admin's), until the
      module that owns it moves.

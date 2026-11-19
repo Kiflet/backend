@@ -211,7 +211,7 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 		}
 	}
 
-	tenant, err := q.GetTenantByID(ctx, out.TenantID)
+	tenant, err := s.tenant(ctx, q, out.TenantID)
 	if err != nil {
 		return out, err
 	}
@@ -344,7 +344,7 @@ func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, r
 		})
 		_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{TenantID: a.TenantID, ShipmentID: id, AlertTypes: resolvedByCompletion})
 
-		tenant, err := q.GetTenantByID(ctx, a.TenantID)
+		tenant, err := s.tenant(ctx, q, a.TenantID)
 		if err != nil {
 			return err
 		}
@@ -384,7 +384,7 @@ func (s *ShipmentService) Reopen(ctx context.Context, a Actor, id pgtype.UUID) (
 		}
 		// Reopening is new work: not in read-only mode, and the driver gets
 		// it back only if they could be assigned it now.
-		tenant, err := q.GetTenantByID(ctx, a.TenantID)
+		tenant, err := s.tenant(ctx, q, a.TenantID)
 		if err != nil {
 			return err
 		}
@@ -490,7 +490,7 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 		if bySMS || auto {
 			d, err := q.GetUserByID(ctx, db.GetUserByIDParams{ID: sh.DriverID, TenantID: a.TenantID})
 			if err == nil && d.Phone != nil {
-				tenant, err := q.GetTenantByID(ctx, a.TenantID)
+				tenant, err := s.tenant(ctx, q, a.TenantID)
 				if err != nil {
 					return err
 				}

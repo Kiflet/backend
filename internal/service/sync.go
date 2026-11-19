@@ -605,7 +605,7 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 		MustChangePIN: u.PasswordResetRequired, SMSNumber: s.cfg.SMSNumber,
 		Settings: DriverSettings{Language: deref(u.Language), BatterySaver: u.AppBatterySaver, Vibrate: u.AppVibrate},
 	}
-	if t, err := s.q.GetTenantByID(ctx, p.TenantID); err == nil {
+	if t, err := s.tenant(ctx, s.q, p.TenantID); err == nil {
 		resp.Driver.OfficePhone = deref(t.ContactPhone)
 	}
 	if u.VehicleID.Valid {

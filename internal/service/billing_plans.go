@@ -111,7 +111,7 @@ func (s *BillingService) Overview(ctx context.Context, p *Principal) (*BillingOv
 	if !p.CanManageCompany() {
 		return nil, ErrUnauthorized
 	}
-	t, err := s.q.GetTenantByID(ctx, p.TenantID)
+	t, err := s.tenant(ctx, s.q, p.TenantID)
 	if err != nil {
 		return nil, err
 	}

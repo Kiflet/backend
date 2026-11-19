@@ -62,7 +62,7 @@ func (s *DataService) Export(ctx context.Context, p *Principal, ci ClientInfo) (
 	defer tx.Rollback(ctx) //nolint:errcheck // read only
 	q := s.q.WithTx(tx)
 	out := &Export{At: s.now()}
-	if out.Company, err = q.GetTenantByID(ctx, p.TenantID); err != nil {
+	if out.Company, err = s.tenant(ctx, q, p.TenantID); err != nil {
 		return nil, err
 	}
 	if out.Shipments, err = q.ExportShipments(ctx, p.TenantID); err != nil {

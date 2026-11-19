@@ -126,7 +126,7 @@ func (c *core) enqueueSMS(ctx context.Context, q *db.Queries, after *afterCommit
 // are billed. Checked without a lock, a burst of texts may pass a limit by
 // a few, which is harmless. The company is told by an alert, once a day.
 func (c *core) smsRefusal(ctx context.Context, q *db.Queries, after *afterCommit, tenantID pgtype.UUID, segments int32) (string, error) {
-	t, err := q.GetTenantByID(ctx, tenantID)
+	t, err := c.tenant(ctx, q, tenantID)
 	if err != nil {
 		return "", err
 	}

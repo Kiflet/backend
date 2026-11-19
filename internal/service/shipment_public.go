@@ -82,7 +82,7 @@ func (s *ShipmentService) Track(ctx context.Context, number, lang string) (*Publ
 	if err != nil {
 		return nil, err
 	}
-	tenant, err := s.q.GetTenantByID(ctx, sh.TenantID)
+	tenant, err := s.tenant(ctx, s.q, sh.TenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (s *ShipmentService) ByConfirmToken(ctx context.Context, token string) (*Co
 	if sh.ActualDelivery.Valid && s.now().Sub(sh.ActualDelivery.Time) > ConfirmLinkTTL {
 		return nil, gone
 	}
-	tenant, err := s.q.GetTenantByID(ctx, sh.TenantID)
+	tenant, err := s.tenant(ctx, s.q, sh.TenantID)
 	if err != nil {
 		return nil, err
 	}

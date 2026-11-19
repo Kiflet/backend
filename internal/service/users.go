@@ -293,7 +293,7 @@ func (s *UserService) CreateStaff(ctx context.Context, p *Principal, in PersonIn
 	}
 	out := &NewAccount{}
 	err = s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
-		tenant, err := q.GetTenantByID(ctx, p.TenantID)
+		tenant, err := s.tenant(ctx, q, p.TenantID)
 		if err != nil {
 			return err
 		}

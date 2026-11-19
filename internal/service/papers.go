@@ -181,7 +181,7 @@ func (s *UserService) RemindLicence(ctx context.Context, p *Principal, id pgtype
 		if d.Phone == nil {
 			return conflict(d.FullName + " has no phone number to text.")
 		}
-		tenant, err := q.GetTenantByID(ctx, p.TenantID)
+		tenant, err := s.tenant(ctx, q, p.TenantID)
 		if err != nil {
 			return err
 		}
