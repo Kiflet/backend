@@ -111,7 +111,7 @@ What already fits the target and must be kept:
 
 | Repository | Contains | Deploys as |
 |---|---|---|
-| **Kiflet/backend** (this one) | Go backend: modules, `cmd/{api,realtime,worker,scheduler,relay,migrate,sandbox}`; migrations; OpenAPI and AsyncAPI contracts; the generated `@kiflet/api` TypeScript client package; `deployments/` for every environment (Caddy, Postgres, PgBouncer, RabbitMQ, Redis, storage, monitoring); integration tests; the docs | Docker images `ghcr.io/kiflet/backend`, `ghcr.io/kiflet/sandbox`; the `@kiflet/api` npm package |
+| **Kiflet/backend** (this one) | Go backend: modules, `cmd/{api,realtime,worker,scheduler,relay,migrate,sandbox}`; migrations; OpenAPI and AsyncAPI contracts; the generated `@kiflet/api` TypeScript client package; `deployments/` for every environment (Caddy, Postgres, PgBouncer, RabbitMQ, Redis, Garage, monitoring); integration tests; the docs | Docker images `ghcr.io/kiflet/backend`, `ghcr.io/kiflet/sandbox`; the `@kiflet/api` npm package |
 | **Kiflet/web** | Next.js: the public pages, the dashboard, the operator's pages; the design system; Playwright tests | Docker image `ghcr.io/kiflet/web` |
 | **Kiflet/mobile** | Expo app for drivers: SQLite, sync engine, background GPS, screens; Maestro tests | Play Store / App Store builds (EAS Build), over-the-air updates (EAS Update), an APK on the website |
 
@@ -319,18 +319,49 @@ Roll back: each module is one PR; revert it.
    `cmd/worker --queues=tracking.*` and so on, `cmd/scheduler`,
    `cmd/relay`, `cmd/migrate`. `cmd/server` stays for one release as "all
    of them in one process" for development and small installs.
-10. **Load test** in staging (k6): 12,000 simulated phones syncing every
+10. **Garage for files** (architecture, section 5). It depends on nothing
+    else in this phase and can go first:
+    1. `pkg/storage`: an `S3_FORCE_PATH_STYLE` setting (today path-style
+       is used only for `http://` endpoints), and the public endpoint
+       that presigned URLs are signed for, apart from the private one the
+       app uploads through.
+    2. Compose: Garage (`dxflrs/garage`, pinned) in `deployments/dev`,
+       staging (one node, replication factor 1, replacing SeaweedFS) and
+       production (three nodes, factor 3), with `garage.toml` in
+       `deployments/garage/` and `rpc_secret` and the admin token as
+       secret files (`GARAGE_RPC_SECRET_FILE`, `GARAGE_ADMIN_TOKEN_FILE`).
+       A `garage-init` job applies the layout and makes the buckets, keys,
+       CORS and lifecycle rules through the admin API, and is safe to run
+       again. The health check uses Garage's binary (the image has no
+       shell).
+    3. Caddy: `files.kiflet.et` (staging: `files.kiflet.localhost`) to
+       Garage's S3 port only.
+    4. Tests: `tests/integration/storage_test.go` starts Garage instead of
+       SeaweedFS, and adds presigned PUT and GET, CORS and a lifecycle
+       rule; staging's end-to-end delivery test then runs against it.
+    5. The nightly encrypted copy of new files to the off-site bucket
+       (`scripts/backup.sh` with rclone, as for the database), and a
+       restore of one file in `tests/e2e`'s restore test.
+    6. Production: copy the files already stored (the `app-data` volume,
+       or the S3 bucket if `STORAGE_TYPE=s3`) into Garage with
+       `rclone copy --checksum`, switch the settings, keep the old copy a
+       month.
+11. **Load test** in staging (k6): 12,000 simulated phones syncing every
     60 s, then 3,000 reconnecting with 2 hours of positions each; the
     targets in the architecture's section 15 (oldest message in
     `tracking.ingest` under 2 minutes, API p95 under 300 ms).
 
 Done when: production runs the separate processes on RabbitMQ and Redis;
 the load test passes; stopping Redis or one RabbitMQ node in staging loses
-nothing (tested); the old in-process workers are deleted.
+nothing (tested); the old in-process workers are deleted; files are in
+Garage, with one node of production's three stopped for an hour losing
+nothing and refusing no upload, and a file restored from the off-site copy.
 
 Roll back: each worker move has a setting (`WORKER_<NAME>=inprocess|queue`)
 until it has run in production for two weeks; Redis can be turned off
-(`REDIS_URL` empty falls back to Postgres and per-instance limits).
+(`REDIS_URL` empty falls back to Postgres and per-instance limits); the
+files stay where they were until Garage has run a month, so going back
+is the old settings and a copy of what was uploaded since.
 
 ### Phase 3: the web API and its contract
 
@@ -516,7 +547,7 @@ shorten it by about a third, with web and mobile split between them):
 |---|---|
 | 0: groundwork | 1 week |
 | 1: modules in place | 3–4 weeks |
-| 2: RabbitMQ, Redis, processes, partitions, load test | 4–5 weeks |
+| 2: RabbitMQ, Redis, Garage, processes, partitions, load test | 5–6 weeks |
 | 3: `/api/web` for every page | 4–6 weeks (overlaps phase 4) |
 | 4: Kiflet/web, ~45 pages | 8–10 weeks |
 | 5: Kiflet/mobile and the pilot | 6–8 weeks, plus the pilot's length |
@@ -547,6 +578,8 @@ than a Capacitor wrapper that would be thrown away.
 | Background GPS policies (Play, Android vendors killing services) | gaps in trails | foreground service with notification; tested on the cheap phones drivers use (Tecno, Itel, Samsung A); gaps drawn honestly on the maps (PR #46) |
 | RabbitMQ or Redis misconfigured in production | lost or duplicated messages, slow pages | quorum queues, confirms, idempotent consumers; failure tests in CI; staging identical to production |
 | The partition migration of `tracking_events` | a slow or failed copy on a big table | copy by day in the background, swap in one transaction, keep the old table a week |
+| Garage has no versioning or object lock | a POD photo deleted by a bug or a stolen key can't be brought back from Garage | one key per process with the fewest rights; the nightly encrypted copy to an off-site bucket that keeps versions; an alert when that copy is late |
+| Garage is younger and smaller than S3 | a bug or a breaking upgrade (v1 → v2 reworked its admin API) | pin the image; upgrade in staging first with a metadata snapshot; only the S3 API is used by the app, so another S3-compatible store can replace it with settings and a copy |
 | Operating more moving parts on VMs | more to monitor and back up | the alerts in the architecture's section 14; runbooks in `docs/deploy.md` for each part |
 | Breaking changes to `/api/driver` | old apps on phones fail | version header, `426`, support two releases, tests against the previous app version |
 | Cost of accounts and services | Apple's yearly fee, EAS plans, more VMs | start Android-only; EAS's free tier until builds are frequent; three VMs until load needs more |
@@ -559,10 +592,13 @@ Questions this plan doesn't settle, for when they come up:
 
 1. **iOS:** at the same time as Android, or later? Android-only halves the
    store work and the testing; most drivers use Android.
-2. **Object storage in production:** SeaweedFS or MinIO on our VMs, or a
-   hosted S3 (which stores the backups off the machine, a ROADMAP
-   requirement for the pilot)?
+2. **The off-site bucket's provider.** The app's files are in Garage on
+   our VMs (decided 2026-11-19), but the backups and the copy of the files
+   must leave our VMs (a ROADMAP requirement for the pilot): which
+   provider, with versioning or object lock?
 3. **The public pages' address:** `track.kiflet.et` or `kiflet.et/track`
    (shorter in SMS)?
 4. **Who builds what:** if a web or mobile developer joins, phases 4 and 5
    can run in parallel with phase 2.
+5. **How long POD photos are kept,** which decides the storage VMs' disks
+   (architecture, section 15).

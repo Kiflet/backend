@@ -21,6 +21,7 @@ created in the Kiflet organization on 2026-11-19):
 | Web | Next.js (App Router, TypeScript): the dashboard, the operator's pages and the public pages |
 | Broker | **RabbitMQ**: GPS positions, notifications, webhooks, domain events, live updates, scheduled jobs |
 | Cache | **Redis**: sessions, rate limits, latest positions, hot tenant data, idempotency |
+| Files | **[Garage](https://garagehq.deuxfleurs.fr/)** (`dxflrs/garage`), S3-compatible, three nodes on our VMs: signatures, photos, documents, exports. Database backups still go to a bucket with another provider (decided 2026-11-19) |
 | Scale | Up to **20,000 drivers** in the next 2–3 years, hundreds of companies |
 | Hosting | **VMs with Docker Compose**, each part scaled by replicas |
 
@@ -143,8 +144,10 @@ flowchart TB
     PGR[("read replica<br/>reports, exports")]
     RMQ{{"RabbitMQ<br/>quorum queues"}}
     RDS[("Redis<br/>cache, rate limits, presence")]
-    S3[("Object storage<br/>S3-compatible: PODs, documents, exports, backups")]
+    S3[("Garage, 3 nodes<br/>S3-compatible: PODs, documents, exports")]
   end
+
+  OFF[("Off-site bucket<br/>another provider: backups, copy of the files")]
 
   MOB -- HTTPS --> EDGE
   BRW -- HTTPS / WSS --> EDGE
@@ -153,6 +156,7 @@ flowchart TB
   EDGE -- "app.kiflet.et, track.kiflet.et" --> NX
   EDGE -- "/api/*" --> API
   EDGE -- "/ws" --> RT
+  EDGE -- "files.kiflet.et: presigned PUT and GET" --> S3
   NX -- "server-side REST" --> API
 
   API --> PGB --> PG
@@ -160,6 +164,8 @@ flowchart TB
   API -- "positions, commands" --> RMQ
   API -- "presigned URLs" --> S3
   PG -- "streaming" --> PGR
+  PG -. "WAL, nightly backups (encrypted)" .-> OFF
+  S3 -. "nightly copy (encrypted)" .-> OFF
 
   REL --> PG
   REL --> RMQ
@@ -186,7 +192,8 @@ flowchart TB
 | PgBouncer | image | | 1 per database VM | none |
 | RabbitMQ | image | | 3-node cluster | durable queues |
 | Redis | image | | 1 primary + replica with Sentinel | can be lost |
-| Object storage | SeaweedFS or MinIO on VMs, or a hosted S3 | | volumes | files |
+| Garage | image `dxflrs/garage`, pinned (v2.5.0 on 2026-11-19) | | 3 nodes, replication factor 3; add nodes and disks | files |
+| Off-site bucket | another provider (still to choose) | | | encrypted backups, a copy of the files |
 | Driver app | Kiflet/mobile | TypeScript | phones | SQLite on the phone |
 
 All the Go processes are the same binary with different commands, built
@@ -367,13 +374,70 @@ on a busy day at 20,000 drivers (section 15).
   position every 5 minutes plus every stop and turn (Douglas–Peucker), so
   the trail still draws but takes a fifth of the space.
 
-### Object storage
+### Object storage: Garage
 
-Signatures, photos, shipment documents, data exports and database backups
-live in S3-compatible storage (SeaweedFS or MinIO on the VMs, as staging
-does now, or a hosted S3). The API hands out **presigned URLs**: phones
-upload photos straight to storage and the API never carries the bytes.
-Every object key starts with the tenant ID.
+Signatures, photos, shipment documents and data exports live in
+[Garage](https://garagehq.deuxfleurs.fr/), an S3-compatible store we run
+on our own VMs (image `dxflrs/garage`, pinned to a release; v2.5.0 on
+2026-11-19). The app talks to it through `pkg/storage`'s S3 adapter
+(aws-sdk-go-v2), as it talks to SeaweedFS today, so no module knows which
+store it is. The API hands out **presigned URLs**: phones upload photos
+straight to storage and the API never carries the bytes. Every object key
+starts with the tenant ID.
+
+How it is set up:
+
+- **Three nodes, replication factor 3,** one per VM, each in its own zone
+  in Garage's layout, so any one VM can be lost with no file lost and no
+  upload refused. Garage's own advice is three nodes at least; a factor of
+  1 is for tests only. Metadata on SSD (the `lmdb` engine with Garage's
+  metadata snapshots turned on, since LMDB can be damaged by an unclean
+  shutdown); data on the larger, slower disk, XFS rather than ext4.
+- **Buckets:** `kiflet` (the app's files) and `kiflet-exports` (data
+  exports and reports, with a lifecycle rule that expires them after 7
+  days). Garage supports lifecycle `Expiration` and
+  `AbortIncompleteMultipartUpload`, nothing else.
+- **Keys:** Garage has no bucket policies or ACLs, only "this key may
+  read, write or own this bucket". So each process gets its own key with
+  only what it needs: the app reads and writes `kiflet` and
+  `kiflet-exports`; the copying job (below) only reads them. Keys are
+  made through the admin API by an init job, not in the config file.
+- **Addressing:** path-style (`files.kiflet.et/kiflet/<key>`), so one
+  certificate and no wildcard DNS. `pkg/storage` gets a
+  `S3_FORCE_PATH_STYLE` setting; today it uses path-style only for plain
+  `http://` endpoints. `s3_region` in `garage.toml` and `S3_REGION` must be
+  the same string, or every signature is refused.
+- **Reached from outside** only through Caddy at `files.kiflet.et`, which
+  forwards the S3 port (3900) and nothing else. Presigned URLs are signed
+  for that host, so the app's client is configured with the public
+  endpoint, not the private one. The admin (3903) and RPC (3901) ports
+  stay on the private network. CORS on the buckets allows PUT and GET from
+  `app.kiflet.et` for the web's uploads.
+- **Checksums:** recent AWS SDKs add CRC32 checksums to every request by
+  default, and Garage's support for them varies by version. `pkg/storage`
+  already sends and checks them only where S3 requires them, and that
+  setting stays.
+
+What Garage does not do, and what covers it:
+
+- **No versioning and no object lock.** A file deleted or overwritten (by a
+  bug, a stolen key or a mistake) is gone from Garage, whatever the
+  replication. Proof of delivery is evidence, so a nightly job (rclone, as
+  `scripts/backup.sh` uses) copies new objects, encrypted with age, to the
+  **off-site bucket** with another provider, which keeps versions. The app
+  never deletes a POD file except through retention and company deletion
+  (`purgeTx`), and those are logged.
+- **Not a backup of itself.** Replication protects against a disk or a VM,
+  not against the site. Database backups and archived WAL therefore go to
+  the off-site bucket, as `docs/deploy.md` describes today, never only to
+  Garage on the same VMs. (Garage can run nodes in several places; a second
+  site would be its own decision.)
+- **No server-side encryption at rest** (SSE-S3, SSE-KMS). The storage
+  VMs' disks are encrypted instead (LUKS), and the off-site copy is
+  encrypted by us before it leaves.
+- **Licence:** AGPLv3. We run it unmodified as a separate service, which
+  asks nothing of our code; a change to Garage itself that we ran for users
+  would have to be published.
 
 ### Redis holds nothing that can't be rebuilt
 
@@ -800,6 +864,9 @@ flowchart LR
   strict on sign-in, codes and tracking look-ups.
 - **Files:** presigned URLs valid for minutes, keys prefixed by tenant, file
   types checked by content after upload (as `shipment_files.go` does now).
+  Garage has no bucket policies, so a bucket is never public: every read
+  goes through a presigned URL, and each process has its own key limited
+  to the buckets it uses.
 - **Secrets** in files mounted into containers (`*_FILE` variables, as
   today), never in images or the repository; gitleaks in CI.
 - **Audit:** every change a person makes is in `audit_logs`, which can't be
@@ -838,19 +905,23 @@ flowchart TB
     PGBA["PgBouncer"]
   end
 
-  subgraph STV["storage (or a hosted S3)"]
-    S3A["SeaweedFS / MinIO"]
+  subgraph STV["storage-1, storage-2, storage-3 (4 vCPU, 8 GB, SSD + large disk)"]
+    S3A["Garage node<br/>replication factor 3"]
   end
+
+  OFFB[("Off-site bucket<br/>another provider")]
 
   subgraph MON["monitor-1 (4 vCPU, 8 GB)"]
     OBSA["Prometheus, Grafana,<br/>Loki, Alertmanager"]
   end
 
   DNS --> E --> A
+  E -- "files.kiflet.et" --> STV
   A --> Q
   A --> DBV
   A --> STV
-  DBV -- "WAL archive, nightly base backup" --> STV
+  DBV -- "WAL archive, nightly base backup (encrypted)" --> OFFB
+  STV -- "nightly copy of new files (encrypted)" --> OFFB
   MON -. scrapes .-> E & A & Q & DBV & STV
 ```
 
@@ -861,16 +932,31 @@ flowchart TB
   `migrate`, then replaces API and worker containers one VM at a time
   (Caddy's health checks take a VM out while it restarts). Next.js deploys
   the same way from Kiflet/web's CI.
-- **Backups:** continuous WAL archiving and nightly base backups to object
-  storage with point-in-time restore (pgBackRest or WAL-G), a restore
-  tested in CI as `tests/e2e`'s last test does today. RabbitMQ definitions
-  exported nightly; Redis needs none.
+- **Backups:** continuous WAL archiving and nightly base backups to the
+  off-site bucket with point-in-time restore (pgBackRest or WAL-G), a
+  restore tested in CI as `tests/e2e`'s last test does today. RabbitMQ
+  definitions exported nightly; Redis needs none. Garage's files are copied
+  nightly to the same off-site provider (section 5); Garage's own metadata
+  snapshots cover a damaged node, and its cluster layout is kept in this
+  repository's runbook.
+- **Garage's setup** is a one-off init container that, through the admin
+  API, assigns and applies the layout, makes the buckets and keys, and
+  sets CORS and lifecycle rules; it does nothing when they exist already.
+  The image is built `FROM scratch` with no shell, so its compose health
+  check runs Garage's own binary rather than `wget`.
+- **Upgrading Garage** follows its release notes: a major version (v1 to
+  v2 reworked the admin API) is a procedure of its own, rehearsed in
+  staging with a metadata snapshot first.
 - **Staging** is the same compose files with stand-ins for the outside
-  world (the provider sandbox, Mailpit, SeaweedFS, Caddy's own CA), on one
-  VM, as `deployments/staging` is now.
+  world (the provider sandbox, Mailpit, Caddy's own CA), on one VM, as
+  `deployments/staging` is now. Garage is not a stand-in: staging runs the
+  same image as production, as one node with replication factor 1 (the
+  one place that is allowed).
 - **Smaller to start:** below 2,000 drivers everything fits on three VMs
-  (edge+app, queue+db, monitor) with the same compose files; parts move to
-  their own VMs as load grows, with no code change.
+  (edge+app, queue+db, monitor) with the same compose files, with one
+  Garage node on each of the three, so replication factor 3 holds from the
+  first day; parts move to their own VMs as load grows, with no code
+  change.
 
 ---
 
@@ -881,14 +967,18 @@ flowchart TB
   errors per route; queue depth, age of the oldest message and consumer
   rate per queue; positions per second in and stored; sync failures by
   reason; outbox lag; SMS sent and failed; Postgres and PgBouncer pools;
-  Redis hit rate.
+  Redis hit rate; Garage's own `/metrics` (on its admin port, with its
+  metrics token): requests and errors, blocks waiting to sync, disk used
+  per node.
 - **Logs:** JSON (zerolog), to Loki, with `request_id` and `trace_id`.
 - **Traces:** OpenTelemetry from Next.js through the API, RabbitMQ
   (headers in the envelope) and workers.
 - **Alerts** (Alertmanager to the operator by SMS and email): oldest
   message in `tracking.ingest` over 2 minutes; any dead-lettered message;
   outbox lag over 1 minute; 5xx over 1%; replica lag over 30 s; disk over
-  80%; backup older than 26 hours; certificate expiring within 14 days.
+  80%; backup older than 26 hours; certificate expiring within 14 days;
+  a Garage node down or its cluster not healthy; the off-site copy of the
+  files older than 26 hours.
 - **Health pages:** the operator's System health page reads the same
   figures.
 
@@ -911,6 +1001,7 @@ drivers on the road at once.
 | Live messages | positions coalesced per tenant to one message every 5 s: under 1,000/s across all sockets |
 | SMS | ~10 texts per shipment; 10,000 shipments a day → **100,000 texts a day**, ~5/s at peak, limited by the gateway |
 | Photos | 2 per delivery at ~300 KB → ~6 GB a day into object storage |
+| Garage disk | 6 GB a day × 3 copies = ~18 GB a day of raw disk across the three nodes: **~2.2 TB of files a year, ~6.6 TB of disk**, so each storage VM needs ~2.2 TB of data disk a year kept (plus the off-site copy, paid by the GB) |
 
 What each part handles at that load, with room to spare:
 
@@ -925,6 +1016,9 @@ What each part handles at that load, with room to spare:
 - **Postgres:** ~400 writes a second in batches and indexed reads; the
   primary's NVMe and 64 GB keep the working set (today's partitions and the
   hot tables) in memory.
+- **Garage (3 nodes):** ~10,000 deliveries a day is well under one upload a
+  second; disk, not CPU, is what it runs out of. How long POD photos are
+  kept (a retention setting per company, still to set) decides how fast.
 
 When to grow: more `api` and worker replicas first (no code change); then
 a bigger database VM; then, past ~50,000 drivers, positions could move to
@@ -947,5 +1041,9 @@ module boundary already allows.
   with fewer moving parts.
 - **Redis as a source of truth or as a queue.** RabbitMQ queues work;
   Redis caches.
+- **MinIO, SeaweedFS or a hosted S3 for the app's files.** Garage was
+  chosen (2026-11-19): self-hosted, small, made for a few nodes on ordinary
+  machines. MinIO no longer publishes images; SeaweedFS stays only until
+  staging and the tests move to Garage.
 - **GraphQL.** REST with generated types covers both clients; the driver
   sync is a single purpose-built endpoint.
