@@ -173,6 +173,7 @@ func New(d Deps) *Services {
 	c.alerts = s.Alerts
 	s.Media = &MediaService{core: c, store: d.Storage, pod: podStorage(d.Storage)}
 	s.Shipments = &ShipmentService{core: c, media: s.Media}
+	c.bus.Within("shipment.*", s.Shipments.notifyFor)
 	s.SMS.shipments = s.Shipments
 	s.Auth = &AuthService{core: c}
 	s.Users = &UserService{core: c}
@@ -275,9 +276,29 @@ func (c *core) tx(ctx context.Context, fn func(q *db.Queries, after *afterCommit
 	return nil
 }
 
-type afterCommit struct{ fns []func() }
+type afterCommit struct {
+	fns []func()
+	// to, when set, is the After of the events.Tx a subscriber runs in:
+	// what it defers goes to the publisher's transaction.
+	to func(func())
+}
 
-func (a *afterCommit) do(f func()) { a.fns = append(a.fns, f) }
+func (a *afterCommit) do(f func()) {
+	if a.to != nil {
+		a.to(f)
+		return
+	}
+	a.fns = append(a.fns, f)
+}
+
+// afterOf is the afterCommit of a bus transaction, for a subscriber
+// calling code that takes one; nil when there is no transaction.
+func afterOf(tx events.Tx) *afterCommit {
+	if tx.After == nil {
+		return nil
+	}
+	return &afterCommit{to: tx.After}
+}
 
 // fn is do as a function, or nil for no transaction: what an events.Tx
 // and handOff take.

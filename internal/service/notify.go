@@ -3,13 +3,16 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/kiflet/backend/internal/modules/shipments"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/shipments"
+	"github.com/kiflet/backend/internal/platform/events"
 	"github.com/kiflet/backend/internal/platform/text"
 )
 
@@ -136,6 +139,91 @@ func (s *ShipmentService) notifyCustomer(ctx context.Context, q *db.Queries, aft
 	}
 }
 
+// notifyFor texts the customer and the driver what an event in a
+// shipment's history means for them, in the transaction of the change
+// (FR-011, FR-016): it subscribes to shipment.* on the bus. Which texts a
+// company sends is in its settings.
+func (s *ShipmentService) notifyFor(ctx context.Context, tx events.Tx, ev events.Event) error {
+	m, ok := ev.Payload.(ShipmentEventMessage)
+	if !ok {
+		return fmt.Errorf("%s carries %T, not a ShipmentEventMessage", ev.Type, ev.Payload)
+	}
+	e, sh := m.event, m.shipment
+	switch {
+	case e.Type == "created", e.Type == "status_changed":
+	case e.Type == "assigned" && e.newDriver:
+	case e.Type == "edited" && e.DriverID.Valid && editedFields(e).has("destination"):
+	default:
+		return nil
+	}
+	q, after := db.New(tx.Conn), afterOf(tx)
+	t, err := s.tenant(ctx, q, sh.TenantID)
+	if err != nil {
+		return err
+	}
+	driverText := func(id pgtype.UUID, body, purpose string) {
+		if d, err := s.user(ctx, q, sh.TenantID, id); err == nil && d.Phone != nil {
+			s.enqueueSMS(ctx, q, after, outboundSMS{
+				TenantID: sh.TenantID, ShipmentID: sh.ID, Phone: *d.Phone, Purpose: purpose, Body: body,
+			})
+		}
+	}
+
+	switch e.Type {
+	case "created":
+		if t.SmsOnCreated {
+			body := s.customerCreatedText(t, sh)
+			s.notifyCustomer(ctx, q, after, t, sh, body, body)
+		}
+
+	case "assigned":
+		if t.SmsDriverOnAssign {
+			driverText(e.DriverID, s.driverAssignedText(t, sh), PurposeDriverAssigned)
+		}
+		// A load handed over on the road: the driver who had it stops.
+		if e.PreviousDriverID.Valid && model.IsOnRoad(e.From) {
+			to, err := s.user(ctx, q, sh.TenantID, e.DriverID)
+			if err != nil {
+				return err
+			}
+			driverText(e.PreviousDriverID, fmt.Sprintf("%s: shipment %s has been handed to %s.",
+				t.Name, ShortRef(sh.TrackingNumber), to.FullName), PurposeDriverMessage)
+		}
+
+	case "edited":
+		// A new drop-off matters enough to text (FR-011 AC-011.4): the
+		// driver may be on the road with the app closed.
+		driverText(e.DriverID, fmt.Sprintf("%s: shipment %s now goes to %s. %s.",
+			t.Name, ShortRef(sh.TrackingNumber), place(sh.DestinationCity, sh.DestinationAddress), meet(sh)), PurposeDriverMessage)
+
+	case "status_changed":
+		if e.To != model.StatusCancelled {
+			toReceiver, toCustomer := s.customerStatusText(t, sh, e.To, e.firstDeparture, e.Reason, e.recipient)
+			s.notifyCustomer(ctx, q, after, t, sh, toReceiver, toCustomer)
+			return nil
+		}
+		if t.SmsOnCancelled {
+			body := s.customerCancelledText(t, sh)
+			s.notifyCustomer(ctx, q, after, t, sh, body, body)
+		}
+		if e.DriverID.Valid && model.IsActiveStatus(e.From) {
+			driverText(e.DriverID, fmt.Sprintf("%s: shipment %s (%s) is CANCELLED: %s. Do not deliver it; call the office.",
+				t.Name, ShortRef(sh.TrackingNumber), deref(sh.DestinationCity), model.ReasonLabel(e.Reason)), PurposeDriverMessage)
+		}
+	}
+	return nil
+}
+
+// fieldList is the fields an "edited" event names.
+type fieldList []string
+
+func (f fieldList) has(name string) bool { return contains(f, name) }
+
+func editedFields(e shipmentEvent) fieldList {
+	f, _ := e.Details["fields"].([]string)
+	return f
+}
+
 // meet is who the driver is told to meet: "Customer Name 09…", or "Deliver
 // to Name 09…" when the receiver isn't the customer.
 func meet(sh shipments.Shipment) string {
@@ -146,10 +234,8 @@ func meet(sh shipments.Shipment) string {
 	return "Customer " + name + " " + phone
 }
 
-func (s *ShipmentService) notifyDriverAssigned(ctx context.Context, q *db.Queries, after *afterCommit, t db.Tenant, sh shipments.Shipment, d db.User) {
-	if d.Phone == nil {
-		return
-	}
+// driverAssignedText tells a driver of a load they have been given.
+func (s *ShipmentService) driverAssignedText(t db.Tenant, sh shipments.Shipment) string {
 	ref := ShortRef(sh.TrackingNumber)
 	cargo := ""
 	if sh.CargoDescription != nil {
@@ -168,12 +254,9 @@ func (s *ShipmentService) notifyDriverAssigned(ctx context.Context, q *db.Querie
 	if s.cfg.SMSNumber != "" {
 		report = fmt.Sprintf(" When you leave, open the driver app or text ET %s 1 to %s.", ref, s.cfg.SMSNumber)
 	}
-	body := fmt.Sprintf("%s: %snew shipment %s, %s to %s.%s %s.%s%s",
+	return fmt.Sprintf("%s: %snew shipment %s, %s to %s.%s %s.%s%s",
 		t.Name, priority, ref, place(sh.OriginCity, sh.OriginAddress), place(sh.DestinationCity, sh.DestinationAddress),
 		pickup, meet(sh), cargo, report)
-	s.enqueueSMS(ctx, q, after, outboundSMS{
-		TenantID: t.ID, ShipmentID: sh.ID, Phone: *d.Phone, Body: body, Purpose: PurposeDriverAssigned,
-	})
 }
 
 // SMSPreview is the text a customer gets when their load sets off, in one

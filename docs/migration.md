@@ -350,7 +350,8 @@ throughout; only imports move.
    when a process stops in between. `After` runs once it has committed,
    for live updates and waking workers. The bus also writes the outbox,
    which `core.emit` did. Webhooks subscribe to `shipment.*` within the
-   transaction, live updates after it; notify and alerts follow, then booking and status changes move
+   transaction, then the customer's and driver's texts; live updates
+   after it. Alerts follow, then booking and status changes move
    into the shipments module, publishing instead of calling them.
 
 Done when: `internal/service`, `internal/model` and `internal/db` are gone;
