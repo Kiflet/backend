@@ -397,7 +397,7 @@ func webhookBody(eventType string, at time.Time, data any) []byte {
 
 // webhookTypes are the webhook events a shipment event is: none for most,
 // and two for a delivery or a problem, which are status changes as well.
-func webhookTypes(e shipmentEvent) []string {
+func webhookTypes(e shipments.Change) []string {
 	switch e.Type {
 	case "created":
 		return []string{WebhookShipmentCreated}
@@ -425,15 +425,15 @@ func webhookTypes(e shipmentEvent) []string {
 // webhooksFor writes the webhooks a shipment's event calls for, in the
 // transaction of the change: it subscribes to shipment.* on the bus.
 func (c *core) webhooksFor(ctx context.Context, tx events.Tx, ev events.Event) error {
-	m, ok := ev.Payload.(ShipmentEventMessage)
+	m, ok := ev.Payload.(shipments.Changed)
 	if !ok {
-		return fmt.Errorf("%s carries %T, not a ShipmentEventMessage", ev.Type, ev.Payload)
+		return fmt.Errorf("%s carries %T, not a shipments.Changed", ev.Type, ev.Payload)
 	}
-	c.enqueueWebhooks(ctx, db.New(tx.Conn), tx.After, m.actor, m.shipment, m.event, m.OccurredAt)
+	c.enqueueWebhooks(ctx, db.New(tx.Conn), tx.After, m.Actor, m.Shipment, m.Change, m.OccurredAt)
 	return nil
 }
 
-func (c *core) enqueueWebhooks(ctx context.Context, q *db.Queries, after func(func()), a Actor, sh shipments.Shipment, e shipmentEvent, at time.Time) {
+func (c *core) enqueueWebhooks(ctx context.Context, q *db.Queries, after func(func()), a Actor, sh shipments.Shipment, e shipments.Change, at time.Time) {
 	types := webhookTypes(e)
 	if len(types) == 0 || c.webhooks == nil {
 		return

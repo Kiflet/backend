@@ -23,6 +23,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/pkg/broker"
 	"github.com/kiflet/backend/pkg/console"
@@ -197,7 +198,7 @@ func TestRabbitMQ(t *testing.T) {
 				if err := json.Unmarshal(d.Body, &env); err != nil {
 					t.Fatalf("not an envelope: %s", d.Body)
 				}
-				var m service.ShipmentEventMessage
+				var m shipments.Changed
 				_ = json.Unmarshal(env.Payload, &m)
 				if m.ShipmentID != shipmentID || env.Type != "shipment.created" {
 					continue

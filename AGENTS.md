@@ -63,8 +63,10 @@ the plan, not from those.
   packages, never `internal/service`, `db` or `model`. Errors a person
   can act on are `internal/platform/apperror`'s (`service.Error` is the
   same type). Moved so far: audit, tenancy, identity, fleet, and
-  shipments' tables, rules, documents and charges (booking, assigning
-  and status changes still in `internal/service`).
+  shipments' tables, rules, documents and charges, and its history,
+  which `shipments.History.Record` writes and publishes on the bus as
+  `shipment.<type>` (booking, assigning and status changes still in
+  `internal/service`).
 - `internal/service`: the business rules not yet in a module. Handlers
   stay thin.
 - `internal/model`: plans and prices, and aliases of what moved to the

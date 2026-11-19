@@ -259,7 +259,8 @@ throughout; only imports move.
    5. `make test test-integration`; one PR per module.
 
    Done: audit, tenancy, identity, fleet; shipments in part (its tables,
-   its history, the status rules, documents and charges; booking,
+   its history, which it records and publishes, the status rules,
+   documents and charges; booking,
    assigning, status changes and the driver sync still in
    `internal/service`). How it went, for the rest:
    - **The server-rendered handlers stay in `internal/web`.** Phase 4

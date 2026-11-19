@@ -12,15 +12,19 @@ import (
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/modules/shipments/store"
 	"github.com/kiflet/backend/internal/platform/database"
+	"github.com/kiflet/backend/internal/platform/events"
 )
 
 // Service is shipments.Shipments on Postgres.
-type Service struct{}
+type Service struct {
+	bus events.Bus
+}
 
 var _ shipments.Shipments = Service{}
 
-// New is the shipments module.
-func New() Service { return Service{} }
+// New is the shipments module, publishing its history on bus. A nil bus
+// publishes nothing.
+func New(bus events.Bus) Service { return Service{bus: bus} }
 
 // found makes a shipment that isn't there shipments.ErrNoShipment.
 func found(s shipments.Shipment, err error) (shipments.Shipment, error) {

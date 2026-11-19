@@ -59,7 +59,12 @@ What changed in each release, newest first.
   those a shipment's events raise or clear (problems and delays
   reported, deliveries, proof held or recorded away from the
   destination, a customer's complaint, a driver's message) come from a
-  subscriber too. A new test covers the four that had none.
+  subscriber too. A new test covers the four that had none. Finally the
+  shipments module records each event in a shipment's history and
+  publishes it (`shipments.History.Record`, the event `shipments.Changed`),
+  so booking and status changes can move into it next without knowing
+  who reacts. `internal/app` makes the one bus and hands it to the module
+  and the services.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

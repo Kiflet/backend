@@ -25,6 +25,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/kiflet/backend/internal/platform/config"
+	"github.com/kiflet/backend/internal/platform/events"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/internal/web"
 	"github.com/kiflet/backend/pkg/broker"
@@ -146,6 +147,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 	if senders[service.WorkSMS] || senders[service.WorkMail] || senders[service.WorkWebhooks] {
 		work = brokerWork{b: a.broker, kinds: senders}
 	}
+	// The bus writes every event to the outbox when RabbitMQ is there to
+	// carry it on; without it nothing would read them.
+	bus := events.New(a.broker != nil, nil, log)
 	svc := service.New(service.Deps{
 		Audit:         auditapp.New(pool, log),
 		Tenancy:       tenancyapp.New(),
@@ -155,9 +159,10 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		Signups:       identityapp.NewSignups(pool),
 		Users:         identityapp.NewUsers(pool),
 		Fleet:         fleetapp.New(pool),
-		Shipments:     shipmentsapp.New(),
-		ShipmentFiles: shipmentsapp.New(),
-		Pool:          pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
+		Shipments:     shipmentsapp.New(bus),
+		ShipmentFiles: shipmentsapp.New(bus),
+		Bus:           bus,
+		Pool:          pool, Log: log, Publisher: live, Positions: positions,
 		RemoteWorkers: !roles.Has("worker"), Work: work,
 		Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},
 		Payments: providers,

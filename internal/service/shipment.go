@@ -384,9 +384,9 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 			break
 		}
 
-		s.event(ctx, q, after, a, out, shipmentEvent{Type: "created", To: model.StatusPending, Public: true})
+		s.event(ctx, q, after, a, out, shipments.Change{Type: "created", To: model.StatusPending, Public: true})
 		if driver != nil {
-			s.event(ctx, q, after, a, out, shipmentEvent{Type: "assigned", To: model.StatusAssigned, DriverID: driver.ID, Public: true, newDriver: true})
+			s.event(ctx, q, after, a, out, shipments.Change{Type: "assigned", To: model.StatusAssigned, DriverID: driver.ID, Public: true, NewDriver: true})
 		}
 		return nil
 	})
@@ -466,7 +466,7 @@ func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, i
 		if len(changed) == 0 {
 			return nil
 		}
-		ev := shipmentEvent{Type: "edited", Details: map[string]any{"fields": changed}}
+		ev := shipments.Change{Type: "edited", Details: map[string]any{"fields": changed}}
 		// The driver needs to know when where they're going or who they're
 		// meeting changes under them.
 		if cur.DriverID.Valid && driverRelevant(changed) {
@@ -567,9 +567,9 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 			return err
 		}
 
-		ev := shipmentEvent{
+		ev := shipments.Change{
 			Type: "assigned", From: cur.Status, To: status, DriverID: driver.ID, Public: cur.Status == model.StatusPending,
-			newDriver: cur.DriverID != driver.ID,
+			NewDriver: cur.DriverID != driver.ID,
 		}
 		if cur.DriverID.Valid && cur.DriverID != driver.ID {
 			ev.PreviousDriverID = cur.DriverID
@@ -604,7 +604,7 @@ func (s *ShipmentService) Unassign(ctx context.Context, a Actor, id pgtype.UUID)
 		if err != nil {
 			return err
 		}
-		s.event(ctx, q, after, a, out, shipmentEvent{
+		s.event(ctx, q, after, a, out, shipments.Change{
 			Type: "unassigned", From: cur.Status, To: model.StatusPending, PreviousDriverID: cur.DriverID,
 		})
 		return nil
@@ -963,123 +963,20 @@ func (s *ShipmentService) DeliveredSince(ctx context.Context, tenantID pgtype.UU
 // History
 // ---------------------------------------------------------------------------
 
-type shipmentEvent struct {
-	Type             string
-	From, To         string
-	DriverID         pgtype.UUID
-	PreviousDriverID pgtype.UUID
-	Note             string
-	Reason           string
-	Lat, Lng         *float64
-	VisibleToDriver  bool
-	Public           bool
-	Details          map[string]any
-	ClientID         string
-	OccurredAt       time.Time
-
-	// Not kept in the history; for the subscribers that text people.
-	newDriver      bool        // assigned: the driver is new to the load
-	firstDeparture bool        // status_changed: the load's first move to in transit
-	recipient      string      // status_changed: who took delivery, from the proof
-	by             model.Actor // status_changed: how it was made
-	// pod_recorded: how the proof's place compares with the destination.
-	pod *podCheck
-}
-
-// podCheck is what the alerts make of where a proof of delivery was
-// recorded.
-type podCheck struct {
-	driver            pgtype.UUID // who recorded it
-	haveFix, verified bool
-	distance          float64 // metres from the destination
-	reason            string  // the driver's, for being elsewhere
-}
-
-// event appends to a shipment's timeline. It reports false when the event is
-// a replay of one already recorded (same client_id).
-//
-// Webhooks are written with it, for the endpoints that asked for what
-// happened; sh is the shipment as it is after the change.
-func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, sh shipments.Shipment, e shipmentEvent) bool {
-	occurred := e.OccurredAt
-	if occurred.IsZero() {
-		occurred = s.now()
+// event records a change in a shipment's history and publishes it, in
+// the transaction of the change; false when the device sent it before. sh
+// is the shipment as it is after the change.
+func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, sh shipments.Shipment, e shipments.Change) bool {
+	if e.OccurredAt.IsZero() {
+		e.OccurredAt = s.now()
 	}
-	var details []byte
-	if len(e.Details) > 0 {
-		details = mustJSON(e.Details)
-	}
-	_, err := s.shipmentData.AddEvent(ctx, q.Conn(), shipments.NewEvent{
-		TenantID:         sh.TenantID,
-		ShipmentID:       sh.ID,
-		EventType:        e.Type,
-		FromStatus:       toText(e.From),
-		ToStatus:         toText(e.To),
-		DriverID:         e.DriverID,
-		PreviousDriverID: e.PreviousDriverID,
-		ActorID:          a.UserID,
-		ActorName:        a.Name,
-		Source:           a.Source,
-		Note:             toText(e.Note),
-		Reason:           toText(e.Reason),
-		Latitude:         e.Lat,
-		Longitude:        e.Lng,
-		VisibleToDriver:  e.VisibleToDriver,
-		Public:           e.Public,
-		Details:          details,
-		ClientID:         toText(e.ClientID),
-		OccurredAt:       toTimestamp(occurred),
-	})
-	if isNoRows(err) {
-		return false
-	}
-	if err != nil {
-		s.log.Error().Err(err).Str("type", e.Type).Msg("record shipment event")
-		return false
-	}
-	err = s.bus.Publish(ctx, events.Tx{Conn: q.Conn(), After: after.fn()}, events.Event{
-		Type: "shipment." + e.Type, TenantID: sh.TenantID,
-		Payload: ShipmentEventMessage{
-			ShipmentID: sh.ID.String(), TrackingNumber: sh.TrackingNumber, Status: sh.Status,
-			Type: e.Type, FromStatus: e.From, ToStatus: e.To, Reason: e.Reason,
-			DriverID: uuidString(e.DriverID), ActorID: uuidString(a.UserID), Source: a.Source,
-			Lat: e.Lat, Lng: e.Lng, OccurredAt: occurred,
-			shipment: sh, actor: a, event: e,
-		},
-	})
+	recorded, err := s.shipmentData.Record(ctx, events.Tx{Conn: q.Conn(), After: after.fn()}, a, sh, e)
 	if err != nil {
 		// A failed write spoils the transaction, so the change fails with
 		// it: no change goes in without its event.
-		s.log.Error().Err(err).Str("type", e.Type).Msg("publish shipment event")
+		s.log.Error().Err(err).Str("type", e.Type).Msg("record shipment event")
 	}
-	return true
-}
-
-// ShipmentEventMessage is the event on the bus for each event in a
-// shipment's history, and what kiflet.events carries of it
-// (shipment.<type>, version 1). Consumers fetch more if they need it;
-// customers' details stay out of the broker.
-type ShipmentEventMessage struct {
-	ShipmentID     string    `json:"shipment_id"`
-	TrackingNumber string    `json:"tracking_number"`
-	Status         string    `json:"status"`
-	Type           string    `json:"type"`
-	FromStatus     string    `json:"from_status,omitempty"`
-	ToStatus       string    `json:"to_status,omitempty"`
-	Reason         string    `json:"reason,omitempty"`
-	DriverID       string    `json:"driver_id,omitempty"`
-	ActorID        string    `json:"actor_id,omitempty"`
-	Source         string    `json:"source"`
-	Lat            *float64  `json:"lat,omitempty"`
-	Lng            *float64  `json:"lng,omitempty"`
-	OccurredAt     time.Time `json:"occurred_at"`
-
-	// For the subscribers in this process (webhooks): the shipment as it
-	// is after the change, who made it, and the event in full. They stay
-	// out of the broker.
-	shipment shipments.Shipment
-	actor    Actor
-	event    shipmentEvent
+	return recorded
 }
 
 // liveShipment tells the company's dashboards that a shipment changed,
@@ -1087,7 +984,7 @@ type ShipmentEventMessage struct {
 // change is what happened (the event's type); the dashboard fetches what
 // it shows again.
 func (c *core) liveShipment(_ context.Context, ev events.Event) {
-	m, ok := ev.Payload.(ShipmentEventMessage)
+	m, ok := ev.Payload.(shipments.Changed)
 	if !ok {
 		return
 	}
