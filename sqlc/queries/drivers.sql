@@ -1,21 +1,6 @@
--- The drivers' profile: their vehicle, licence and app settings, and the
--- drivers page. These columns of users are the fleet module's
--- (docs/architecture.md, section 4), and move with it.
-
--- name: SetDriverVehicle :exec
-UPDATE users SET vehicle_id = $3 WHERE id = $1 AND tenant_id = $2 AND role = 'driver';
-
--- name: ClearVehicleFromDrivers :exec
-UPDATE users SET vehicle_id = NULL WHERE vehicle_id = $1 AND tenant_id = $2;
-
--- name: SetDriverAppSettings :exec
--- The driver app's settings, chosen on the phone (FR-026 AC-026.6). The
--- phone sends only those the driver changed; the rest stay as they are.
-UPDATE users
-SET language = COALESCE(sqlc.narg(language)::text, language),
-    app_battery_saver = COALESCE(sqlc.narg(battery_saver)::boolean, app_battery_saver),
-    app_vibrate = COALESCE(sqlc.narg(vibrate)::boolean, app_vibrate)
-WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id) AND role = 'driver';
+-- The drivers page and the assignment picker: each driver with their
+-- load, phone and position, from fleet's, tracking's and shipments'
+-- tables. A read model, which moves to reports.
 
 -- name: ListDriversWithStatus :many
 -- The drivers page and the assignment picker: who is on duty, how loaded they
@@ -65,7 +50,3 @@ WHERE u.tenant_id = sqlc.arg(tenant_id)
        OR u.full_name ILIKE '%' || sqlc.narg(query)::text || '%'
        OR u.phone ILIKE '%' || sqlc.narg(query)::text || '%')
 ORDER BY u.is_active DESC, u.full_name;
-
--- name: SetDriverLicence :exec
-UPDATE users SET licence_expires_on = sqlc.narg(licence_expires_on)
-WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id) AND role = 'driver';

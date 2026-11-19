@@ -70,7 +70,6 @@ type Querier interface {
 	ClaimSMSByIDs(ctx context.Context, ids []pgtype.UUID) ([]SmsMessage, error)
 	// As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
 	ClaimWebhooksByIDs(ctx context.Context, ids []pgtype.UUID) ([]WebhookDelivery, error)
-	ClearVehicleFromDrivers(ctx context.Context, arg ClearVehicleFromDriversParams) error
 	CountActiveAPIKeys(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	CountActiveShipmentsByDriver(ctx context.Context, arg CountActiveShipmentsByDriverParams) (int64, error)
 	CountAlerts(ctx context.Context, arg CountAlertsParams) (int64, error)
@@ -98,7 +97,6 @@ type Querier interface {
 	CountTrackingEventsByShipment(ctx context.Context, arg CountTrackingEventsByShipmentParams) (int64, error)
 	// One person's badge: open alerts raised since they last opened the list.
 	CountUnreadAlerts(ctx context.Context, arg CountUnreadAlertsParams) (int64, error)
-	CountVehiclesByTenant(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	CountWaitingTickets(ctx context.Context) (int64, error)
 	CountWebhookEndpoints(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	// The public API's keys (FR-046).
@@ -128,7 +126,6 @@ type Querier interface {
 	// its partition key) it is what a retried batch conflicts on, so replaying
 	// a batch whose response was lost cannot duplicate telemetry.
 	CreateTrackingEvents(ctx context.Context, arg CreateTrackingEventsParams) error
-	CreateVehicle(ctx context.Context, arg CreateVehicleParams) (Vehicle, error)
 	// Webhooks (FR-047): a company's endpoints, and the outbox of messages to
 	// them.
 	CreateWebhookEndpoint(ctx context.Context, arg CreateWebhookEndpointParams) (WebhookEndpoint, error)
@@ -227,7 +224,6 @@ type Querier interface {
 	GetTenantForUpdate(ctx context.Context, id pgtype.UUID) (Tenant, error)
 	// Only for the platform admin, who answers every company.
 	GetTicketForPlatform(ctx context.Context, id pgtype.UUID) (GetTicketForPlatformRow, error)
-	GetVehicleByID(ctx context.Context, arg GetVehicleByIDParams) (Vehicle, error)
 	// What a vehicle carries already: the weight of its active shipments other
 	// than this one, and another driver on any of them.
 	GetVehicleLoad(ctx context.Context, arg GetVehicleLoadParams) (GetVehicleLoadRow, error)
@@ -244,7 +240,6 @@ type Querier interface {
 	ListAPIKeys(ctx context.Context, tenantID pgtype.UUID) ([]ApiKey, error)
 	ListActiveShipmentsByDriver(ctx context.Context, arg ListActiveShipmentsByDriverParams) ([]Shipment, error)
 	ListActiveShipmentsForMap(ctx context.Context, tenantID pgtype.UUID) ([]ListActiveShipmentsForMapRow, error)
-	ListActiveVehiclesByTenant(ctx context.Context, tenantID pgtype.UUID) ([]Vehicle, error)
 	// Office staff who asked to have alerts of this type emailed to them, at a
 	// confirmed address.
 	ListAlertEmailRecipients(ctx context.Context, arg ListAlertEmailRecipientsParams) ([]ListAlertEmailRecipientsRow, error)
@@ -267,6 +262,9 @@ type Querier interface {
 	// Active drivers with a shipment assigned or under way: who a message to
 	// "every driver on the road" reaches.
 	ListDriversOnTheRoad(ctx context.Context, tenantID pgtype.UUID) ([]ListDriversOnTheRoadRow, error)
+	// The drivers page and the assignment picker: each driver with their
+	// load, phone and position, from fleet's, tracking's and shipments'
+	// tables. A read model, which moves to reports.
 	// The drivers page and the assignment picker: who is on duty, how loaded they
 	// are, what they carry now, where and when their phone was last heard from,
 	// and when their licence runs out.
@@ -290,10 +288,6 @@ type Querier interface {
 	// How late counts is the company's rule (alert_rules.late_minutes).
 	ListOverdueShipments(ctx context.Context) ([]ListOverdueShipmentsRow, error)
 	ListPODMediaForShipments(ctx context.Context, ids []pgtype.UUID) ([]ListPODMediaForShipmentsRow, error)
-	// The papers check: every active driver's licence and every vehicle's
-	// insurance and inspection that runs out on or before a day, across
-	// companies. The alert's episode names the date, so each is raised once.
-	ListPapersDue(ctx context.Context, until pgtype.Date) ([]ListPapersDueRow, error)
 	ListPaymentsByInvoice(ctx context.Context, arg ListPaymentsByInvoiceParams) ([]Payment, error)
 	// Payments a provider may have finished without its notification reaching
 	// us: open a minute or more, a few hours old at most, and not asked about
@@ -382,6 +376,9 @@ type Querier interface {
 	// Trials ending before $1 whose end hasn't been announced yet. The episode
 	// is the end time, so an extended trial is announced again.
 	ListTrialsEnding(ctx context.Context, trialEndsAt pgtype.Timestamptz) ([]Tenant, error)
+	// The vehicles page: each vehicle with its drivers and load, from
+	// identity's and shipments' tables. A read model, which moves to reports;
+	// vehicles are the fleet module's (internal/modules/fleet).
 	ListVehiclesWithDrivers(ctx context.Context, tenantID pgtype.UUID) ([]ListVehiclesWithDriversRow, error)
 	ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]ListWebhookDeliveriesRow, error)
 	ListWebhookEndpoints(ctx context.Context, tenantID pgtype.UUID) ([]ListWebhookEndpointsRow, error)
@@ -484,17 +481,9 @@ type Querier interface {
 	SetCustomerConfirmation(ctx context.Context, arg SetCustomerConfirmationParams) (Shipment, error)
 	// A problem report: the customer has answered but not confirmed receipt.
 	SetCustomerFeedback(ctx context.Context, arg SetCustomerFeedbackParams) (Shipment, error)
-	// The driver app's settings, chosen on the phone (FR-026 AC-026.6). The
-	// phone sends only those the driver changed; the rest stay as they are.
-	SetDriverAppSettings(ctx context.Context, arg SetDriverAppSettingsParams) error
-	SetDriverLicence(ctx context.Context, arg SetDriverLicenceParams) error
 	// Keeps the driver's newest position for the fleet map. An older fix,
 	// from a phone sending what it saved while offline, changes nothing.
 	SetDriverPosition(ctx context.Context, arg SetDriverPositionParams) error
-	// The drivers' profile: their vehicle, licence and app settings, and the
-	// drivers page. These columns of users are the fleet module's
-	// (docs/architecture.md, section 4), and move with it.
-	SetDriverVehicle(ctx context.Context, arg SetDriverVehicleParams) error
 	SetEnterpriseOffer(ctx context.Context, arg SetEnterpriseOfferParams) error
 	// Files an inbound message under the company and shipment it turned out to
 	// be about, once the sender is known.
@@ -530,7 +519,6 @@ type Querier interface {
 	TouchAPIKey(ctx context.Context, id pgtype.UUID) error
 	// Edits replace every editable field; the form always submits all of them.
 	UpdateShipmentDetails(ctx context.Context, arg UpdateShipmentDetailsParams) (Shipment, error)
-	UpdateVehicle(ctx context.Context, arg UpdateVehicleParams) (Vehicle, error)
 	UpdateWebhookEndpoint(ctx context.Context, arg UpdateWebhookEndpointParams) (WebhookEndpoint, error)
 	UpsertAlertRules(ctx context.Context, arg UpsertAlertRulesParams) error
 	UpsertSyncMetadata(ctx context.Context, arg UpsertSyncMetadataParams) error

@@ -258,7 +258,7 @@ throughout; only imports move.
       `http/` (still rendering templates for now).
    5. `make test test-integration`; one PR per module.
 
-   Done: audit, tenancy, identity. How it went, for the rest:
+   Done: audit, tenancy, identity, fleet. How it went, for the rest:
    - **The server-rendered handlers stay in `internal/web`.** Phase 4
      replaces those pages with Kiflet/web and phase 6 deletes them, so
      moving them would be work thrown away. A module's `http/` holds the
@@ -307,7 +307,13 @@ throughout; only imports move.
    - **A table may have columns of two modules:** `users` is identity's,
      but its driver profile columns (`vehicle_id`, `licence_expires_on`,
      the app settings) are fleet's, as `docs/architecture.md` has it.
-     Their queries wait in `sqlc/queries/drivers.sql` for fleet.
+     Fleet's store has their queries. The papers check reads a driver's
+     role and standing beside their licence, a read of identity's columns
+     kept on purpose: the two share the row.
+   - **Pages that gather from several modules are read models:** the
+     platform's companies (`tenants.sql`), the vehicles page
+     (`vehicles.sql`) and the drivers page (`drivers.sql`) stay in
+     `sqlc/queries` until reports moves; the modules own the tables.
    - **What still reaches into identity's tables**, to go through
      `identity.Users` when that code moves: joins on `users` for names
      and drivers in `alerts`, `billing`, `dashboard`, `pod`, `reports`,

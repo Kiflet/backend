@@ -11,21 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const clearVehicleFromDrivers = `-- name: ClearVehicleFromDrivers :exec
-UPDATE users SET vehicle_id = NULL WHERE vehicle_id = $1 AND tenant_id = $2
-`
-
-type ClearVehicleFromDriversParams struct {
-	VehicleID pgtype.UUID `db:"vehicle_id" json:"vehicle_id"`
-	TenantID  pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-}
-
-func (q *Queries) ClearVehicleFromDrivers(ctx context.Context, arg ClearVehicleFromDriversParams) error {
-	_, err := q.db.Exec(ctx, clearVehicleFromDrivers, arg.VehicleID, arg.TenantID)
-	return err
-}
-
 const listDriversWithStatus = `-- name: ListDriversWithStatus :many
+
 SELECT u.id, u.full_name, u.phone, u.is_active, u.vehicle_id, u.created_at, u.licence_expires_on,
        v.plate_number AS vehicle_plate,
        sm.last_sync_at, sm.battery_level, sm.tracking_paused, sm.app_version, sm.storage_used_kb,
@@ -105,6 +92,9 @@ type ListDriversWithStatusRow struct {
 	PositionAt         pgtype.Timestamptz `db:"position_at" json:"position_at"`
 }
 
+// The drivers page and the assignment picker: each driver with their
+// load, phone and position, from fleet's, tracking's and shipments'
+// tables. A read model, which moves to reports.
 // The drivers page and the assignment picker: who is on duty, how loaded they
 // are, what they carry now, where and when their phone was last heard from,
 // and when their licence runs out.
@@ -155,68 +145,4 @@ func (q *Queries) ListDriversWithStatus(ctx context.Context, arg ListDriversWith
 		return nil, err
 	}
 	return items, nil
-}
-
-const setDriverAppSettings = `-- name: SetDriverAppSettings :exec
-UPDATE users
-SET language = COALESCE($1::text, language),
-    app_battery_saver = COALESCE($2::boolean, app_battery_saver),
-    app_vibrate = COALESCE($3::boolean, app_vibrate)
-WHERE id = $4 AND tenant_id = $5 AND role = 'driver'
-`
-
-type SetDriverAppSettingsParams struct {
-	Language     *string     `db:"language" json:"language"`
-	BatterySaver *bool       `db:"battery_saver" json:"battery_saver"`
-	Vibrate      *bool       `db:"vibrate" json:"vibrate"`
-	ID           pgtype.UUID `db:"id" json:"id"`
-	TenantID     pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-}
-
-// The driver app's settings, chosen on the phone (FR-026 AC-026.6). The
-// phone sends only those the driver changed; the rest stay as they are.
-func (q *Queries) SetDriverAppSettings(ctx context.Context, arg SetDriverAppSettingsParams) error {
-	_, err := q.db.Exec(ctx, setDriverAppSettings,
-		arg.Language,
-		arg.BatterySaver,
-		arg.Vibrate,
-		arg.ID,
-		arg.TenantID,
-	)
-	return err
-}
-
-const setDriverLicence = `-- name: SetDriverLicence :exec
-UPDATE users SET licence_expires_on = $1
-WHERE id = $2 AND tenant_id = $3 AND role = 'driver'
-`
-
-type SetDriverLicenceParams struct {
-	LicenceExpiresOn pgtype.Date `db:"licence_expires_on" json:"licence_expires_on"`
-	ID               pgtype.UUID `db:"id" json:"id"`
-	TenantID         pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-}
-
-func (q *Queries) SetDriverLicence(ctx context.Context, arg SetDriverLicenceParams) error {
-	_, err := q.db.Exec(ctx, setDriverLicence, arg.LicenceExpiresOn, arg.ID, arg.TenantID)
-	return err
-}
-
-const setDriverVehicle = `-- name: SetDriverVehicle :exec
-
-UPDATE users SET vehicle_id = $3 WHERE id = $1 AND tenant_id = $2 AND role = 'driver'
-`
-
-type SetDriverVehicleParams struct {
-	ID        pgtype.UUID `db:"id" json:"id"`
-	TenantID  pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-	VehicleID pgtype.UUID `db:"vehicle_id" json:"vehicle_id"`
-}
-
-// The drivers' profile: their vehicle, licence and app settings, and the
-// drivers page. These columns of users are the fleet module's
-// (docs/architecture.md, section 4), and move with it.
-func (q *Queries) SetDriverVehicle(ctx context.Context, arg SetDriverVehicleParams) error {
-	_, err := q.db.Exec(ctx, setDriverVehicle, arg.ID, arg.TenantID, arg.VehicleID)
-	return err
 }

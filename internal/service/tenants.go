@@ -330,7 +330,7 @@ func (s *TenantService) Usage(ctx context.Context, tenantID pgtype.UUID) (*Usage
 	if u.ActiveDrivers, err = s.users.CountDrivers(ctx, s.q.Conn(), tenantID); err != nil {
 		return nil, err
 	}
-	if u.Vehicles, err = s.q.CountVehiclesByTenant(ctx, tenantID); err != nil {
+	if u.Vehicles, err = s.fleet.CountVehicles(ctx, s.q.Conn(), tenantID); err != nil {
 		return nil, err
 	}
 	if u.Staff, err = s.users.CountStaff(ctx, s.q.Conn(), tenantID); err != nil {

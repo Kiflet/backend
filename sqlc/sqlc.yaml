@@ -19,7 +19,8 @@ sql:
           - db_type: "pg_catalog.timestamp with time zone"
             go_type: "time.Time"
           - db_type: "pg_catalog.timestamp without time zone"
-            go_type: "time.Time"  # The modules' stores (docs/architecture.md, section 4): each module's
+            go_type: "time.Time"
+  # The modules' stores (docs/architecture.md, section 4): each module's
   # queries, generated into its store package, with only the models they
   # use.
   - schema: "../migrations"
@@ -65,6 +66,24 @@ sql:
       go:
         package: "store"
         out: "../internal/modules/identity/store"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_db_tags: true
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
+        omit_unused_structs: true
+        overrides:
+          - db_type: "pg_catalog.timestamp with time zone"
+            go_type: "time.Time"
+          - db_type: "pg_catalog.timestamp without time zone"
+            go_type: "time.Time"
+  - schema: "../migrations"
+    queries: "../internal/modules/fleet/store/queries"
+    engine: "postgresql"
+    gen:
+      go:
+        package: "store"
+        out: "../internal/modules/fleet/store"
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_db_tags: true
