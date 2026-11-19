@@ -320,8 +320,9 @@ Roll back: each module is one PR; revert it.
       Done (`WORKER_JOBS`), as the `scheduler` role rather than a command
       of its own: the scheduler holding a Postgres lock publishes each job
       as it falls due (`internal/service/jobs_queue.go`), and a worker
-      runs it under a lock of that job's own, so different jobs run on
-      different workers and no job runs twice at once.
+      runs it under a lease of that job's own (`job_leases`), so
+      different jobs run on different workers and no job runs twice at
+      once.
 6. **Positions through the queue:** the sync handler publishes positions
    to `tracking.ingest` (with confirms) instead of inserting them; the
    tracking worker batch-inserts, updates `driver_positions` and Redis,

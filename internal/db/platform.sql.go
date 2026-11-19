@@ -179,6 +179,26 @@ func (q *Queries) GetTicketForPlatform(ctx context.Context, id pgtype.UUID) (Get
 	return i, err
 }
 
+const leaseJob = `-- name: LeaseJob :one
+INSERT INTO job_leases (name, until) VALUES ($1, NOW() + $2::interval)
+ON CONFLICT (name) DO UPDATE SET until = EXCLUDED.until WHERE job_leases.until < NOW()
+RETURNING true AS taken
+`
+
+type LeaseJobParams struct {
+	Name  string          `db:"name" json:"name"`
+	Lease pgtype.Interval `db:"lease" json:"lease"`
+}
+
+// Takes a timed job's lease unless another worker holds it. true when
+// taken.
+func (q *Queries) LeaseJob(ctx context.Context, arg LeaseJobParams) (bool, error) {
+	row := q.db.QueryRow(ctx, leaseJob, arg.Name, arg.Lease)
+	var taken bool
+	err := row.Scan(&taken)
+	return taken, err
+}
+
 const listCompanyTickets = `-- name: ListCompanyTickets :many
 SELECT t.id, t.number, t.subject, t.status, t.created_at, t.updated_at, t.closed_at,
        COALESCE(u.full_name, '')::text AS opened_by_name,
@@ -585,6 +605,15 @@ func (q *Queries) RecordJobRun(ctx context.Context, arg RecordJobRunParams) erro
 		arg.DurationMs,
 		arg.Error,
 	)
+	return err
+}
+
+const releaseJob = `-- name: ReleaseJob :exec
+UPDATE job_leases SET until = NOW() WHERE name = $1
+`
+
+func (q *Queries) ReleaseJob(ctx context.Context, name string) error {
+	_, err := q.db.Exec(ctx, releaseJob, name)
 	return err
 }
 

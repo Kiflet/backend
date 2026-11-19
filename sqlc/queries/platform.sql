@@ -117,3 +117,13 @@ FROM sms_messages WHERE status = 'queued'
 UNION ALL
 SELECT 'email'::text, COUNT(*)::bigint, MIN(created_at)::timestamptz
 FROM emails WHERE status = 'queued';
+
+-- name: LeaseJob :one
+-- Takes a timed job's lease unless another worker holds it. true when
+-- taken.
+INSERT INTO job_leases (name, until) VALUES (sqlc.arg(name), NOW() + sqlc.arg(lease)::interval)
+ON CONFLICT (name) DO UPDATE SET until = EXCLUDED.until WHERE job_leases.until < NOW()
+RETURNING true AS taken;
+
+-- name: ReleaseJob :exec
+UPDATE job_leases SET until = NOW() WHERE name = sqlc.arg(name);

@@ -5,6 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/kiflet/backend/internal/db"
 )
 
 // schedulerLockKey makes one scheduler the leader when the timed jobs go
@@ -33,29 +37,35 @@ func JobEvery(name string) (time.Duration, bool) {
 	return 0, false
 }
 
+// jobLeaseSpare is how long past its interval a job's lease lasts: what a
+// worker that dies mid-job keeps the job waiting at most.
+const jobLeaseSpare = 10 * time.Minute
+
 // RunJob runs one job in jobSchedule, as a worker does when the scheduler
-// names it (jobs.scheduled). Each job holds a lock of its own while it
-// runs, so a job is never run twice at once, while different jobs run on
+// names it (jobs.scheduled). It takes the job's lease first (job_leases),
+// so a job is never run twice at once, while different jobs run on
 // different workers. A job that fails is recorded for the health panel and
 // runs again at its next turn: only a failure to run it at all is an error.
 func (j *Jobs) RunJob(ctx context.Context, name string) error {
 	fn, ok := j.jobs()[name]
+	every, _ := JobEvery(name)
 	if !ok {
 		j.log.Warn().Str("job", name).Msg("no such job")
 		return nil
 	}
-	tx, err := j.pool.Begin(ctx)
+	lease := every + jobLeaseSpare
+	_, err := j.q.LeaseJob(ctx, db.LeaseJobParams{Name: name, Lease: pgtype.Interval{Microseconds: lease.Microseconds(), Valid: true}})
+	if isNoRows(err) {
+		return nil // running elsewhere
+	}
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck // releases the lock
-	var got bool
-	if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock($1, hashtext($2))", int32(jobsLockKey), name).Scan(&got); err != nil {
-		return err
-	}
-	if !got {
-		return nil // running elsewhere
-	}
+	defer func() {
+		if err := j.q.ReleaseJob(context.WithoutCancel(ctx), name); err != nil {
+			j.log.Warn().Err(err).Str("job", name).Msg("release job")
+		}
+	}()
 	if err := j.record(ctx, name, fn); err != nil && ctx.Err() == nil {
 		j.log.Error().Err(err).Str("job", name).Msg("job")
 	}
