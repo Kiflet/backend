@@ -24,6 +24,13 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Redis** (`docs/architecture.md`, section 7; `docs/deploy.md`,
+  "Redis"). Production's compose file runs it with
+  `COMPOSE_PROFILES=redis`, staging and `make db` always. With
+  `REDIS_URL` set, the request limits (sign-in, codes, lookups, each API
+  key) are counted for all the instances together, not by each one; if
+  Redis doesn't answer within 100 ms, each counts on its own until it
+  does (`kiflet_limits_local`).
 - **RabbitMQ** (`docs/architecture.md`, section 6; `docs/deploy.md`,
   "RabbitMQ"). Production's compose file runs it with
   `COMPOSE_PROFILES=rabbitmq`, staging and `make db` always, and the app

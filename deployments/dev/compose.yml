@@ -1,6 +1,6 @@
-# Development database and RabbitMQ. The app itself runs on the host with
-# `make run`. DB_PORT and RABBITMQ_PORT move them off 5434 and 5673 if
-# those ports are taken.
+# Development database, RabbitMQ and Redis. The app itself runs on the
+# host with `make run`. DB_PORT, RABBITMQ_PORT and REDIS_PORT move them off
+# 5434, 5673 and 6380 if those ports are taken.
 #
 # The provider sandbox, for an app on the host run with `make run-sandbox`:
 #   make sandbox-keys && docker compose -f deployments/dev/compose.yml --profile sandbox up sandbox
@@ -50,6 +50,20 @@ services:
       timeout: 10s
       retries: 20
 
+  # The request limits, shared as in production. `make run` uses it.
+  redis:
+    image: redis:8.10-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   sandbox:
     profiles: [sandbox]
     build:
@@ -72,3 +86,4 @@ services:
 volumes:
   postgres17_data:
   rabbitmq_data:
+  redis_data:

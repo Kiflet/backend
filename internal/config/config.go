@@ -70,6 +70,11 @@ type Config struct {
 	// Empty, the app works without it: positions are written at once, live
 	// updates pass through Postgres, and no events are published.
 	RabbitMQURL string
+	// RedisURL connects to Redis (redis://:password@host:6379/0). With it,
+	// the per-address and per-key request limits are shared by every
+	// instance; empty, each instance counts its own.
+	RedisURL string
+
 	// WorkerTracking and WorkerLive say where GPS fixes and live updates
 	// go: "queue" (RabbitMQ, the default with it) or "inprocess" (the
 	// database, and Postgres's NOTIFY), to switch one back
@@ -188,6 +193,7 @@ func Load() (*Config, error) {
 		S3ForcePathStyle:        getBoolEnv("S3_FORCE_PATH_STYLE", false),
 		S3PublicEndpoint:        strings.TrimRight(getEnv("S3_PUBLIC_ENDPOINT", ""), "/"),
 		RabbitMQURL:             getEnv("RABBITMQ_URL", ""),
+		RedisURL:                getEnv("REDIS_URL", ""),
 		SMSProvider:             getEnv("SMS_PROVIDER", "mock"),
 		SMSNumber:               getEnv("SMS_NUMBER", ""),
 		SMSInboundSecret:        getEnv("SMS_INBOUND_SECRET", ""),

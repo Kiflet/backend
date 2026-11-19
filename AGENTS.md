@@ -114,7 +114,8 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   must be shared in Postgres, not in memory: live updates already cross
   instances through RabbitMQ's `kiflet.live` (`internal/app/queues.go`)
   or, without it, `LISTEN`/`NOTIFY` (`internal/app/live.go`), and the
-  rate limits hold because Caddy keeps a client address on one instance.
+  rate limits are counted in Redis (`internal/web/limits.go`) or, without
+  it, hold because Caddy keeps a client address on one instance.
 - Live updates: an element with `data-live-region` and an `id` is fetched
   again and swapped in when a WebSocket message says something changed
   (`static/app.js`). Mark new live parts of a page that way instead of

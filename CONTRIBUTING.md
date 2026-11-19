@@ -12,7 +12,7 @@ JavaScript, and the end-to-end tests need [age](https://age-encryption.org)
 for the backups and Chrome or Chromium for the driver app.
 
 ```bash
-make db      # PostGIS on localhost:5434, RabbitMQ on 5673
+make db      # PostGIS on localhost:5434, RabbitMQ on 5673, Redis on 6380
 make seed    # migrate and load a demo company
 make run     # http://localhost:8080
 ```

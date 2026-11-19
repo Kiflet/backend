@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/httprate"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kiflet/backend/internal/db"
@@ -54,10 +53,10 @@ var publicAPI = []apiRoute{
 // mountPublicAPI adds the public API's routes to the /api/v1 router.
 func (s *Server) mountPublicAPI(r chi.Router) {
 	r.Get("/openapi.json", s.apiSpec)
-	perKey := httprate.LimitBy(apiRequestsPerMinute, time.Minute, func(r *http.Request) (string, error) {
+	perKey := s.limit("api_key", apiRequestsPerMinute, func(r *http.Request) (string, error) {
 		sum := sha256.Sum256([]byte(r.Header.Get("Authorization")))
 		return hex.EncodeToString(sum[:8]), nil
-	}, httprate.WithLimitHandler(s.tooManyRequests))
+	})
 	r.Group(func(r chi.Router) {
 		r.Use(perKey)
 		r.Use(s.requireAPIKey)

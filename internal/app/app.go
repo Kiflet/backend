@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/redis/go-redis/v9"
 	"net/http"
 	"os"
 	"strings"
@@ -48,6 +49,7 @@ type App struct {
 	// workers are the background loops Run runs, besides the services'.
 	workers []func(context.Context)
 	broker  *broker.Broker
+	redis   redis.UniversalClient
 }
 
 // New builds the app. It refuses stand-in providers in production unless
@@ -135,7 +137,14 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 			PrivateWebhooks: cfg.PrivateWebhooks,
 		},
 	})
-	srv, err := web.New(cfg, svc, pool, hub, log)
+	var rdb redis.UniversalClient
+	if cfg.RedisURL != "" {
+		if rdb, err = connectRedis(cfg.RedisURL, log); err != nil {
+			return nil, err
+		}
+		a.redis = rdb
+	}
+	srv, err := web.New(cfg, svc, pool, hub, rdb, log)
 	if err != nil {
 		return nil, err
 	}
@@ -174,6 +183,32 @@ func (a *App) Close() {
 	if a.broker != nil {
 		a.broker.Close()
 	}
+	if a.redis != nil {
+		_ = a.redis.Close()
+	}
+}
+
+// connectRedis makes the Redis client. What the app keeps there can be
+// counted again or fetched from Postgres, so Redis is answered quickly or
+// not at all: short timeouts and no retries, and an app that starts while
+// Redis is down still starts.
+func connectRedis(url string, log zerolog.Logger) (redis.UniversalClient, error) {
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		return nil, fmt.Errorf("REDIS_URL: %w", err)
+	}
+	opts.ClientName = "kiflet"
+	opts.DialTimeout = time.Second
+	opts.ReadTimeout = 200 * time.Millisecond
+	opts.WriteTimeout = 200 * time.Millisecond
+	opts.MaxRetries = -1
+	rdb := redis.NewClient(opts)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Warn().Err(err).Msg("redis not answering; request limits are counted per instance until it does")
+	}
+	return rdb, nil
 }
 
 // paymentProviders are the mobile-money methods offered. The stand-ins are
