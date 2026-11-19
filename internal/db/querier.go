@@ -84,8 +84,6 @@ type Querier interface {
 	CountSMSSentSince(ctx context.Context, arg CountSMSSentSinceParams) (int64, error)
 	CountSMSToPhoneSince(ctx context.Context, arg CountSMSToPhoneSinceParams) (int64, error)
 	CountSavedFilters(ctx context.Context, arg CountSavedFiltersParams) (int64, error)
-	CountShipmentCharges(ctx context.Context, arg CountShipmentChargesParams) (int64, error)
-	CountShipmentDocuments(ctx context.Context, arg CountShipmentDocumentsParams) (int64, error)
 	CountShipments(ctx context.Context, arg CountShipmentsParams) (int64, error)
 	// A company's texts queued or sent since a time, in SMS parts, for its
 	// limits.
@@ -105,8 +103,6 @@ type Querier interface {
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreatePOD(ctx context.Context, arg CreatePODParams) (pgtype.UUID, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
-	CreateShipmentCharge(ctx context.Context, arg CreateShipmentChargeParams) (ShipmentCharge, error)
-	CreateShipmentDocument(ctx context.Context, arg CreateShipmentDocumentParams) (ShipmentDocument, error)
 	// The people running Kiflet: every company's audit log, support tickets
 	// and the background jobs (FR-042 AC-042.7, FR-049).
 	CreateSupportTicket(ctx context.Context, arg CreateSupportTicketParams) (SupportTicket, error)
@@ -135,8 +131,6 @@ type Querier interface {
 	DeletePersonDeviceData(ctx context.Context, driverID pgtype.UUID) error
 	DeleteSavedFilter(ctx context.Context, arg DeleteSavedFilterParams) (int64, error)
 	DeleteSentOutboxEvents(ctx context.Context, before pgtype.Timestamptz) error
-	DeleteShipmentCharge(ctx context.Context, arg DeleteShipmentChargeParams) (int64, error)
-	DeleteShipmentDocument(ctx context.Context, arg DeleteShipmentDocumentParams) (string, error)
 	DeleteShipmentTexts(ctx context.Context, ids []pgtype.UUID) error
 	DeleteTenant(ctx context.Context, id pgtype.UUID) error
 	DeleteWebhookEndpoint(ctx context.Context, arg DeleteWebhookEndpointParams) (WebhookEndpoint, error)
@@ -202,7 +196,6 @@ type Querier interface {
 	GetPayment(ctx context.Context, arg GetPaymentParams) (GetPaymentRow, error)
 	// What the stand-in payment prompt shows: the reference is the secret.
 	GetPaymentByReference(ctx context.Context, reference string) (GetPaymentByReferenceRow, error)
-	GetShipmentDocument(ctx context.Context, arg GetShipmentDocumentParams) (ShipmentDocument, error)
 	GetSyncMetadata(ctx context.Context, driverID pgtype.UUID) (SyncMetadatum, error)
 	// Subscriptions, invoices and payments (FR-043 to FR-045).
 	GetTenantForUpdate(ctx context.Context, id pgtype.UUID) (Tenant, error)
@@ -295,9 +288,6 @@ type Querier interface {
 	ListRouteDeviations(ctx context.Context) ([]ListRouteDeviationsRow, error)
 	ListSMSByTenant(ctx context.Context, arg ListSMSByTenantParams) ([]ListSMSByTenantRow, error)
 	ListSavedFilters(ctx context.Context, arg ListSavedFiltersParams) ([]SavedFilter, error)
-	ListShipmentCharges(ctx context.Context, arg ListShipmentChargesParams) ([]ShipmentCharge, error)
-	// A shipment's documents and charges. Every query names the tenant.
-	ListShipmentDocuments(ctx context.Context, arg ListShipmentDocumentsParams) ([]ShipmentDocument, error)
 	// A truck carries several shipments at once and its pings are attributed to
 	// only one of them, so a shipment's route is the driver's track over the time
 	// the shipment was on board, plus anything explicitly tagged to it.

@@ -7,81 +7,38 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
-	"path"
-	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/modules/shipments"
+	shipmentsdomain "github.com/kiflet/backend/internal/modules/shipments/domain"
 )
 
-// A shipment's documents and charges: the files the office keeps with a load
-// and what the customer is charged for it.
+// A shipment's documents and charges are the shipments module's
+// (shipments.Files). What stays here is storing the files, and who may.
 
 // DocumentKinds are what a document can be, in the order the form offers
-// them, with their labels.
-var DocumentKinds = []string{"waybill", "invoice", "customs", "delivery_note", "photo", "other"}
-
-var documentKindLabels = map[string]string{
-	"waybill": "Waybill", "invoice": "Invoice", "customs": "Customs papers",
-	"delivery_note": "Delivery note", "photo": "Photo", "other": "Other",
-}
-
-// DocumentKindLabel names a kind of document for people.
-func DocumentKindLabel(kind string) string {
-	if l, ok := documentKindLabels[kind]; ok {
-		return l
-	}
-	return "Document"
-}
-
-// Limits on a shipment's files and lines.
-const (
-	MaxDocumentBytes      = 10 << 20
-	maxDocumentsPerLoad   = 30
-	maxChargesPerShipment = 50
+// them.
+var (
+	DocumentKinds     = shipmentsdomain.DocumentKinds
+	DocumentKindLabel = shipmentsdomain.DocumentKindLabel
 )
 
-// documentTypes are the files accepted, by the type their first bytes show,
-// and the extension they are stored with. What a browser claims is not
-// trusted.
-var documentTypes = map[string]string{
-	"application/pdf": ".pdf",
-	"image/jpeg":      ".jpg",
-	"image/png":       ".png",
-}
+// MaxDocumentBytes is the largest document taken.
+const MaxDocumentBytes = shipmentsdomain.MaxDocumentBytes
 
 // Documents lists a shipment's documents, newest first.
-func (s *ShipmentService) Documents(ctx context.Context, tenantID, shipmentID pgtype.UUID) ([]db.ShipmentDocument, error) {
-	return s.q.ListShipmentDocuments(ctx, db.ListShipmentDocumentsParams{TenantID: tenantID, ShipmentID: shipmentID})
+func (s *ShipmentService) Documents(ctx context.Context, tenantID, shipmentID pgtype.UUID) ([]shipments.Document, error) {
+	return s.shipmentFiles.Documents(ctx, s.q.Conn(), tenantID, shipmentID)
 }
 
 // AddDocument stores a file with a shipment.
-func (s *ShipmentService) AddDocument(ctx context.Context, a Actor, shipmentID pgtype.UUID, kind, name string, body []byte) (db.ShipmentDocument, error) {
-	var doc db.ShipmentDocument
-	if _, ok := documentKindLabels[kind]; !ok {
-		return doc, invalid("kind", "Choose what the document is.")
-	}
-	if len(body) == 0 {
-		return doc, invalid("file", "Choose a file to upload.")
-	}
-	if len(body) > MaxDocumentBytes {
-		return doc, invalid("file", "The file is larger than 10 MB. Scan it at a lower resolution, or split it.")
-	}
-	ct := http.DetectContentType(body)
-	if i := strings.IndexByte(ct, ';'); i >= 0 {
-		ct = ct[:i]
-	}
-	ext, ok := documentTypes[ct]
-	if !ok {
-		return doc, invalid("file", "Upload a PDF, or a photo as JPEG or PNG.")
-	}
-	name = documentName(name, ext)
-	if name == "" {
-		name = DocumentKindLabel(kind) + ext
+func (s *ShipmentService) AddDocument(ctx context.Context, a Actor, shipmentID pgtype.UUID, kind, name string, body []byte) (shipments.Document, error) {
+	var doc shipments.Document
+	file, err := shipmentsdomain.CheckDocument(kind, name, body)
+	if err != nil {
+		return doc, err
 	}
 	if s.media == nil || s.media.store == nil {
 		return doc, errors.New("file storage is not configured")
@@ -94,16 +51,14 @@ func (s *ShipmentService) AddDocument(ctx context.Context, a Actor, shipmentID p
 	if sh.AnonymisedAt.Valid {
 		return doc, invalid("file", "This shipment's details were removed at the end of the keeping period, so it takes no new documents.")
 	}
-	n, err := s.q.CountShipmentDocuments(ctx, db.CountShipmentDocumentsParams{TenantID: a.TenantID, ShipmentID: shipmentID})
-	if err != nil {
+	// Checked before the file is stored, so that a full shipment costs no
+	// upload; AddDocument checks again.
+	if err := s.shipmentFiles.HasRoomForDocument(ctx, s.q.Conn(), a.TenantID, shipmentID); err != nil {
 		return doc, err
 	}
-	if n >= maxDocumentsPerLoad {
-		return doc, invalid("file", fmt.Sprintf("A shipment holds at most %d documents. Remove one to add another.", maxDocumentsPerLoad))
-	}
 
-	key := fmt.Sprintf("documents/%s/%s/%s%s", uuidString(a.TenantID), uuidString(shipmentID), randomToken(16), ext)
-	if _, err := s.media.store.Upload(ctx, key, bytes.NewReader(body), ct); err != nil {
+	key := fmt.Sprintf("documents/%s/%s/%s%s", uuidString(a.TenantID), uuidString(shipmentID), randomToken(16), file.Ext)
+	if _, err := s.media.store.Upload(ctx, key, bytes.NewReader(body), file.ContentType); err != nil {
 		return doc, fmt.Errorf("store document: %w", err)
 	}
 	err = s.tx(ctx, func(q *db.Queries, _ *afterCommit) error {
@@ -114,51 +69,26 @@ func (s *ShipmentService) AddDocument(ctx context.Context, a Actor, shipmentID p
 		if err := s.requireWritable(ctx, q, tenant); err != nil {
 			return err
 		}
-		doc, err = q.CreateShipmentDocument(ctx, db.CreateShipmentDocumentParams{
-			TenantID: a.TenantID, ShipmentID: shipmentID, Kind: kind, Name: name, StorageKey: key,
-			ContentType: ct, SizeBytes: int32(len(body)), UploadedBy: a.UserID, UploadedByName: a.Name,
+		doc, err = s.shipmentFiles.AddDocument(ctx, q.Conn(), shipments.NewDocument{
+			TenantID: a.TenantID, ShipmentID: shipmentID, File: file, StorageKey: key,
+			SizeBytes: int32(len(body)), UploadedBy: a.UserID, UploadedByName: a.Name,
 		})
 		if err != nil {
 			return err
 		}
-		s.audit(ctx, q, a, "document_added", "shipment", shipmentID, nil, map[string]any{"document": name, "kind": kind, "bytes": len(body)})
+		s.audit(ctx, q, a, "document_added", "shipment", shipmentID, nil, map[string]any{"document": file.Name, "kind": kind, "bytes": len(body)})
 		return nil
 	})
 	if err != nil {
 		_ = s.media.store.Delete(context.WithoutCancel(ctx), key)
-		return db.ShipmentDocument{}, err
+		return shipments.Document{}, err
 	}
 	return doc, nil
 }
 
-// documentName keeps a file's own name, tidied: no folders, no control
-// characters, at most 120 letters, ending in the extension its content
-// shows.
-func documentName(name, ext string) string {
-	name = path.Base(strings.ReplaceAll(name, `\`, "/"))
-	name = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || r == '"' {
-			return -1
-		}
-		return r
-	}, name)
-	name = strings.TrimSpace(strings.TrimSuffix(name, path.Ext(name)))
-	if name == "." || name == "/" || name == "" {
-		return ""
-	}
-	for utf8.RuneCountInString(name)+len(ext) > 120 {
-		_, size := utf8.DecodeLastRuneInString(name)
-		name = name[:len(name)-size]
-	}
-	return name + ext
-}
-
 // OpenDocument streams one of a shipment's documents.
-func (s *ShipmentService) OpenDocument(ctx context.Context, tenantID, shipmentID, id pgtype.UUID) (db.ShipmentDocument, io.ReadCloser, error) {
-	doc, err := s.q.GetShipmentDocument(ctx, db.GetShipmentDocumentParams{TenantID: tenantID, ShipmentID: shipmentID, ID: id})
-	if isNoRows(err) {
-		return doc, nil, notFound("Document not found.")
-	}
+func (s *ShipmentService) OpenDocument(ctx context.Context, tenantID, shipmentID, id pgtype.UUID) (shipments.Document, io.ReadCloser, error) {
+	doc, err := s.shipmentFiles.Document(ctx, s.q.Conn(), tenantID, shipmentID, id)
 	if err != nil {
 		return doc, nil, err
 	}
@@ -169,10 +99,7 @@ func (s *ShipmentService) OpenDocument(ctx context.Context, tenantID, shipmentID
 // DeleteDocument removes a document and its file.
 func (s *ShipmentService) DeleteDocument(ctx context.Context, a Actor, shipmentID, id pgtype.UUID) error {
 	return s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
-		key, err := q.DeleteShipmentDocument(ctx, db.DeleteShipmentDocumentParams{TenantID: a.TenantID, ShipmentID: shipmentID, ID: id})
-		if isNoRows(err) {
-			return notFound("Document not found.")
-		}
+		key, err := s.shipmentFiles.RemoveDocument(ctx, q.Conn(), a.TenantID, shipmentID, id)
 		if err != nil {
 			return err
 		}
@@ -184,8 +111,8 @@ func (s *ShipmentService) DeleteDocument(ctx context.Context, a Actor, shipmentI
 
 // Charges lists a shipment's charges in the order they were added, and
 // their total in birr.
-func (s *ShipmentService) Charges(ctx context.Context, tenantID, shipmentID pgtype.UUID) ([]db.ShipmentCharge, float64, error) {
-	rows, err := s.q.ListShipmentCharges(ctx, db.ListShipmentChargesParams{TenantID: tenantID, ShipmentID: shipmentID})
+func (s *ShipmentService) Charges(ctx context.Context, tenantID, shipmentID pgtype.UUID) ([]shipments.Charge, float64, error) {
+	rows, err := s.shipmentFiles.Charges(ctx, s.q.Conn(), tenantID, shipmentID)
 	total := 0.0
 	for _, c := range rows {
 		total += numericOr(c.Amount)
@@ -196,16 +123,9 @@ func (s *ShipmentService) Charges(ctx context.Context, tenantID, shipmentID pgty
 // AddCharge adds a line to what the customer is charged for a load. A
 // negative amount is a discount.
 func (s *ShipmentService) AddCharge(ctx context.Context, a Actor, shipmentID pgtype.UUID, description string, amount float64) error {
-	description = strings.TrimSpace(description)
-	if description == "" {
-		return invalid("description", "Say what the charge is for.")
-	}
-	if utf8.RuneCountInString(description) > 120 {
-		return invalid("description", "Describe the charge in 120 letters or fewer.")
-	}
-	amount = math.Round(amount*100) / 100
-	if amount == 0 || math.IsNaN(amount) || math.Abs(amount) >= 1e12 {
-		return invalid("amount", "Enter an amount in birr; a discount is negative.")
+	description, amount, err := shipmentsdomain.CheckCharge(description, amount)
+	if err != nil {
+		return err
 	}
 	if _, err := s.Get(ctx, a.TenantID, shipmentID); err != nil {
 		return err
@@ -218,16 +138,7 @@ func (s *ShipmentService) AddCharge(ctx context.Context, a Actor, shipmentID pgt
 		if err := s.requireWritable(ctx, q, tenant); err != nil {
 			return err
 		}
-		n, err := q.CountShipmentCharges(ctx, db.CountShipmentChargesParams{TenantID: a.TenantID, ShipmentID: shipmentID})
-		if err != nil {
-			return err
-		}
-		if n >= maxChargesPerShipment {
-			return invalid("description", fmt.Sprintf("A shipment holds at most %d charges.", maxChargesPerShipment))
-		}
-		if _, err := q.CreateShipmentCharge(ctx, db.CreateShipmentChargeParams{
-			TenantID: a.TenantID, ShipmentID: shipmentID, Description: description, Amount: toNumeric(amount), CreatedBy: a.UserID,
-		}); err != nil {
+		if err := s.shipmentFiles.AddCharge(ctx, q.Conn(), a.TenantID, shipmentID, a.UserID, description, amount); err != nil {
 			return err
 		}
 		s.audit(ctx, q, a, "charge_added", "shipment", shipmentID, nil, map[string]any{"description": description, "amount": amount})
@@ -238,12 +149,8 @@ func (s *ShipmentService) AddCharge(ctx context.Context, a Actor, shipmentID pgt
 // DeleteCharge removes a line from a shipment's charges.
 func (s *ShipmentService) DeleteCharge(ctx context.Context, a Actor, shipmentID, id pgtype.UUID) error {
 	return s.tx(ctx, func(q *db.Queries, _ *afterCommit) error {
-		n, err := q.DeleteShipmentCharge(ctx, db.DeleteShipmentChargeParams{TenantID: a.TenantID, ShipmentID: shipmentID, ID: id})
-		if err != nil {
+		if err := s.shipmentFiles.RemoveCharge(ctx, q.Conn(), a.TenantID, shipmentID, id); err != nil {
 			return err
-		}
-		if n == 0 {
-			return notFound("Charge not found.")
 		}
 		s.audit(ctx, q, a, "charge_removed", "shipment", shipmentID, map[string]any{"charge": uuidString(id)}, nil)
 		return nil

@@ -41,7 +41,10 @@ What changed in each release, newest first.
   owns `shipments` and their history (`shipment_events`). The statuses,
   who may move a shipment between them, and the reasons given are in its
   `domain`. Booking, assigning and status changes follow; the lists, the
-  map and the overdue checks stay as read models.
+  map and the overdue checks stay as read models. Then documents and
+  charges: `shipment_documents` and `shipment_charges` are the module's,
+  with the checks on a file and a charge and the limits per shipment;
+  storing the files stays with the service.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

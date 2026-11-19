@@ -259,8 +259,9 @@ throughout; only imports move.
    5. `make test test-integration`; one PR per module.
 
    Done: audit, tenancy, identity, fleet; shipments in part (its tables,
-   its history and the status rules; booking, assigning, status changes,
-   documents and charges, and the driver sync still in `internal/service`). How it went, for the rest:
+   its history, the status rules, documents and charges; booking,
+   assigning, status changes and the driver sync still in
+   `internal/service`). How it went, for the rest:
    - **The server-rendered handlers stay in `internal/web`.** Phase 4
      replaces those pages with Kiflet/web and phase 6 deletes them, so
      moving them would be work thrown away. A module's `http/` holds the

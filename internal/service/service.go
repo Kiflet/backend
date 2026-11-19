@@ -86,8 +86,10 @@ type Deps struct {
 	Users     identity.Users
 	Fleet     fleet.Fleet
 	Shipments shipments.Shipments
-	Log       zerolog.Logger
-	Publisher Publisher
+	// ShipmentFiles are shipments' documents and charges.
+	ShipmentFiles shipments.Files
+	Log           zerolog.Logger
+	Publisher     Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
 	// stores them at once.
 	Positions PositionQueue
@@ -148,7 +150,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments, shipmentFiles: d.ShipmentFiles,
 		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -202,7 +204,8 @@ type core struct {
 	fleet    fleet.Fleet
 	// shipmentData is the shipments module; shipments is a field of
 	// some services already (the ShipmentService they call).
-	shipmentData shipments.Shipments
+	shipmentData  shipments.Shipments
+	shipmentFiles shipments.Files
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	outbox        bool
