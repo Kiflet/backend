@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/identity"
 	"strings"
 	"time"
 	"unicode"
@@ -273,7 +274,7 @@ func (s *SMSService) deliver(ctx context.Context, m db.SmsMessage) {
 	}
 	provider := s.sender.Name()
 	// A code that has expired is no use to anyone: it isn't sent late.
-	if m.Purpose == PurposeOTP && !s.now().Before(m.CreatedAt.Time.Add(codeTTL)) {
+	if m.Purpose == PurposeOTP && !s.now().Before(m.CreatedAt.Time.Add(identity.CodeTTL)) {
 		metrics.Messages.WithLabelValues("sms", provider, "failed").Inc()
 		_ = s.q.MarkSMSFailed(ctx, db.MarkSMSFailedParams{ID: m.ID, LastError: ptr("the code expired before it could be sent")})
 		return
@@ -314,7 +315,7 @@ func (s *SMSService) deliver(ctx context.Context, m db.SmsMessage) {
 		return
 	}
 	next := s.now().Add(smsBackoff[m.Attempts-1])
-	if m.Purpose == PurposeOTP && !next.Before(m.CreatedAt.Time.Add(codeTTL)) {
+	if m.Purpose == PurposeOTP && !next.Before(m.CreatedAt.Time.Add(identity.CodeTTL)) {
 		metrics.Messages.WithLabelValues("sms", provider, "failed").Inc()
 		msg = truncate("the code would expire before another try: "+msg, 300)
 		_ = s.q.MarkSMSFailed(ctx, db.MarkSMSFailedParams{ID: m.ID, LastError: &msg})

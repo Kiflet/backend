@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/identity"
 	"net/mail"
 	"strings"
 	"time"
@@ -20,8 +21,8 @@ import (
 // confirmation link proves the address on an account receives mail, since
 // password resets, invoices and receipts are sent there.
 const (
-	linkPasswordReset = "password_reset"
-	linkEmailVerify   = "email_verify"
+	linkPasswordReset = identity.LinkPasswordReset
+	linkEmailVerify   = identity.LinkEmailVerify
 
 	resetLinkTTL  = time.Hour
 	verifyLinkTTL = 7 * 24 * time.Hour
@@ -29,7 +30,6 @@ const (
 )
 
 var (
-	errLinkExpired  = &Error{Kind: KindNotFound, Message: "This link has expired or has already been used."}
 	errLinksTooMany = &Error{Kind: KindLimit, Message: "We've sent several emails in the last hour. Check your inbox and spam folder, or try again later."}
 )
 
@@ -56,9 +56,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string, ci
 	if u.Role == model.RoleDriver || !u.IsActive || u.Email == nil || !u.EmailVerifiedAt.Valid {
 		return nil
 	}
-	recent, err := s.q.CountEmailTokensSince(ctx, db.CountEmailTokensSinceParams{
-		TenantID: u.TenantID, UserID: u.ID, Purpose: linkPasswordReset, CreatedAt: toTimestamp(s.now().Add(-time.Hour)),
-	})
+	recent, err := s.links.Sent(ctx, u.TenantID, u.ID, linkPasswordReset, s.now().Add(-time.Hour))
 	if err != nil || recent >= linksPerHour {
 		return err
 	}
@@ -90,15 +88,9 @@ type ResetFor struct {
 // using it, so the form can greet them. Opening the link must not use it up:
 // mail scanners open links too.
 func (s *AuthService) PasswordResetFor(ctx context.Context, token string) (ResetFor, error) {
-	t, err := s.q.GetEmailToken(ctx, db.GetEmailTokenParams{TokenHash: hashToken(token), Purpose: linkPasswordReset})
-	if isNoRows(err) {
-		return ResetFor{}, errLinkExpired
-	}
+	t, err := s.links.Find(ctx, s.q.Conn(), token, linkPasswordReset)
 	if err != nil {
 		return ResetFor{}, err
-	}
-	if !linkStillValid(t) {
-		return ResetFor{}, errLinkExpired
 	}
 	return ResetFor{Name: t.FullName, Email: t.Email}, nil
 }
@@ -116,23 +108,21 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string,
 	}
 	var u db.User
 	err = s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
-		t, err := q.GetEmailToken(ctx, db.GetEmailTokenParams{TokenHash: hashToken(token), Purpose: linkPasswordReset})
-		if isNoRows(err) {
-			return errLinkExpired
-		}
+		t, err := s.links.Find(ctx, q.Conn(), token, linkPasswordReset)
 		if err != nil {
 			return err
 		}
-		if !linkStillValid(t) {
-			return errLinkExpired
+		company, err := s.tenant(ctx, q, t.TenantID)
+		if err != nil {
+			return err
 		}
-		if !t.TenantActive {
+		if !company.IsActive {
 			return s.suspended()
 		}
 		if err := q.ResetUserPassword(ctx, db.ResetUserPasswordParams{ID: t.UserID, TenantID: t.TenantID, PasswordHash: &h}); err != nil {
 			return err
 		}
-		if err := q.ExpireEmailTokens(ctx, db.ExpireEmailTokensParams{TenantID: t.TenantID, UserID: t.UserID, Purpose: linkPasswordReset}); err != nil {
+		if err := s.links.ExpireAll(ctx, q.Conn(), t.TenantID, t.UserID, linkPasswordReset); err != nil {
 			return err
 		}
 		if err := s.sessions.EndAll(ctx, q.Conn(), t.UserID); err != nil {
@@ -192,7 +182,7 @@ func (s *AuthService) ResetPasswordByCode(ctx context.Context, rawPhone, code, p
 	}
 	var u db.User
 	err = s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
-		if err := consumeCode(ctx, q, codeID); err != nil {
+		if err := s.consumeCode(ctx, q, codeID); err != nil {
 			return err
 		}
 		if u, err = q.GetUserByPhone(ctx, &p); isNoRows(err) {
@@ -228,13 +218,6 @@ func (s *AuthService) ResetPasswordByCode(ctx context.Context, rawPhone, code, p
 	return s.startSession(ctx, u, SessionWeb, false, ci)
 }
 
-// linkStillValid checks a link against the account as it is now: a
-// deactivated person can't use one, nor can anyone once the address it was
-// sent to is no longer theirs.
-func linkStillValid(t db.GetEmailTokenRow) bool {
-	return t.IsActive && t.Role != model.RoleDriver && t.CurrentEmail != nil && *t.CurrentEmail == t.Email
-}
-
 // ResendVerification sends the caller a new link to confirm their address.
 func (s *AuthService) ResendVerification(ctx context.Context, p *Principal) error {
 	u, err := s.q.GetUserByID(ctx, db.GetUserByIDParams{ID: p.UserID, TenantID: p.TenantID})
@@ -247,9 +230,7 @@ func (s *AuthService) ResendVerification(ctx context.Context, p *Principal) erro
 	if u.EmailVerifiedAt.Valid {
 		return conflict("Your email address is already confirmed.")
 	}
-	recent, err := s.q.CountEmailTokensSince(ctx, db.CountEmailTokensSinceParams{
-		TenantID: u.TenantID, UserID: u.ID, Purpose: linkEmailVerify, CreatedAt: toTimestamp(s.now().Add(-time.Hour)),
-	})
+	recent, err := s.links.Sent(ctx, u.TenantID, u.ID, linkEmailVerify, s.now().Add(-time.Hour))
 	if err != nil {
 		return err
 	}
@@ -265,15 +246,9 @@ func (s *AuthService) ResendVerification(ctx context.Context, p *Principal) erro
 // be signed in. The link keeps working until it expires, so opening it again
 // says the same thing; it stops counting if the address has changed since.
 func (s *AuthService) VerifyEmail(ctx context.Context, token string, ci ClientInfo) (email string, err error) {
-	t, err := s.q.GetEmailToken(ctx, db.GetEmailTokenParams{TokenHash: hashToken(token), Purpose: linkEmailVerify})
-	if isNoRows(err) {
-		return "", errLinkExpired
-	}
+	t, err := s.links.Find(ctx, s.q.Conn(), token, linkEmailVerify)
 	if err != nil {
 		return "", err
-	}
-	if !linkStillValid(t) {
-		return "", errLinkExpired
 	}
 	n, err := s.q.SetEmailVerified(ctx, db.SetEmailVerifiedParams{ID: t.UserID, TenantID: t.TenantID, Email: &t.Email})
 	if err != nil {
@@ -314,11 +289,7 @@ func (c *core) sendEmailVerification(ctx context.Context, q *db.Queries, after *
 // emailLink stores a new link for u and returns its URL. Only a hash of the
 // token is kept.
 func (c *core) emailLink(ctx context.Context, q *db.Queries, u db.User, purpose, path string, ttl time.Duration) (string, error) {
-	token := randomToken(32)
-	err := q.CreateEmailToken(ctx, db.CreateEmailTokenParams{
-		TenantID: u.TenantID, UserID: u.ID, Purpose: purpose, Email: *u.Email,
-		TokenHash: hashToken(token), ExpiresAt: toTimestamp(c.now().Add(ttl)),
-	})
+	token, err := c.links.Create(ctx, q.Conn(), u.TenantID, u.ID, purpose, *u.Email, c.now().Add(ttl))
 	return c.cfg.BaseURL + path + token, err
 }
 

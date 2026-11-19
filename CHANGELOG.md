@@ -26,8 +26,9 @@ What changed in each release, newest first.
   `sessions`, and holds the roles, the `Principal` a request runs as and
   the `Actor` recorded with a change. Signing in, the session lookup on
   every request, signing out and ending sessions go through it; the old
-  names stay as aliases until their callers move. Users, codes and
-  sign-up follow.
+  names stay as aliases until their callers move. Then its one-time codes,
+  email links and waiting sign-ups: `verification_codes`, `email_tokens`
+  and `pending_signups` are identity's, and only `users` is left to move.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

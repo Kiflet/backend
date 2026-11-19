@@ -152,3 +152,18 @@ ORDER BY u.role, u.full_name;
 -- Names of the people in the platform's audit log, from every company:
 -- for the platform admin only (UserService.Names checks).
 SELECT id, full_name FROM users WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- Confirming an address and resetting a password from a link (the
+-- identity module's links), until users move into it.
+
+-- name: SetEmailVerified :execrows
+UPDATE users SET email_verified_at = NOW(), updated_at = NOW()
+WHERE id = $1 AND tenant_id = $2 AND email = sqlc.arg(email) AND email_verified_at IS NULL;
+
+-- name: ResetUserPassword :exec
+-- Following a reset link proves the address, and ends any lockout.
+UPDATE users
+SET password_hash = $3, password_reset_required = false,
+    failed_login_attempts = 0, locked_until = NULL,
+    email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW()
+WHERE id = $1 AND tenant_id = $2;

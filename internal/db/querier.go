@@ -71,7 +71,6 @@ type Querier interface {
 	// As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
 	ClaimWebhooksByIDs(ctx context.Context, ids []pgtype.UUID) ([]WebhookDelivery, error)
 	ClearVehicleFromDrivers(ctx context.Context, arg ClearVehicleFromDriversParams) error
-	ConsumeVerificationCode(ctx context.Context, id pgtype.UUID) (int64, error)
 	CountActiveAPIKeys(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	CountActiveDriversByTenant(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	CountActiveShipmentsByDriver(ctx context.Context, arg CountActiveShipmentsByDriverParams) (int64, error)
@@ -80,7 +79,6 @@ type Querier interface {
 	// budget.
 	CountCodesTextedSince(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
 	CountDeliveredSince(ctx context.Context, arg CountDeliveredSinceParams) (int64, error)
-	CountEmailTokensSince(ctx context.Context, arg CountEmailTokensSinceParams) (int64, error)
 	CountHeldPODs(ctx context.Context, arg CountHeldPODsParams) (int64, error)
 	CountOpenRenewals(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	CountSMSByTenant(ctx context.Context, tenantID pgtype.UUID) (int64, error)
@@ -103,9 +101,6 @@ type Querier interface {
 	// One person's badge: open alerts raised since they last opened the list.
 	CountUnreadAlerts(ctx context.Context, arg CountUnreadAlertsParams) (int64, error)
 	CountVehiclesByTenant(ctx context.Context, tenantID pgtype.UUID) (int64, error)
-	// Counts a try at a code, unless it has had all its tries: then no row.
-	CountVerificationAttempt(ctx context.Context, arg CountVerificationAttemptParams) (int32, error)
-	CountVerificationCodesSince(ctx context.Context, arg CountVerificationCodesSinceParams) (int64, error)
 	CountWaitingTickets(ctx context.Context) (int64, error)
 	CountWebhookEndpoints(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	// The public API's keys (FR-046).
@@ -115,12 +110,9 @@ type Querier interface {
 	// the unique indexes turn either duplicate into a no-op and no row returns.
 	CreateAlert(ctx context.Context, arg CreateAlertParams) (Alert, error)
 	CreateBroadcast(ctx context.Context, arg CreateBroadcastParams) (Broadcast, error)
-	// Links sent by email, and sign-ups waiting for their SMS code.
-	CreateEmailToken(ctx context.Context, arg CreateEmailTokenParams) error
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreatePOD(ctx context.Context, arg CreatePODParams) (pgtype.UUID, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
-	CreatePendingSignup(ctx context.Context, arg CreatePendingSignupParams) error
 	CreateShipment(ctx context.Context, arg CreateShipmentParams) (Shipment, error)
 	CreateShipmentCharge(ctx context.Context, arg CreateShipmentChargeParams) (ShipmentCharge, error)
 	CreateShipmentDocument(ctx context.Context, arg CreateShipmentDocumentParams) (ShipmentDocument, error)
@@ -140,23 +132,18 @@ type Querier interface {
 	CreateTrackingEvents(ctx context.Context, arg CreateTrackingEventsParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVehicle(ctx context.Context, arg CreateVehicleParams) (Vehicle, error)
-	CreateVerificationCode(ctx context.Context, arg CreateVerificationCodeParams) (VerificationCode, error)
 	// Webhooks (FR-047): a company's endpoints, and the outbox of messages to
 	// them.
 	CreateWebhookEndpoint(ctx context.Context, arg CreateWebhookEndpointParams) (WebhookEndpoint, error)
 	DeleteDocumentsForShipments(ctx context.Context, ids []pgtype.UUID) error
-	DeleteExpiredPendingSignups(ctx context.Context, expiresAt pgtype.Timestamptz) error
-	DeleteExpiredVerificationCodes(ctx context.Context) error
 	// Texts and emails that went to the person, with their number or address.
 	DeleteMessagesToPerson(ctx context.Context, arg DeleteMessagesToPersonParams) error
 	DeleteOldAlerts(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldBroadcasts(ctx context.Context, createdAt pgtype.Timestamptz) error
-	DeleteOldEmailTokens(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldEmails(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldProcessedMessages(ctx context.Context, before pgtype.Timestamptz) error
 	DeleteOldSMS(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldWebhookDeliveries(ctx context.Context, createdAt pgtype.Timestamptz) error
-	DeletePendingSignup(ctx context.Context, id pgtype.UUID) error
 	DeletePersonDeviceData(ctx context.Context, driverID pgtype.UUID) error
 	DeleteSavedFilter(ctx context.Context, arg DeleteSavedFilterParams) (int64, error)
 	DeleteSentOutboxEvents(ctx context.Context, before pgtype.Timestamptz) error
@@ -181,8 +168,6 @@ type Querier interface {
 	// One message to each of the company's endpoints that asked for this
 	// event. A paused endpoint's wait for it to be resumed.
 	EnqueueWebhooks(ctx context.Context, arg EnqueueWebhooksParams) ([]pgtype.UUID, error)
-	// Once a reset link is used, the others sent to that person stop working.
-	ExpireEmailTokens(ctx context.Context, arg ExpireEmailTokensParams) error
 	// A prompt nobody answered. A late approval is still honoured.
 	ExpirePendingPayments(ctx context.Context, createdAt pgtype.Timestamptz) error
 	ExportCharges(ctx context.Context, tenantID pgtype.UUID) ([]ExportChargesRow, error)
@@ -198,15 +183,11 @@ type Querier interface {
 	FlagRefundDue(ctx context.Context, arg FlagRefundDueParams) error
 	// The one query not scoped by company: the key is what says which company.
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error)
-	GetActiveVerificationCode(ctx context.Context, arg GetActiveVerificationCodeParams) (VerificationCode, error)
 	GetAlertRules(ctx context.Context, tenantID pgtype.UUID) (AlertRule, error)
 	GetCompanyTicket(ctx context.Context, arg GetCompanyTicketParams) (GetCompanyTicketRow, error)
 	GetDriverDeliveryCounts(ctx context.Context, arg GetDriverDeliveryCountsParams) (GetDriverDeliveryCountsRow, error)
 	// One driver's record over a period, for the driver page.
 	GetDriverPerformance(ctx context.Context, arg GetDriverPerformanceParams) (GetDriverPerformanceRow, error)
-	// A link that still works. Whoever follows it is not signed in, so the
-	// token itself says which company and person it is for.
-	GetEmailToken(ctx context.Context, arg GetEmailTokenParams) (GetEmailTokenRow, error)
 	GetHeldPOD(ctx context.Context, arg GetHeldPODParams) (GetHeldPODRow, error)
 	GetInvoice(ctx context.Context, arg GetInvoiceParams) (Invoice, error)
 	// ---------------------------------------------------------------------------
@@ -233,7 +214,6 @@ type Querier interface {
 	GetPayment(ctx context.Context, arg GetPaymentParams) (GetPaymentRow, error)
 	// What the stand-in payment prompt shows: the reference is the secret.
 	GetPaymentByReference(ctx context.Context, reference string) (GetPaymentByReferenceRow, error)
-	GetPendingSignup(ctx context.Context, tokenHash string) (PendingSignup, error)
 	GetShipmentByConfirmToken(ctx context.Context, confirmToken *string) (Shipment, error)
 	GetShipmentByID(ctx context.Context, arg GetShipmentByIDParams) (Shipment, error)
 	// Row lock for the read-modify-write of a status transition, so two
@@ -423,9 +403,6 @@ type Querier interface {
 	// Locking clears the count: when the lock expires the account starts again
 	// from zero, instead of one mistype locking it at once.
 	LockUserAccount(ctx context.Context, arg LockUserAccountParams) error
-	// Held until the transaction ends: requests for one number and purpose
-	// take turns.
-	LockVerificationSubject(ctx context.Context, subject string) error
 	// Makes the partitions of the days ahead, and those of recent days whose
 	// positions wait in the default partition. Returns how many it made.
 	MaintainTrackingPartitions(ctx context.Context, arg MaintainTrackingPartitionsParams) (int32, error)
@@ -530,6 +507,8 @@ type Querier interface {
 	// from a phone sending what it saved while offline, changes nothing.
 	SetDriverPosition(ctx context.Context, arg SetDriverPositionParams) error
 	SetDriverVehicle(ctx context.Context, arg SetDriverVehicleParams) error
+	// Confirming an address and resetting a password from a link (the
+	// identity module's links), until users move into it.
 	SetEmailVerified(ctx context.Context, arg SetEmailVerifiedParams) (int64, error)
 	SetEnterpriseOffer(ctx context.Context, arg SetEnterpriseOfferParams) error
 	// Files an inbound message under the company and shipment it turned out to

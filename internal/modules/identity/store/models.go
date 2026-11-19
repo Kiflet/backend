@@ -8,6 +8,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type PendingSignup struct {
+	ID           pgtype.UUID        `db:"id" json:"id"`
+	TokenHash    string             `db:"token_hash" json:"token_hash"`
+	Company      string             `db:"company" json:"company"`
+	City         string             `db:"city" json:"city"`
+	FullName     string             `db:"full_name" json:"full_name"`
+	Email        string             `db:"email" json:"email"`
+	Phone        string             `db:"phone" json:"phone"`
+	PasswordHash string             `db:"password_hash" json:"password_hash"`
+	Plan         string             `db:"plan" json:"plan"`
+	BillingCycle string             `db:"billing_cycle" json:"billing_cycle"`
+	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type Session struct {
 	ID               pgtype.UUID        `db:"id" json:"id"`
 	UserID           pgtype.UUID        `db:"user_id" json:"user_id"`
@@ -22,4 +37,15 @@ type Session struct {
 	Kind             string             `db:"kind" json:"kind"`
 	Remember         bool               `db:"remember" json:"remember"`
 	LastSeenAt       pgtype.Timestamptz `db:"last_seen_at" json:"last_seen_at"`
+}
+
+type VerificationCode struct {
+	ID         pgtype.UUID        `db:"id" json:"id"`
+	Phone      string             `db:"phone" json:"phone"`
+	Purpose    string             `db:"purpose" json:"purpose"`
+	CodeHash   string             `db:"code_hash" json:"code_hash"`
+	Attempts   int32              `db:"attempts" json:"attempts"`
+	ExpiresAt  pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	ConsumedAt pgtype.Timestamptz `db:"consumed_at" json:"consumed_at"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
