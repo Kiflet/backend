@@ -605,7 +605,7 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 		if cur.DriverID.Valid && cur.DriverID != driver.ID {
 			ev.PreviousDriverID = cur.DriverID
 		}
-		if v, err := q.GetVehicleByID(ctx, db.GetVehicleByIDParams{ID: vid, TenantID: a.TenantID}); err == nil {
+		if v, err := s.vehicle(ctx, q, a.TenantID, vid); err == nil {
 			ev.Details = map[string]any{"vehicle": v.PlateNumber}
 		}
 		s.event(ctx, q, after, a, out, ev)
@@ -717,7 +717,7 @@ func (s *ShipmentService) assignableVehicle(ctx context.Context, q *db.Queries, 
 	if !id.Valid {
 		return pgtype.UUID{}, nil
 	}
-	v, err := q.GetVehicleByID(ctx, db.GetVehicleByIDParams{ID: id, TenantID: tenantID})
+	v, err := s.vehicle(ctx, q, tenantID, id)
 	if err != nil {
 		return refuse("Choose a vehicle.")
 	}
@@ -919,7 +919,7 @@ func (s *ShipmentService) Detail(ctx context.Context, tenantID, id pgtype.UUID) 
 		}
 	}
 	if sh.VehicleID.Valid {
-		if v, err := s.q.GetVehicleByID(ctx, db.GetVehicleByIDParams{ID: sh.VehicleID, TenantID: tenantID}); err == nil {
+		if v, err := s.vehicle(ctx, s.q, tenantID, sh.VehicleID); err == nil {
 			d.Vehicle = &v
 		}
 	}

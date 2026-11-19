@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5/pgtype"
 	auditapp "github.com/kiflet/backend/internal/modules/audit/app"
+	fleetapp "github.com/kiflet/backend/internal/modules/fleet/app"
 	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
 	tenancyapp "github.com/kiflet/backend/internal/modules/tenancy/app"
 	"github.com/redis/go-redis/v9"
@@ -152,6 +153,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		Links:    identityapp.NewLinks(pool),
 		Signups:  identityapp.NewSignups(pool),
 		Users:    identityapp.NewUsers(pool),
+		Fleet:    fleetapp.New(pool),
 		Pool:     pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
 		RemoteWorkers: !roles.Has("worker"), Work: work,
 		Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},

@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
+	fleetdomain "github.com/kiflet/backend/internal/modules/fleet/domain"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -12,13 +12,8 @@ import (
 	"github.com/kiflet/backend/internal/model"
 )
 
-// The papers a driver and a truck need on the road: the driver's licence,
-// and the truck's insurance and annual inspection (ቦሎ). Each is stored as
-// the last day it is valid. The office is reminded PapersNotice before, by
-// an alert, and a driver whose licence has run out can't be given a trip.
-
-// PapersNotice is how long before papers run out the office is reminded.
-const PapersNotice = 30 * 24 * time.Hour
+// The papers and their states are the fleet module's (fleet/domain).
+const PapersNotice = fleetdomain.PapersNotice
 
 // Alert types for papers.
 const (
@@ -29,27 +24,14 @@ const (
 
 // Paper states.
 const (
-	PaperNone   = ""       // no date recorded
-	PaperValid  = "valid"  // more than PapersNotice to go
-	PaperDue    = "due"    // runs out within PapersNotice
-	PaperLapsed = "lapsed" // the last valid day has passed
+	PaperNone   = fleetdomain.PaperNone
+	PaperValid  = fleetdomain.PaperValid
+	PaperDue    = fleetdomain.PaperDue
+	PaperLapsed = fleetdomain.PaperLapsed
 )
 
 // PaperState is where papers valid to the end of day stand on today.
-func PaperState(day pgtype.Date, today time.Time) string {
-	if !day.Valid {
-		return PaperNone
-	}
-	last := time.Date(day.Time.Year(), day.Time.Month(), day.Time.Day(), 0, 0, 0, 0, time.UTC)
-	now := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
-	switch {
-	case now.After(last):
-		return PaperLapsed
-	case !last.After(now.Add(PapersNotice)):
-		return PaperDue
-	}
-	return PaperValid
-}
+var PaperState = fleetdomain.PaperState
 
 // Today is the date in the company's time zone.
 func (c *core) Today() time.Time {
@@ -65,17 +47,7 @@ func FormatDay(d pgtype.Date) string {
 }
 
 // parseDay reads a date from a form (2026-12-02). Empty is no date.
-func parseDay(field, what, s string) (pgtype.Date, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return pgtype.Date{}, nil
-	}
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil || t.Year() < 2000 || t.Year() > 2100 {
-		return pgtype.Date{}, invalid(field, "Enter the date "+what+" as a day, month and year.")
-	}
-	return toDate(t), nil
-}
+var parseDay = fleetdomain.ParseDay
 
 func sameDay(a, b pgtype.Date) bool {
 	return a.Valid == b.Valid && (!a.Valid || a.Time.Equal(b.Time))
@@ -109,7 +81,7 @@ var papersAlert = map[string]string{"licence": AlertLicenceDue, "insurance": Ale
 // raised once per date: renewing the papers resolves it.
 func (j *Jobs) CheckPapers(ctx context.Context) error {
 	today := j.Today()
-	rows, err := j.q.ListPapersDue(ctx, toDate(today.Add(PapersNotice)))
+	rows, err := j.fleet.PapersDue(ctx, today.Add(PapersNotice))
 	if err != nil {
 		return err
 	}

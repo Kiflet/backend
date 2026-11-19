@@ -32,6 +32,11 @@ What changed in each release, newest first.
   account change and sign-in record goes through the module, and a person
   who isn't there is now "not found" rather than an internal error. The
   drivers' profile columns of `users` wait for the fleet module.
+- **The fleet module**: `internal/modules/fleet` owns `vehicles` and the
+  drivers' profile (their vehicle, licence and app settings). The vehicle
+  form's rules and the paper states are in its `domain`, with unit tests.
+  The vehicles and drivers pages, which gather from several modules, stay
+  as read models until reports moves.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

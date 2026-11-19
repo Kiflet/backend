@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/kiflet/backend/internal/modules/fleet"
 	"sort"
 	"time"
 
@@ -370,8 +371,8 @@ func (s *SyncService) Sync(ctx context.Context, p *Principal, req SyncRequest, c
 		if lang != nil && *lang != "en" && *lang != "am" {
 			lang = nil
 		}
-		if err := s.q.SetDriverAppSettings(ctx, db.SetDriverAppSettingsParams{
-			Language: lang, BatterySaver: st.BatterySaver, Vibrate: st.Vibrate, ID: p.UserID, TenantID: p.TenantID,
+		if err := s.fleet.SetDriverAppSettings(ctx, s.q.Conn(), p.TenantID, p.UserID, fleet.AppSettings{
+			Language: lang, BatterySaver: st.BatterySaver, Vibrate: st.Vibrate,
 		}); err != nil {
 			return nil, err
 		}
@@ -504,7 +505,7 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 		return err
 	}
 	plates := map[pgtype.UUID]string{}
-	if vs, err := s.q.ListActiveVehiclesByTenant(ctx, p.TenantID); err == nil {
+	if vs, err := s.activeVehicles(ctx, s.q, p.TenantID); err == nil {
 		for _, v := range vs {
 			plates[v.ID] = v.PlateNumber
 		}
@@ -609,7 +610,7 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 		resp.Driver.OfficePhone = deref(t.ContactPhone)
 	}
 	if u.VehicleID.Valid {
-		if v, err := s.q.GetVehicleByID(ctx, db.GetVehicleByIDParams{ID: u.VehicleID, TenantID: p.TenantID}); err == nil {
+		if v, err := s.vehicle(ctx, s.q, p.TenantID, u.VehicleID); err == nil {
 			resp.Driver.Vehicle = v.PlateNumber
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/kiflet/backend/internal/modules/audit"
+	"github.com/kiflet/backend/internal/modules/fleet"
 	"github.com/kiflet/backend/internal/modules/identity"
 	"github.com/kiflet/backend/internal/modules/tenancy"
 	"time"
@@ -82,6 +83,7 @@ type Deps struct {
 	Links     identity.Links
 	Signups   identity.Signups
 	Users     identity.Users
+	Fleet     fleet.Fleet
 	Log       zerolog.Logger
 	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
@@ -144,7 +146,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet,
 		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -195,6 +197,7 @@ type core struct {
 	links    identity.Links
 	signups  identity.Signups
 	users    identity.Users
+	fleet    fleet.Fleet
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	outbox        bool
@@ -402,4 +405,20 @@ func (c *core) createUser(ctx context.Context, q *db.Queries, n identity.NewUser
 func (c *core) updateProfile(ctx context.Context, q *db.Queries, p identity.Profile) (db.User, error) {
 	u, err := c.users.UpdateProfile(ctx, q.Conn(), p)
 	return db.User(u), err
+}
+
+// vehicle and activeVehicles reach the fleet module's vehicles on q's
+// connection, as the rest of internal/service knows them until it moves.
+func (c *core) vehicle(ctx context.Context, q *db.Queries, tenantID, id pgtype.UUID) (db.Vehicle, error) {
+	v, err := c.fleet.Vehicle(ctx, q.Conn(), tenantID, id)
+	return db.Vehicle(v), err
+}
+
+func (c *core) activeVehicles(ctx context.Context, q *db.Queries, tenantID pgtype.UUID) ([]db.Vehicle, error) {
+	vs, err := c.fleet.ActiveVehicles(ctx, q.Conn(), tenantID)
+	out := make([]db.Vehicle, len(vs))
+	for i, v := range vs {
+		out[i] = db.Vehicle(v)
+	}
+	return out, err
 }

@@ -172,7 +172,7 @@ func (s *UserService) CreateDriver(ctx context.Context, p *Principal, in PersonI
 			return s.duplicateUser(ctx, p.TenantID, v, err)
 		}
 		if licence.Valid {
-			if err := q.SetDriverLicence(ctx, db.SetDriverLicenceParams{ID: u.ID, TenantID: p.TenantID, LicenceExpiresOn: licence}); err != nil {
+			if err := s.fleet.SetDriverLicence(ctx, q.Conn(), p.TenantID, u.ID, licence); err != nil {
 				return err
 			}
 			u.LicenceExpiresOn = licence
@@ -229,12 +229,12 @@ func (s *UserService) UpdateDriver(ctx context.Context, p *Principal, id pgtype.
 				return err
 			}
 		}
-		if err := q.SetDriverVehicle(ctx, db.SetDriverVehicleParams{ID: id, TenantID: p.TenantID, VehicleID: vehicle}); err != nil {
+		if err := s.fleet.SetDriverVehicle(ctx, q.Conn(), p.TenantID, id, vehicle); err != nil {
 			return err
 		}
 		out.VehicleID = vehicle
 		if !sameDay(cur.LicenceExpiresOn, licence) {
-			if err := q.SetDriverLicence(ctx, db.SetDriverLicenceParams{ID: id, TenantID: p.TenantID, LicenceExpiresOn: licence}); err != nil {
+			if err := s.fleet.SetDriverLicence(ctx, q.Conn(), p.TenantID, id, licence); err != nil {
 				return err
 			}
 			if err := s.papersRenewed(ctx, q, p.TenantID, AlertLicenceDue, id, pgtype.UUID{}); err != nil {
@@ -258,7 +258,7 @@ func (s *UserService) ownVehicle(ctx context.Context, q *db.Queries, tenantID pg
 	if err != nil {
 		return pgtype.UUID{}, invalid("vehicle_id", "Choose a vehicle.")
 	}
-	v, err := q.GetVehicleByID(ctx, db.GetVehicleByIDParams{ID: id, TenantID: tenantID})
+	v, err := s.vehicle(ctx, q, tenantID, id)
 	if err != nil {
 		return pgtype.UUID{}, invalid("vehicle_id", "Choose a vehicle.")
 	}
@@ -508,7 +508,7 @@ func (s *UserService) Driver(ctx context.Context, tenantID, id pgtype.UUID) (*Dr
 	}
 	d := &DriverDetail{Driver: u}
 	if u.VehicleID.Valid {
-		if v, err := s.q.GetVehicleByID(ctx, db.GetVehicleByIDParams{ID: u.VehicleID, TenantID: tenantID}); err == nil {
+		if v, err := s.vehicle(ctx, s.q, tenantID, u.VehicleID); err == nil {
 			d.Vehicle = &v
 		}
 	}
