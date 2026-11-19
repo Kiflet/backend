@@ -5,8 +5,9 @@
 -- ID, since an array here can't hold NULL.
 --
 -- client_id carries the offline client's own row identifier. Paired with
--- device_id it is what a retried batch conflicts on, so replaying a batch whose
--- response was lost cannot duplicate telemetry.
+-- device_id and the fix's time (a partitioned table's unique keys include
+-- its partition key) it is what a retried batch conflicts on, so replaying
+-- a batch whose response was lost cannot duplicate telemetry.
 INSERT INTO tracking_events (
     tenant_id, shipment_id, driver_id,
     coordinates, accuracy_meters, speed_kph, heading,
@@ -28,7 +29,7 @@ FROM (
            unnest(sqlc.arg(recorded)::timestamptz[]) AS recorded_at,
            unnest(sqlc.arg(client_ids)::text[]) AS client_id
 ) p
-ON CONFLICT (device_id, client_id) WHERE client_id IS NOT NULL AND device_id IS NOT NULL DO NOTHING;
+ON CONFLICT (device_id, client_id, recorded_at) WHERE client_id IS NOT NULL AND device_id IS NOT NULL DO NOTHING;
 
 -- name: SetDriverPosition :exec
 -- Keeps the driver's newest position for the fleet map. An older fix,
@@ -115,5 +116,12 @@ LIMIT 1;
 -- name: CountTrackingEventsByShipment :one
 SELECT COUNT(*) FROM tracking_events WHERE shipment_id = $1 AND tenant_id = $2;
 
--- name: DeleteOldTrackingEvents :exec
-DELETE FROM tracking_events WHERE recorded_at < $1;
+-- name: MaintainTrackingPartitions :one
+-- Makes the partitions of the days ahead, and those of recent days whose
+-- positions wait in the default partition. Returns how many it made.
+SELECT tracking_events_maintain(sqlc.arg(days_ahead)::int, make_interval(days => sqlc.arg(keep_days)::int))::int AS made;
+
+-- name: DropOldTrackingPartitions :one
+-- Retention: drops each day's partition that ends before the cut-off, and
+-- deletes older rows from the default partition. Returns how many days.
+SELECT tracking_events_drop_partitions(sqlc.arg(before)::timestamptz)::int AS dropped;

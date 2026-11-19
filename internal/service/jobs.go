@@ -28,10 +28,18 @@ const (
 	pickupGrace = 2 * time.Hour
 
 	retainTracking = 90 * 24 * time.Hour
-	retainAlerts   = 90 * 24 * time.Hour
-	retainSMS      = 180 * 24 * time.Hour //nolint:staticcheck // SMS, not milliseconds
-	retainEmail    = 180 * 24 * time.Hour
-	retainLinks    = 30 * 24 * time.Hour
+	// partitionsAhead is how many days of tracking_events partitions are
+	// made before they are needed.
+	partitionsAhead = 7
+	// retainOutbox is how long a published event is kept, to look into a
+	// delivery; retainProcessed how long consumers remember the messages
+	// they handled, well past RabbitMQ's longest redelivery.
+	retainOutbox    = 3 * 24 * time.Hour
+	retainProcessed = 7 * 24 * time.Hour
+	retainAlerts    = 90 * 24 * time.Hour
+	retainSMS       = 180 * 24 * time.Hour //nolint:staticcheck // SMS, not milliseconds
+	retainEmail     = 180 * 24 * time.Hour
+	retainLinks     = 30 * 24 * time.Hour
 
 	// usageEvery spaces out the plan-limit checks, which count every
 	// company's texts this month.
@@ -106,6 +114,7 @@ func (j *Jobs) once(ctx context.Context, retention, usage bool) (ran bool, err e
 		run("papers_check", j.CheckPapers)
 	}
 	if retention {
+		run("tracking_partitions", j.TrackingPartitions)
 		run("retention", j.Retention)
 	}
 	return true, errors.Join(errs...)
@@ -217,7 +226,15 @@ func (j *Jobs) Retention(ctx context.Context) error {
 	} else if n > 0 {
 		j.log.Info().Int("shipments", n).Msg("removed customer details from old shipments")
 	}
-	if err := j.q.DeleteOldTrackingEvents(ctx, toTimestamp(now.Add(-retainTracking))); err != nil {
+	if days, err := j.q.DropOldTrackingPartitions(ctx, toTimestamp(now.Add(-retainTracking))); err != nil {
+		return err
+	} else if days > 0 {
+		j.log.Info().Int32("days", days).Msg("dropped old positions")
+	}
+	if err := j.q.DeleteSentOutboxEvents(ctx, toTimestamp(now.Add(-retainOutbox))); err != nil {
+		return err
+	}
+	if err := j.q.DeleteOldProcessedMessages(ctx, toTimestamp(now.Add(-retainProcessed))); err != nil {
 		return err
 	}
 	if err := j.q.DeleteOldAlerts(ctx, toTimestamp(now.Add(-retainAlerts))); err != nil {
@@ -245,6 +262,23 @@ func (j *Jobs) Retention(ctx context.Context) error {
 		return err
 	}
 	return j.q.DeleteExpiredVerificationCodes(ctx)
+}
+
+// TrackingPartitions makes the coming week's partitions of
+// tracking_events, and those of recent days whose positions arrived before
+// their partition existed. It runs hourly with retention, so a missed run
+// leaves a week of margin.
+func (j *Jobs) TrackingPartitions(ctx context.Context) error {
+	made, err := j.q.MaintainTrackingPartitions(ctx, db.MaintainTrackingPartitionsParams{
+		DaysAhead: partitionsAhead, KeepDays: int32(retainTracking / (24 * time.Hour)),
+	})
+	if err != nil {
+		return err
+	}
+	if made > 0 {
+		j.log.Info().Int32("partitions", made).Msg("made tracking partitions")
+	}
+	return nil
 }
 
 // humanDuration renders a duration the way a dispatcher would say it.

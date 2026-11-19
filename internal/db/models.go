@@ -126,6 +126,22 @@ type EmailToken struct {
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type EventOutbox struct {
+	ID          pgtype.UUID        `db:"id" json:"id"`
+	TenantID    pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	Type        string             `db:"type" json:"type"`
+	Version     int32              `db:"version" json:"version"`
+	Exchange    string             `db:"exchange" json:"exchange"`
+	RoutingKey  string             `db:"routing_key" json:"routing_key"`
+	Payload     []byte             `db:"payload" json:"payload"`
+	TraceID     *string            `db:"trace_id" json:"trace_id"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	AvailableAt pgtype.Timestamptz `db:"available_at" json:"available_at"`
+	SentAt      pgtype.Timestamptz `db:"sent_at" json:"sent_at"`
+	Attempts    int32              `db:"attempts" json:"attempts"`
+	LastError   *string            `db:"last_error" json:"last_error"`
+}
+
 type Invoice struct {
 	ID             pgtype.UUID        `db:"id" json:"id"`
 	TenantID       pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
@@ -200,6 +216,12 @@ type PendingSignup struct {
 	BillingCycle string             `db:"billing_cycle" json:"billing_cycle"`
 	ExpiresAt    pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
+type ProcessedMessage struct {
+	Consumer    string             `db:"consumer" json:"consumer"`
+	MessageID   pgtype.UUID        `db:"message_id" json:"message_id"`
+	ProcessedAt pgtype.Timestamptz `db:"processed_at" json:"processed_at"`
 }
 
 type ProofOfDelivery struct {

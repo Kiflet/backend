@@ -280,9 +280,11 @@ Roll back: each module is one PR; revert it.
    (exchanges, queues, policies) in `deployments/rabbitmq/definitions.json`,
    loaded at start. `make db` becomes `make deps` (Postgres, RabbitMQ,
    Redis).
-2. **Postgres 15 → 17** (PostGIS 3.5): a dump and restore in staging, then
-   production with `pg_upgrade --link` in a maintenance window, or a
-   logical replica and a switch. Tested by staging's restore test.
+2. **Postgres 15 → 17** (PostGIS 3.6): a dump and restore, as
+   `docs/deploy.md` ("Upgrading PostgreSQL") has it, while the database is
+   small; a database too big to restore in a maintenance window would use
+   `pg_upgrade --link` or a logical replica and a switch. Tested by
+   staging's restore test.
 3. **The broker package** (`internal/platform/broker`): connection with
    reconnects, channels per goroutine, publisher confirms, the envelope,
    consumers with prefetch, ack after commit, retries through delayed

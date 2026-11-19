@@ -26,6 +26,7 @@ var jobSchedule = []struct {
 	{"billing", "Renewals, reminders and read-only", time.Minute},
 	{"plan_limits", "Plan limits", usageEvery},
 	{"papers_check", "Licences, insurance and inspections running out", usageEvery},
+	{"tracking_partitions", "Days of GPS positions made ahead", time.Hour},
 	{"retention", "Data retention", time.Hour},
 }
 

@@ -24,6 +24,14 @@ What changed in each release, newest first.
 
 ### Added
 
+- **The event outbox** (`docs/migration.md`, phase 2). Two tables for the
+  move to RabbitMQ: `event_outbox`, where a change will write the events
+  others must hear about in its own transaction, for a relay to publish,
+  and `processed_messages`, where a consumer records what it has handled
+  so a message delivered twice does nothing the second time. Nothing
+  writes to them yet. Retention keeps sent events three days and handled
+  messages seven.
+
 - **The plan for three codebases.** `docs/architecture.md` (a Go modular
   monolith run as API, realtime, worker, scheduler and relay processes
   over RabbitMQ and Redis; the Next.js web app; the Expo driver app with
@@ -38,6 +46,21 @@ What changed in each release, newest first.
   Help page, beside the email address. Each is left off when not set.
 
 ### Changed
+
+- **PostgreSQL 17** (PostGIS 3.6), from 15, in development, production,
+  CI and the tests. Its data is in a new volume (`postgres17-data`; in
+  development `postgres17_data`), so the old one is untouched:
+  `docs/deploy.md`, "Upgrading PostgreSQL", moves production's data
+  across with a backup and a restore, and in development `make seed`
+  fills the new one.
+- **GPS positions partitioned by day.** `tracking_events` is now one
+  table per UTC day, made a week ahead by an hourly job (on the health
+  page as "Days of GPS positions made ahead"). Retention drops a whole
+  day at 90 days instead of deleting its rows, which leaves nothing for
+  vacuum. The migration moves the existing positions across. A position
+  is now told apart by its device, client ID and time together, which a
+  phone sending it again repeats, so retries still store nothing twice.
+  The index on positions' coordinates is gone: no query used it.
 
 - **A new dark theme.** Night is now a neutral dark grey instead of a teal
   one, in the dashboard, the public pages and the driver app: surfaces
