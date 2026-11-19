@@ -129,9 +129,6 @@ type Querier interface {
 	// The people running Kiflet: every company's audit log, support tickets
 	// and the background jobs (FR-042 AC-042.7, FR-049).
 	CreateSupportTicket(ctx context.Context, arg CreateSupportTicketParams) (SupportTicket, error)
-	// A slug already taken returns no row, so the caller can try another
-	// without aborting its transaction.
-	CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error)
 	// A batch of a driver's GPS fixes in one statement: a phone back from a day
 	// without signal sends thousands. The arrays run in parallel, one element
 	// a fix, with -1 standing for a missing number and '' for a missing client
@@ -255,8 +252,6 @@ type Querier interface {
 	// sends a batch again when the answer to it was lost.
 	GetShipmentEventByClientID(ctx context.Context, arg GetShipmentEventByClientIDParams) (string, error)
 	GetSyncMetadata(ctx context.Context, driverID pgtype.UUID) (SyncMetadatum, error)
-	GetTenantByID(ctx context.Context, id pgtype.UUID) (Tenant, error)
-	GetTenantBySlug(ctx context.Context, slug string) (Tenant, error)
 	// Subscriptions, invoices and payments (FR-043 to FR-045).
 	GetTenantForUpdate(ctx context.Context, id pgtype.UUID) (Tenant, error)
 	// Only for the platform admin, who answers every company.
@@ -413,6 +408,10 @@ type Querier interface {
 	// Paid periods that have ended, unless the last renewal is still unpaid or
 	// the company turned renewal off.
 	ListTenantsToRenew(ctx context.Context, periodEnd pgtype.Timestamptz) ([]Tenant, error)
+	// Every company with activity figures from other modules' tables (users,
+	// shipments, invoices), for the platform's companies page: a read model,
+	// which moves to reports with that module. The tenants table itself is the
+	// tenancy module's (internal/modules/tenancy).
 	ListTenantsWithStats(ctx context.Context) ([]ListTenantsWithStatsRow, error)
 	ListTicketMessages(ctx context.Context, arg ListTicketMessagesParams) ([]SupportMessage, error)
 	// Trials ending before $1 whose end hasn't been announced yet. The episode
@@ -573,7 +572,6 @@ type Querier interface {
 	// delay. When the status was entered is unchanged.
 	SetShipmentStatusDetail(ctx context.Context, arg SetShipmentStatusDetailParams) (Shipment, error)
 	SetSupportTicketStatus(ctx context.Context, arg SetSupportTicketStatusParams) error
-	SetTenantActive(ctx context.Context, arg SetTenantActiveParams) error
 	SetTrialEnd(ctx context.Context, arg SetTrialEndParams) error
 	SetUserActive(ctx context.Context, arg SetUserActiveParams) error
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
@@ -589,7 +587,6 @@ type Querier interface {
 	UpdatePassword(ctx context.Context, arg UpdatePasswordParams) error
 	// Edits replace every editable field; the form always submits all of them.
 	UpdateShipmentDetails(ctx context.Context, arg UpdateShipmentDetailsParams) (Shipment, error)
-	UpdateTenantSettings(ctx context.Context, arg UpdateTenantSettingsParams) (Tenant, error)
 	// A changed email address has to be confirmed again.
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 	UpdateVehicle(ctx context.Context, arg UpdateVehicleParams) (Vehicle, error)

@@ -133,7 +133,7 @@ func (s *VehicleService) Create(ctx context.Context, p *Principal, in VehicleInp
 	if err != nil {
 		return db.Vehicle{}, err
 	}
-	tenant, err := s.q.GetTenantByID(ctx, p.TenantID)
+	tenant, err := s.tenant(ctx, s.q, p.TenantID)
 	if err != nil {
 		return db.Vehicle{}, err
 	}

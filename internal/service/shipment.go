@@ -307,7 +307,7 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 
 	var out db.Shipment
 	err = s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
-		tenant, err := q.GetTenantByID(ctx, a.TenantID)
+		tenant, err := s.tenant(ctx, q, a.TenantID)
 		if err != nil {
 			return err
 		}
@@ -502,7 +502,7 @@ func (s *ShipmentService) textNewDestination(ctx context.Context, q *db.Queries,
 	if err != nil || d.Phone == nil {
 		return nil
 	}
-	t, err := q.GetTenantByID(ctx, sh.TenantID)
+	t, err := s.tenant(ctx, q, sh.TenantID)
 	if err != nil {
 		return err
 	}
@@ -565,7 +565,7 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 		if !model.CanAssign(cur.Status) {
 			return conflict(fmt.Sprintf("A %s shipment can't be reassigned.", strings.ToLower(model.StatusLabel(cur.Status))))
 		}
-		tenant, err := q.GetTenantByID(ctx, a.TenantID)
+		tenant, err := s.tenant(ctx, q, a.TenantID)
 		if err != nil {
 			return err
 		}

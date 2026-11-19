@@ -213,7 +213,7 @@ func (s *AuthService) admit(ctx context.Context, u db.User, ci ClientInfo) error
 		return ErrAccountInactive
 	}
 	if u.Role != model.RolePlatformAdmin {
-		t, err := s.q.GetTenantByID(ctx, u.TenantID)
+		t, err := s.tenant(ctx, s.q, u.TenantID)
 		if err != nil {
 			return err
 		}

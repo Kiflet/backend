@@ -107,7 +107,7 @@ func (s *ShipmentService) AddDocument(ctx context.Context, a Actor, shipmentID p
 		return doc, fmt.Errorf("store document: %w", err)
 	}
 	err = s.tx(ctx, func(q *db.Queries, _ *afterCommit) error {
-		tenant, err := q.GetTenantByID(ctx, a.TenantID)
+		tenant, err := s.tenant(ctx, q, a.TenantID)
 		if err != nil {
 			return err
 		}
@@ -211,7 +211,7 @@ func (s *ShipmentService) AddCharge(ctx context.Context, a Actor, shipmentID pgt
 		return err
 	}
 	return s.tx(ctx, func(q *db.Queries, _ *afterCommit) error {
-		tenant, err := q.GetTenantByID(ctx, a.TenantID)
+		tenant, err := s.tenant(ctx, q, a.TenantID)
 		if err != nil {
 			return err
 		}

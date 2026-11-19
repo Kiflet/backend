@@ -175,7 +175,7 @@ func (s *ShipmentService) Broadcast(ctx context.Context, a Actor, text string) (
 		if len(drivers) == 0 {
 			return conflict("No driver has a shipment assigned or on the road right now.")
 		}
-		tenant, err := q.GetTenantByID(ctx, a.TenantID)
+		tenant, err := s.tenant(ctx, q, a.TenantID)
 		if err != nil {
 			return err
 		}
