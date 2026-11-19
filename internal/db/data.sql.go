@@ -176,15 +176,6 @@ func (q *Queries) DeleteTenant(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
-const deleteTenantAuditLogs = `-- name: DeleteTenantAuditLogs :exec
-DELETE FROM audit_logs WHERE tenant_id = $1
-`
-
-func (q *Queries) DeleteTenantAuditLogs(ctx context.Context, tenantID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteTenantAuditLogs, tenantID)
-	return err
-}
-
 const exportCharges = `-- name: ExportCharges :many
 SELECT s.tracking_number, c.description, c.amount::float8 AS amount, c.created_at
 FROM shipment_charges c

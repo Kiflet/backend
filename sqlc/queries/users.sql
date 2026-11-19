@@ -147,3 +147,8 @@ SELECT u.id, u.tenant_id, u.role, u.full_name, u.email, u.phone, u.is_active
 FROM users u
 WHERE u.tenant_id = $1
 ORDER BY u.role, u.full_name;
+
+-- name: UserNamesByIDs :many
+-- Names of the people in the platform's audit log, from every company:
+-- for the platform admin only (UserService.Names checks).
+SELECT id, full_name FROM users WHERE id = ANY(sqlc.arg(ids)::uuid[]);

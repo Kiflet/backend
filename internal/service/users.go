@@ -537,3 +537,21 @@ func (s *UserService) Driver(ctx context.Context, tenantID, id pgtype.UUID) (*Dr
 	}
 	return d, nil
 }
+
+// Names are the names of users in any company, by ID, for the platform
+// admin's view of every company's audit log. A user deleted since is
+// missing.
+func (s *UserService) Names(ctx context.Context, p *Principal, ids []pgtype.UUID) (map[pgtype.UUID]string, error) {
+	if !p.IsPlatformAdmin() {
+		return nil, ErrUnauthorized
+	}
+	rows, err := s.q.UserNamesByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[pgtype.UUID]string, len(rows))
+	for _, r := range rows {
+		out[r.ID] = r.FullName
+	}
+	return out, nil
+}

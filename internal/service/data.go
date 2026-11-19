@@ -191,7 +191,7 @@ func (s *DataService) DeleteCompany(ctx context.Context, p *Principal, id pgtype
 		if err != nil {
 			return err
 		}
-		if err := q.DeleteTenantAuditLogs(ctx, id); err != nil {
+		if err := s.auditLog.DeleteTenant(ctx, q.Conn(), id); err != nil {
 			return err
 		}
 		if err := q.DeleteTenant(ctx, id); err != nil {

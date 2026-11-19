@@ -153,9 +153,6 @@ UPDATE invoices SET status = 'void', voided_at = NOW()
 WHERE tenant_id = $1 AND status = 'open'
 RETURNING number;
 
--- name: DeleteTenantAuditLogs :exec
-DELETE FROM audit_logs WHERE tenant_id = $1;
-
 -- name: DeleteTenant :exec
 DELETE FROM tenants WHERE id = $1;
 
