@@ -30,6 +30,12 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Timed jobs through RabbitMQ** (`docs/deploy.md`, "RabbitMQ"). With
+  `RABBITMQ_URL`, one scheduler, holding a Postgres lock, names each job
+  on `jobs.scheduled` as it falls due, and the workers run them, each job
+  under a lease of its own (`job_leases`): the alert checks no longer
+  wait behind a long retention run, and a scheduler that takes over
+  carries on from the record of runs. `WORKER_JOBS=inprocess` switches back.
 - **Texts, email and webhooks through RabbitMQ** (`docs/deploy.md`,
   "RabbitMQ"). With `RABBITMQ_URL`, the workers take them from
   `notify.sms`, `notify.email` and `webhook.deliver`. Each is still written

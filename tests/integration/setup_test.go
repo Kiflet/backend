@@ -152,7 +152,12 @@ type setup struct {
 	base  string
 	cfg   *config.Config
 	texts func(phone string) []console.Item
+	// jobs runs the timed jobs on their schedule (withJobs).
+	jobs bool
 }
+
+// withJobs runs the timed jobs on their schedule, as the server does.
+func withJobs(s *setup) { s.jobs = true }
 
 // newEnv starts the app as the server command does, with the stand-in
 // providers. They print what they would send to the inbox, which the tests
@@ -186,7 +191,7 @@ func newEnv(t *testing.T, options ...func(*setup)) *env {
 		log = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
 	}
 	inbox := console.New(nil)
-	a, err := app.New(cfg, pool, log, app.Options{Console: inbox, NoJobs: true})
+	a, err := app.New(cfg, pool, log, app.Options{Console: inbox, NoJobs: !s.jobs})
 	if err != nil {
 		t.Fatal(err)
 	}

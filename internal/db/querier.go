@@ -276,6 +276,9 @@ type Querier interface {
 	// Written in the transaction of the change it tells of.
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error
 	IsPhoneOptedOut(ctx context.Context, phone string) (bool, error)
+	// Takes a timed job's lease unless another worker holds it. true when
+	// taken.
+	LeaseJob(ctx context.Context, arg LeaseJobParams) (bool, error)
 	ListAPIKeys(ctx context.Context, tenantID pgtype.UUID) ([]ApiKey, error)
 	ListActiveSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]Session, error)
 	ListActiveShipmentsByDriver(ctx context.Context, arg ListActiveShipmentsByDriverParams) ([]Shipment, error)
@@ -488,6 +491,7 @@ type Querier interface {
 	RecordSuccessfulLogin(ctx context.Context, id pgtype.UUID) error
 	// As ReleaseSMS.
 	ReleaseEmails(ctx context.Context, ids []pgtype.UUID) error
+	ReleaseJob(ctx context.Context, name string) error
 	// Hands back messages claimed but not yet attempted when the process stops,
 	// so the next one sends them at once instead of after the lease.
 	ReleaseSMS(ctx context.Context, ids []pgtype.UUID) error

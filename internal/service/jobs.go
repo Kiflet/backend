@@ -21,7 +21,7 @@ type Jobs struct {
 }
 
 const (
-	jobsLockKey = 7_311_042 // arbitrary, unique to this application
+	jobsLockKey = 7_311_042 // arbitrary, unique to this application; see schedulerLockKey
 
 	// pickupGrace is how long after its planned pickup a load may still be
 	// waiting before the office is told.
@@ -92,32 +92,39 @@ func (j *Jobs) once(ctx context.Context, retention, usage bool) (ran bool, err e
 	}
 
 	var errs []error
-	run := func(name string, fn func(context.Context) error) {
-		if err := j.record(ctx, name, fn); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", name, err))
+	jobs := j.jobs()
+	for _, s := range jobSchedule {
+		switch {
+		case s.Every >= time.Hour && !retention, s.Every == usageEvery && !usage:
+			continue
 		}
-	}
-	run("driver_check", j.CheckDrivers)
-	run("eta_check", j.CheckETAs)
-	run("pickup_check", j.CheckPickups)
-	run("route_check", j.CheckRoutes)
-	run("stop_check", j.CheckStops)
-	run("outbox_requeue", func(ctx context.Context) error {
-		if err := errors.Join(j.q.RequeueStuckSMS(ctx), j.q.RequeueStuckEmails(ctx), j.q.RequeueStuckWebhooks(ctx)); err != nil {
-			return err
+		if err := j.record(ctx, s.Name, jobs[s.Name]); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", s.Name, err))
 		}
-		return j.observeOutbox(ctx)
-	})
-	run("billing", j.billing.Run)
-	if usage {
-		run("plan_limits", j.billing.CheckUsage)
-		run("papers_check", j.CheckPapers)
-	}
-	if retention {
-		run("tracking_partitions", j.TrackingPartitions)
-		run("retention", j.Retention)
 	}
 	return true, errors.Join(errs...)
+}
+
+// jobs are what each job in jobSchedule runs.
+func (j *Jobs) jobs() map[string]func(context.Context) error {
+	return map[string]func(context.Context) error{
+		"driver_check": j.CheckDrivers,
+		"eta_check":    j.CheckETAs,
+		"pickup_check": j.CheckPickups,
+		"route_check":  j.CheckRoutes,
+		"stop_check":   j.CheckStops,
+		"outbox_requeue": func(ctx context.Context) error {
+			if err := errors.Join(j.q.RequeueStuckSMS(ctx), j.q.RequeueStuckEmails(ctx), j.q.RequeueStuckWebhooks(ctx)); err != nil {
+				return err
+			}
+			return j.observeOutbox(ctx)
+		},
+		"billing":             j.billing.Run,
+		"plan_limits":         j.billing.CheckUsage,
+		"papers_check":        j.CheckPapers,
+		"tracking_partitions": j.TrackingPartitions,
+		"retention":           j.Retention,
+	}
 }
 
 // observeOutbox publishes how many texts and emails are waiting to be sent,

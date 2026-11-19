@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -143,5 +144,45 @@ func deliverWork(deliver func(context.Context, []pgtype.UUID) error) broker.Hand
 			}
 		}
 		return nil
+	}
+}
+
+// jobsPrefetch is how many jobs a worker runs at once.
+const jobsPrefetch = 4
+
+// brokerJobs publishes the jobs the scheduler names.
+type brokerJobs struct{ b *broker.Broker }
+
+// jobMessage is what jobs.scheduled carries.
+type jobMessage struct {
+	Job string `json:"job"`
+}
+
+func (j brokerJobs) Publish(ctx context.Context, name string) error {
+	env, err := broker.NewEnvelope("jobs.scheduled", "", jobMessage{Job: name})
+	if err != nil {
+		return err
+	}
+	// A job not taken before its next turn would only run twice in a row.
+	every, _ := service.JobEvery(name)
+	return j.b.Publish(ctx, broker.Message{Exchange: broker.Jobs, RoutingKey: "jobs.scheduled", Envelope: env, Expires: every})
+}
+
+// runJobs is the consumer of jobs.scheduled: the jobs in a batch run side
+// by side.
+func runJobs(jobs *service.Jobs) broker.Handler {
+	return func(ctx context.Context, batch []broker.Delivery) error {
+		errs := make([]error, len(batch))
+		var wg sync.WaitGroup
+		for i, d := range batch {
+			wg.Go(func() {
+				var m jobMessage
+				if errs[i] = json.Unmarshal(d.Envelope.Payload, &m); errs[i] == nil {
+					errs[i] = jobs.RunJob(ctx, m.Job)
+				}
+			})
+		}
+		wg.Wait()
+		return errors.Join(errs...)
 	}
 }
