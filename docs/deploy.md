@@ -383,6 +383,41 @@ a delivery that is sent once the signal is back. It finds Chrome or
 Chromium on the `PATH`, or the program named in `E2E_CHROME`, and is
 skipped without one, except in CI.
 
+### Load test
+
+The load test (`tests/load/`) plays the driver app's phones against
+staging with [k6](https://k6.io/), from its image:
+
+```bash
+make staging-up
+make load-seed                    # LOAD_PHONES=12000 drivers on the road, signed in: tmp/load-phones.json
+make test-load                    # 15 minutes (LOAD_DURATION), then how long positions waited
+```
+
+- **Seeding:** `make load-seed` runs `kiflet seed-load` in the app's
+  container. It makes companies of 200 drivers on the Enterprise plan,
+  each driver with a shipment on the road from Addis Ababa to Adama, and
+  signs every driver in. It refuses unless `--on` names the host of
+  `PUBLIC_URL`, and refuses a second time on the same data. 12,000 drivers
+  take about ten minutes.
+- **The run:** every phone syncs its newest position once a minute (the
+  `live` scenario). After five minutes, 3,000 phones come back from two
+  hours without signal, with a position every 30 seconds (`reconnect`).
+- **The targets** (`docs/architecture.md`, section 15):
+  - k6 fails the run if a live sync's 95th percentile is over 300 ms, or
+    more than 1% of requests fail.
+  - `tests/load/report.sql` then reads, from the database, how long live
+    positions waited before the tracking worker wrote them. The target is
+    under two minutes for every one.
+
+k6 sends every phone's requests from one address, so `make load-seed`
+restarts the app with `tests/load/compose.yml`, which lifts the driver
+API's allowance per address (`DRIVER_API_PER_ADDRESS=0`). Each driver's
+own allowance stays. A laptop shares its cores between k6 and staging, so
+its figures are a floor. The test the plan asks for runs on a machine the
+size of production's, with k6 on another (set `BASE_URL`, and copy
+`tmp/load-phones.json` there).
+
 ## Connecting the real providers
 
 The adapters follow what each provider publishes, and the sandbox plays the

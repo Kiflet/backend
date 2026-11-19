@@ -30,6 +30,12 @@ What changed in each release, newest first.
 
 ### Added
 
+- **The load test** (`docs/deploy.md`, "Load test"). `make load-seed`
+  puts `LOAD_PHONES` drivers on the road in staging, signed in, with
+  `kiflet seed-load`. `make test-load` then plays their phones with k6: a
+  sync a minute from each, and 3,000 coming back with two hours of
+  positions. It fails the run if a live sync's 95th percentile is over
+  300 ms, and reports how long positions waited for the tracking worker.
 - **Texts, email and webhooks through RabbitMQ** (`docs/deploy.md`,
   "RabbitMQ"). With `RABBITMQ_URL`, the workers take them from
   `notify.sms`, `notify.email` and `webhook.deliver`. Each is still written

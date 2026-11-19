@@ -1,0 +1,8 @@
+# Staging for the load test (make load-seed, make test-load), on top of
+# staging's own files: k6 sends every phone's requests from one address,
+# so the driver API's allowance per address is lifted. Each driver's own
+# allowance stays.
+services:
+  app:
+    environment:
+      DRIVER_API_PER_ADDRESS: "0"

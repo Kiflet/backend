@@ -1,6 +1,6 @@
 .PHONY: help db db-stop run dev build migrate seed test test-integration test-integration-cover test-e2e vet lint sqlc docker-build clean \
 	sandbox sandbox-keys run-sandbox \
-	staging-up staging-down staging-ca staging-logs
+	staging-up staging-down staging-ca staging-logs load-seed test-load
 
 DB_PORT ?= 5434
 DATABASE_URL ?= postgres://logistics:logistics@localhost:$(DB_PORT)/logistics?sslmode=disable
@@ -41,6 +41,8 @@ help:
 	@echo "  make test-integration-cover   the same, with what they cover of the service and web packages"
 	@echo "  make staging-up         run staging at https://kiflet.localhost:8443"
 	@echo "  make test-e2e           end-to-end tests against staging"
+	@echo "  make load-seed          add LOAD_PHONES drivers on the road to staging, for the load test"
+	@echo "  make test-load          the load test against staging (k6), then how long positions waited"
 	@echo "  make staging-down       remove staging and its data"
 	@echo "  make build              build bin/kiflet and bin/kiflet-sandbox"
 	@echo "  make migrate            apply migrations"
@@ -110,6 +112,27 @@ staging-up:
 staging-down:
 	$(STAGING) down --volumes --remove-orphans
 
+# The load test (tests/load, docs/deploy.md "Load test"), on a staging
+# started with make staging-up: LOAD_PHONES drivers, 200 to a company.
+LOAD = $(STAGING) -f tests/load/compose.yml
+LOAD_PHONES ?= 12000
+LOAD_DURATION ?= 15m
+K6_IMAGE = grafana/k6:2.3.0
+
+load-seed:
+	$(LOAD) up -d --wait app
+	@mkdir -p tmp
+	$(LOAD) exec -T app kiflet seed-load --on=kiflet.localhost \
+		--companies=$$(( ($(LOAD_PHONES) + 199) / 200 )) \
+		--drivers=$$(( $(LOAD_PHONES) < 200 ? $(LOAD_PHONES) : 200 )) > tmp/load-phones.json
+
+test-load:
+	docker run --rm --network host --add-host kiflet.localhost:127.0.0.1 \
+		-v $(CURDIR)/tests/load:/load:ro -v $(CURDIR)/tmp:/data:ro \
+		-e PHONES=/data/load-phones.json -e BASE_URL=https://kiflet.localhost:8443 -e INSECURE=1 \
+		-e DURATION=$(LOAD_DURATION) $(K6_IMAGE) run /load/sync.js; \
+	status=$$?; $(LOAD) exec -T postgres psql -U logistics -d logistics < tests/load/report.sql; exit $$status
+
 # Caddy's root certificate, for the tests, curl or a browser to trust.
 staging-ca:
 	@mkdir -p $(dir $(STAGING_CA))
@@ -132,7 +155,7 @@ lint:
 	@for f in $$(git ls-files '*.js' ':!:*/vendor/*'); do \
 		case $$f in \
 		internal/web/static/driver/sw.js) node --check "$$f" ;; \
-		internal/web/static/driver/*) node --input-type=module --check <"$$f" || { echo "in $$f"; false; } ;; \
+		internal/web/static/driver/*|tests/load/*) node --input-type=module --check <"$$f" || { echo "in $$f"; false; } ;; \
 		*) node --check "$$f" ;; \
 		esac || exit 1; \
 	done

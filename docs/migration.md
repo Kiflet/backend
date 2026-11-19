@@ -376,6 +376,11 @@ Roll back: each module is one PR; revert it.
     60 s, then 3,000 reconnecting with 2 hours of positions each; the
     targets in the architecture's section 15 (oldest message in
     `tracking.ingest` under 2 minutes, API p95 under 300 ms).
+    Written (`tests/load/`, `make load-seed`, `make test-load`; deploy.md,
+    "Load test"), and run at small scale. Running it on hardware the size
+    of production's is what remains. Writing it found that the driver API
+    was limited to 600 requests a minute per address, which drivers
+    sharing a carrier address would have hit; it is now per driver.
 
 Done when: production runs the separate processes on RabbitMQ and Redis;
 the load test passes; stopping Redis or one RabbitMQ node in staging loses
