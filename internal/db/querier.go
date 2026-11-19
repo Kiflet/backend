@@ -208,8 +208,6 @@ type Querier interface {
 	// Where a claimed message goes, read as it is sent: a changed address or
 	// secret applies to messages still waiting.
 	GetWebhookTarget(ctx context.Context, id pgtype.UUID) (GetWebhookTargetRow, error)
-	// Written in the transaction of the change it tells of.
-	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error
 	IsPhoneOptedOut(ctx context.Context, phone string) (bool, error)
 	// Takes a timed job's lease unless another worker holds it. true when
 	// taken.

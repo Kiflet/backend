@@ -85,42 +85,6 @@ func (q *Queries) DeleteSentOutboxEvents(ctx context.Context, before pgtype.Time
 	return err
 }
 
-const insertOutboxEvent = `-- name: InsertOutboxEvent :exec
-INSERT INTO event_outbox (id, tenant_id, type, version, exchange, routing_key, payload, trace_id, created_at)
-VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8, $9
-)
-`
-
-type InsertOutboxEventParams struct {
-	ID         pgtype.UUID        `db:"id" json:"id"`
-	TenantID   pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
-	Type       string             `db:"type" json:"type"`
-	Version    int32              `db:"version" json:"version"`
-	Exchange   string             `db:"exchange" json:"exchange"`
-	RoutingKey string             `db:"routing_key" json:"routing_key"`
-	Payload    []byte             `db:"payload" json:"payload"`
-	TraceID    *string            `db:"trace_id" json:"trace_id"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
-}
-
-// Written in the transaction of the change it tells of.
-func (q *Queries) InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error {
-	_, err := q.db.Exec(ctx, insertOutboxEvent,
-		arg.ID,
-		arg.TenantID,
-		arg.Type,
-		arg.Version,
-		arg.Exchange,
-		arg.RoutingKey,
-		arg.Payload,
-		arg.TraceID,
-		arg.CreatedAt,
-	)
-	return err
-}
-
 const markMessageProcessed = `-- name: MarkMessageProcessed :execrows
 INSERT INTO processed_messages (consumer, message_id)
 VALUES ($1, $2)

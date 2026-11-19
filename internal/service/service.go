@@ -10,12 +10,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/kiflet/backend/internal/modules/audit"
 	"github.com/kiflet/backend/internal/modules/fleet"
 	"github.com/kiflet/backend/internal/modules/identity"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/modules/tenancy"
+	"github.com/kiflet/backend/internal/platform/events"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -86,6 +86,9 @@ type Deps struct {
 	Users     identity.Users
 	Fleet     fleet.Fleet
 	Shipments shipments.Shipments
+	// Bus carries the events modules publish to the modules that react.
+	// Nil is an in-process bus, writing to the outbox if Outbox is set.
+	Bus events.Bus
 	// ShipmentFiles are shipments' documents and charges.
 	ShipmentFiles shipments.Files
 	Log           zerolog.Logger
@@ -150,8 +153,11 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
+	if d.Bus == nil {
+		d.Bus = events.New(d.Outbox, d.Now, d.Log)
+	}
 	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments, shipmentFiles: d.ShipmentFiles,
-		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
+		positions: d.Positions, bus: d.Bus, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
 	s.Audit = &AuditService{core: c}
@@ -161,6 +167,7 @@ func New(d Deps) *Services {
 	c.mail = s.Mail
 	s.Webhooks = newWebhookService(c)
 	c.webhooks = s.Webhooks
+	c.bus.Within("shipment.*", c.webhooksFor)
 	s.Alerts = &AlertService{core: c}
 	c.alerts = s.Alerts
 	s.Media = &MediaService{core: c, store: d.Storage, pod: podStorage(d.Storage)}
@@ -208,7 +215,7 @@ type core struct {
 	shipmentFiles shipments.Files
 	// positions and outbox: see Deps.
 	positions     PositionQueue
-	outbox        bool
+	bus           events.Bus
 	remoteWorkers bool
 	work          WorkQueue
 }
@@ -270,6 +277,15 @@ func (c *core) tx(ctx context.Context, fn func(q *db.Queries, after *afterCommit
 type afterCommit struct{ fns []func() }
 
 func (a *afterCommit) do(f func()) { a.fns = append(a.fns, f) }
+
+// fn is do as a function, or nil for no transaction: what an events.Tx
+// and handOff take.
+func (a *afterCommit) fn() func(func()) {
+	if a == nil {
+		return nil
+	}
+	return a.do
+}
 
 // publish sends a live update to every dashboard of a tenant.
 func (c *core) publish(tenantID pgtype.UUID, kind string, data any) {
@@ -346,27 +362,6 @@ func mustJSON(v any) []byte {
 // emit writes an event to event_outbox in the transaction of the change it
 // tells of; the relay publishes it to RabbitMQ once it commits
 // (docs/architecture.md, section 6). Without RabbitMQ it writes nothing.
-func (c *core) emit(ctx context.Context, q *db.Queries, tenantID pgtype.UUID, typ string, payload any) {
-	if !c.outbox {
-		return
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		c.log.Error().Err(err).Str("type", typ).Msg("marshal event")
-		return
-	}
-	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
-	err = q.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
-		ID: id, TenantID: tenantID, Type: typ, Version: 1, Exchange: "kiflet.events",
-		RoutingKey: typ, Payload: raw, CreatedAt: toTimestamp(c.now()),
-	})
-	if err != nil {
-		// The transaction is spoilt, so the change fails with it: no
-		// change goes in without its event.
-		c.log.Error().Err(err).Str("type", typ).Msg("write event to the outbox")
-	}
-}
-
 // tenant loads a company through the tenancy module, on q's connection
 // (its transaction, if it has one), as the rest of internal/service knows
 // it until it moves into modules.

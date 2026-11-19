@@ -45,6 +45,11 @@ What changed in each release, newest first.
   charges: `shipment_documents` and `shipment_charges` are the module's,
   with the checks on a file and a charge and the limits per shipment;
   storing the files stays with the service.
+- **The events bus** (phase 1, step 4): `internal/platform/events`. A
+  change publishes an event in its transaction, and the modules that
+  react subscribe to its type, within the transaction (what must commit
+  with the change) or after it commits. The bus writes the outbox, and
+  webhooks are its first subscriber.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

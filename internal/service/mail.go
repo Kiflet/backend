@@ -76,7 +76,7 @@ func (c *core) enqueueEmail(ctx context.Context, q *db.Queries, after *afterComm
 		c.log.Error().Err(err).Str("purpose", m.Purpose).Msg("enqueue email")
 		return
 	}
-	c.handOff(after, WorkMail, []pgtype.UUID{row.ID}, c.mail.kick)
+	c.handOff(after.fn(), WorkMail, []pgtype.UUID{row.ID}, c.mail.kick)
 }
 
 // emailBody lays out a message: greeting, paragraphs, sign-off.
