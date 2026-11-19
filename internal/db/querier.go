@@ -44,6 +44,10 @@ type Querier interface {
 	// A person who has left: what identifies them goes, their history stays
 	// (AC-041.6).
 	AnonymiseUser(ctx context.Context, arg AnonymiseUserParams) (pgtype.UUID, error)
+	// The next events to publish, oldest first. Run in a transaction that
+	// marks them sent or failed before it commits; SKIP LOCKED lets a second
+	// relay take others instead of waiting.
+	ClaimOutboxEvents(ctx context.Context, maxEvents int32) ([]ClaimOutboxEventsRow, error)
 	// Notes that the provider is being asked how a payment ended, unless it was
 	// asked since checked_before. No row means another check is under way or
 	// was recent.
@@ -125,8 +129,9 @@ type Querier interface {
 	// ID, since an array here can't hold NULL.
 	//
 	// client_id carries the offline client's own row identifier. Paired with
-	// device_id it is what a retried batch conflicts on, so replaying a batch whose
-	// response was lost cannot duplicate telemetry.
+	// device_id and the fix's time (a partitioned table's unique keys include
+	// its partition key) it is what a retried batch conflicts on, so replaying
+	// a batch whose response was lost cannot duplicate telemetry.
 	CreateTrackingEvents(ctx context.Context, arg CreateTrackingEventsParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVehicle(ctx context.Context, arg CreateVehicleParams) (Vehicle, error)
@@ -144,18 +149,22 @@ type Querier interface {
 	DeleteOldBroadcasts(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldEmailTokens(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldEmails(ctx context.Context, createdAt pgtype.Timestamptz) error
+	DeleteOldProcessedMessages(ctx context.Context, before pgtype.Timestamptz) error
 	DeleteOldSMS(ctx context.Context, createdAt pgtype.Timestamptz) error
-	DeleteOldTrackingEvents(ctx context.Context, recordedAt pgtype.Timestamptz) error
 	DeleteOldWebhookDeliveries(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeletePendingSignup(ctx context.Context, id pgtype.UUID) error
 	DeletePersonDeviceData(ctx context.Context, driverID pgtype.UUID) error
 	DeleteSavedFilter(ctx context.Context, arg DeleteSavedFilterParams) (int64, error)
+	DeleteSentOutboxEvents(ctx context.Context, before pgtype.Timestamptz) error
 	DeleteShipmentCharge(ctx context.Context, arg DeleteShipmentChargeParams) (int64, error)
 	DeleteShipmentDocument(ctx context.Context, arg DeleteShipmentDocumentParams) (string, error)
 	DeleteShipmentTexts(ctx context.Context, ids []pgtype.UUID) error
 	DeleteTenant(ctx context.Context, id pgtype.UUID) error
 	DeleteTenantAuditLogs(ctx context.Context, tenantID pgtype.UUID) error
 	DeleteWebhookEndpoint(ctx context.Context, arg DeleteWebhookEndpointParams) (WebhookEndpoint, error)
+	// Retention: drops each day's partition that ends before the cut-off, and
+	// deletes older rows from the default partition. Returns how many days.
+	DropOldTrackingPartitions(ctx context.Context, before pgtype.Timestamptz) (int32, error)
 	EnqueueEmail(ctx context.Context, arg EnqueueEmailParams) (Email, error)
 	EnqueueSMS(ctx context.Context, arg EnqueueSMSParams) (SmsMessage, error)
 	// A message to one endpoint, whatever it asked for: a test.
@@ -250,6 +259,8 @@ type Querier interface {
 	// secret applies to messages still waiting.
 	GetWebhookTarget(ctx context.Context, id pgtype.UUID) (GetWebhookTargetRow, error)
 	IncrementFailedLoginAttempts(ctx context.Context, id pgtype.UUID) (User, error)
+	// Written in the transaction of the change it tells of.
+	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error
 	IsPhoneOptedOut(ctx context.Context, phone string) (bool, error)
 	ListAPIKeys(ctx context.Context, tenantID pgtype.UUID) ([]ApiKey, error)
 	ListActiveSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]Session, error)
@@ -415,6 +426,9 @@ type Querier interface {
 	// Held until the transaction ends: requests for one number and purpose
 	// take turns.
 	LockVerificationSubject(ctx context.Context, subject string) error
+	// Makes the partitions of the days ahead, and those of recent days whose
+	// positions wait in the default partition. Returns how many it made.
+	MaintainTrackingPartitions(ctx context.Context, arg MaintainTrackingPartitionsParams) (int32, error)
 	MarkAlertsSeen(ctx context.Context, arg MarkAlertsSeenParams) error
 	MarkEmailFailed(ctx context.Context, arg MarkEmailFailedParams) error
 	MarkEmailRetry(ctx context.Context, arg MarkEmailRetryParams) error
@@ -423,6 +437,12 @@ type Querier interface {
 	// gets its dates on payment, and a renewal paid after read-only mode began
 	// has them moved to the payment.
 	MarkInvoicePaid(ctx context.Context, arg MarkInvoicePaidParams) error
+	// A consumer's record of a message it handled, in the same transaction as
+	// its effect. No row: it was handled already, so the handler does nothing.
+	MarkMessageProcessed(ctx context.Context, arg MarkMessageProcessedParams) (int64, error)
+	// A publish that failed is tried again after delay.
+	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) error
+	MarkOutboxSent(ctx context.Context, ids []pgtype.UUID) error
 	MarkPaymentRefunded(ctx context.Context, arg MarkPaymentRefundedParams) error
 	MarkSMSFailed(ctx context.Context, arg MarkSMSFailedParams) error
 	MarkSMSRetry(ctx context.Context, arg MarkSMSRetryParams) error
@@ -436,6 +456,8 @@ type Querier interface {
 	NextInvoiceNumber(ctx context.Context, year int32) (int32, error)
 	// Texts and emails waiting, and those sent or failed in the last day.
 	OutboxHealth(ctx context.Context) ([]OutboxHealthRow, error)
+	// How many events wait, and how long the oldest has, for /metrics.
+	OutboxLag(ctx context.Context) (OutboxLagRow, error)
 	// Texts and emails waiting to be sent, for /metrics. Read off the partial
 	// queue indexes, so it is cheap to run every minute.
 	OutboxWaiting(ctx context.Context) ([]OutboxWaitingRow, error)

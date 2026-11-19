@@ -11,7 +11,7 @@ name: kiflet-dev
 
 services:
   postgres:
-    image: postgis/postgis:15-3.3-alpine
+    image: postgis/postgis:17-3.6-alpine
     environment:
       POSTGRES_USER: logistics
       POSTGRES_PASSWORD: logistics
@@ -19,7 +19,9 @@ services:
     ports:
       - "${DB_PORT:-5434}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PostgreSQL 17's. The volume of 15 (postgres_data) is left as it was;
+      # `make seed` fills this one.
+      - postgres17_data:/var/lib/postgresql/data
     healthcheck:
       # Over TCP: on first start the image's set-up server answers on the
       # socket only, and the app connects over the network.
@@ -48,4 +50,4 @@ services:
       - ../../sandbox-keys:/keys:ro
 
 volumes:
-  postgres_data:
+  postgres17_data:

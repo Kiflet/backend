@@ -49,7 +49,7 @@ FROM (
            unnest($11::timestamptz[]) AS recorded_at,
            unnest($12::text[]) AS client_id
 ) p
-ON CONFLICT (device_id, client_id) WHERE client_id IS NOT NULL AND device_id IS NOT NULL DO NOTHING
+ON CONFLICT (device_id, client_id, recorded_at) WHERE client_id IS NOT NULL AND device_id IS NOT NULL DO NOTHING
 `
 
 type CreateTrackingEventsParams struct {
@@ -73,8 +73,9 @@ type CreateTrackingEventsParams struct {
 // ID, since an array here can't hold NULL.
 //
 // client_id carries the offline client's own row identifier. Paired with
-// device_id it is what a retried batch conflicts on, so replaying a batch whose
-// response was lost cannot duplicate telemetry.
+// device_id and the fix's time (a partitioned table's unique keys include
+// its partition key) it is what a retried batch conflicts on, so replaying
+// a batch whose response was lost cannot duplicate telemetry.
 func (q *Queries) CreateTrackingEvents(ctx context.Context, arg CreateTrackingEventsParams) error {
 	_, err := q.db.Exec(ctx, createTrackingEvents,
 		arg.TenantID,
@@ -93,13 +94,17 @@ func (q *Queries) CreateTrackingEvents(ctx context.Context, arg CreateTrackingEv
 	return err
 }
 
-const deleteOldTrackingEvents = `-- name: DeleteOldTrackingEvents :exec
-DELETE FROM tracking_events WHERE recorded_at < $1
+const dropOldTrackingPartitions = `-- name: DropOldTrackingPartitions :one
+SELECT tracking_events_drop_partitions($1::timestamptz)::int AS dropped
 `
 
-func (q *Queries) DeleteOldTrackingEvents(ctx context.Context, recordedAt pgtype.Timestamptz) error {
-	_, err := q.db.Exec(ctx, deleteOldTrackingEvents, recordedAt)
-	return err
+// Retention: drops each day's partition that ends before the cut-off, and
+// deletes older rows from the default partition. Returns how many days.
+func (q *Queries) DropOldTrackingPartitions(ctx context.Context, before pgtype.Timestamptz) (int32, error) {
+	row := q.db.QueryRow(ctx, dropOldTrackingPartitions, before)
+	var dropped int32
+	err := row.Scan(&dropped)
+	return dropped, err
 }
 
 const getLatestDriverLocation = `-- name: GetLatestDriverLocation :one
@@ -333,6 +338,24 @@ func (q *Queries) ListShipmentRoute(ctx context.Context, arg ListShipmentRoutePa
 		return nil, err
 	}
 	return items, nil
+}
+
+const maintainTrackingPartitions = `-- name: MaintainTrackingPartitions :one
+SELECT tracking_events_maintain($1::int, make_interval(days => $2::int))::int AS made
+`
+
+type MaintainTrackingPartitionsParams struct {
+	DaysAhead int32 `db:"days_ahead" json:"days_ahead"`
+	KeepDays  int32 `db:"keep_days" json:"keep_days"`
+}
+
+// Makes the partitions of the days ahead, and those of recent days whose
+// positions wait in the default partition. Returns how many it made.
+func (q *Queries) MaintainTrackingPartitions(ctx context.Context, arg MaintainTrackingPartitionsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, maintainTrackingPartitions, arg.DaysAhead, arg.KeepDays)
+	var made int32
+	err := row.Scan(&made)
+	return made, err
 }
 
 const setDriverPosition = `-- name: SetDriverPosition :exec

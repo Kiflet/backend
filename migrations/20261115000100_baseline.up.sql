@@ -660,12 +660,24 @@ CREATE INDEX IF NOT EXISTS idx_sms_tenant ON sms_messages (tenant_id, created_at
 CREATE INDEX IF NOT EXISTS idx_support_messages_ticket ON support_messages (ticket_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets (status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_tenant ON support_tickets (tenant_id, updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_tracking_coords ON tracking_events USING gist (coordinates);
-CREATE INDEX IF NOT EXISTS idx_tracking_driver ON tracking_events (driver_id);
-CREATE INDEX IF NOT EXISTS idx_tracking_driver_recorded ON tracking_events (tenant_id, driver_id, recorded_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tracking_events_device_client ON tracking_events (device_id, client_id) WHERE ((client_id IS NOT NULL) AND (device_id IS NOT NULL));
-CREATE INDEX IF NOT EXISTS idx_tracking_recorded ON tracking_events (recorded_at);
-CREATE INDEX IF NOT EXISTS idx_tracking_shipment_recorded ON tracking_events (shipment_id, recorded_at);
+-- Only while tracking_events is the plain table this file makes: once
+-- 20261119000100_tracking_partitions has partitioned it, that migration's
+-- indexes stand, and a unique index without the partition key would be
+-- refused.
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF (SELECT relkind FROM pg_class WHERE oid = 'tracking_events'::regclass) = 'r' THEN
+        CREATE INDEX IF NOT EXISTS idx_tracking_coords ON tracking_events USING gist (coordinates);
+        CREATE INDEX IF NOT EXISTS idx_tracking_driver ON tracking_events (driver_id);
+        CREATE INDEX IF NOT EXISTS idx_tracking_driver_recorded ON tracking_events (tenant_id, driver_id, recorded_at DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tracking_events_device_client ON tracking_events (device_id, client_id) WHERE ((client_id IS NOT NULL) AND (device_id IS NOT NULL));
+        CREATE INDEX IF NOT EXISTS idx_tracking_recorded ON tracking_events (recorded_at);
+        CREATE INDEX IF NOT EXISTS idx_tracking_shipment_recorded ON tracking_events (shipment_id, recorded_at);
+    END IF;
+END;
+$$;
+-- +goose StatementEnd
 CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users (lower(email));
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE (email IS NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users (phone) WHERE (phone IS NOT NULL);

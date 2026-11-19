@@ -194,6 +194,34 @@ encrypted backup copied to a bucket, the copies on the machine lost, and
 the backup fetched and restored, and a restore to a moment between two
 sign-ups from a base backup and WAL fetched from the bucket.
 
+## Upgrading PostgreSQL
+
+The compose file runs PostgreSQL 17 (PostGIS 3.6), with its data in the
+`postgres17-data` volume. A machine that ran PostgreSQL 15 has its data in
+`postgres-data`, which 17 can't open. It moves across as a dump: the app is
+down for as long as the restore takes (minutes before the first customer).
+
+1. While the old version still runs, before pulling the new compose file,
+   take a backup: `scripts/backup.sh`. Its `.dump` is all that's needed.
+2. Pull the new version and start only the database, which comes up empty
+   on its new volume: `docker compose -f deployments/docker-compose.prod.yml
+   --env-file .env up -d postgres`.
+3. Restore the dump into it: `scripts/restore.sh
+   /var/backups/kiflet/kiflet_<time>.dump` (with `AGE_IDENTITY` if it is
+   encrypted). The files archive isn't needed: the app's volume is
+   unchanged.
+4. Start everything: `docker compose … up -d --wait`. The app applies the
+   newer migrations on start.
+5. With `WAL_ARCHIVE=on`, take a new base backup at once
+   (`scripts/backup.sh`): base backups and WAL from PostgreSQL 15 can't
+   bring a 17 database forward. Keep the old ones until their 90 days are
+   out, for a restore onto a 15 server if one is ever needed.
+
+The old volume stays until it is removed by hand (`docker volume rm
+kiflet_postgres-data`), which is the way back: the old compose file and
+image open it as it was at step 1. Remove it once the new version has run
+for a week.
+
 ## Staging
 
 Production's compose file and images, with `deployments/staging/compose.yml`

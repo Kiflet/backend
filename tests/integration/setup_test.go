@@ -95,7 +95,7 @@ func database(ctx context.Context) (string, func(), error) {
 		}, nil
 	}
 
-	c, err := postgres.Run(ctx, "postgis/postgis:15-3.3-alpine",
+	c, err := postgres.Run(ctx, "postgis/postgis:17-3.6-alpine",
 		postgres.WithDatabase("kiflet"), postgres.WithUsername("kiflet"), postgres.WithPassword("kiflet"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(2*time.Minute)),
 	)

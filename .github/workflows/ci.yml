@@ -71,7 +71,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgis/postgis:15-3.3-alpine
+        image: postgis/postgis:17-3.6-alpine
         env:
           POSTGRES_USER: logistics
           POSTGRES_PASSWORD: logistics
