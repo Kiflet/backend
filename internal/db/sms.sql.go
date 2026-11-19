@@ -77,6 +77,60 @@ func (q *Queries) ClaimQueuedSMS(ctx context.Context, limit int32) ([]SmsMessage
 	return items, nil
 }
 
+const claimSMSByIDs = `-- name: ClaimSMSByIDs :many
+UPDATE sms_messages
+SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
+WHERE id IN (
+    SELECT id FROM sms_messages
+    WHERE id = ANY($1::uuid[]) AND status = 'queued' AND next_attempt_at <= NOW()
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING id, tenant_id, shipment_id, direction, phone, body, purpose, sensitive, status, attempts, last_error, provider, next_attempt_at, sent_at, created_at, provider_message_id, delivery, delivery_at, segments
+`
+
+// ClaimQueuedSMS for the messages RabbitMQ named (notify.sms): those still
+// queued and due. One sent already, held by another worker or waiting for
+// a retry is left alone.
+func (q *Queries) ClaimSMSByIDs(ctx context.Context, ids []pgtype.UUID) ([]SmsMessage, error) {
+	rows, err := q.db.Query(ctx, claimSMSByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SmsMessage{}
+	for rows.Next() {
+		var i SmsMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.ShipmentID,
+			&i.Direction,
+			&i.Phone,
+			&i.Body,
+			&i.Purpose,
+			&i.Sensitive,
+			&i.Status,
+			&i.Attempts,
+			&i.LastError,
+			&i.Provider,
+			&i.NextAttemptAt,
+			&i.SentAt,
+			&i.CreatedAt,
+			&i.ProviderMessageID,
+			&i.Delivery,
+			&i.DeliveryAt,
+			&i.Segments,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countCodesTextedSince = `-- name: CountCodesTextedSince :one
 SELECT COUNT(*) FROM sms_messages
 WHERE purpose = 'otp' AND direction = 'outbound' AND status IN ('queued', 'sending', 'sent') AND created_at >= $1
@@ -164,6 +218,35 @@ DELETE FROM sms_messages WHERE created_at < $1
 func (q *Queries) DeleteOldSMS(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldSMS, createdAt)
 	return err
+}
+
+const dueSMSIDs = `-- name: DueSMSIDs :many
+SELECT id FROM sms_messages
+WHERE status = 'queued' AND next_attempt_at <= NOW()
+ORDER BY next_attempt_at
+LIMIT $1
+`
+
+// Messages due to be sent, for the sweeper to hand to RabbitMQ: retries
+// whose time has come, and any whose message was lost.
+func (q *Queries) DueSMSIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, dueSMSIDs, maxMessages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const enqueueSMS = `-- name: EnqueueSMS :one

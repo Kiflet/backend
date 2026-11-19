@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/rs/zerolog"
 
@@ -73,4 +76,72 @@ func (l *brokerLive) BroadcastToTenant(tenantID string, message []byte) {
 // Run hands the updates every instance publishes to this one's dashboards.
 func (l *brokerLive) Run(ctx context.Context) {
 	l.broker.SubscribeLive(ctx, l.hub.BroadcastToTenant)
+}
+
+// senderQueues are the queues of the senders whose work goes through
+// RabbitMQ (service.WorkQueue), by sender.
+var senderQueues = map[string]string{
+	service.WorkSMS:      "notify.sms",
+	service.WorkMail:     "notify.email",
+	service.WorkWebhooks: "webhook.deliver",
+}
+
+// senderPrefetch is how many messages (of up to workChunk rows) a
+// sender's consumer holds at a time: with one consumer per worker, it caps
+// what a worker has claimed, and so how hard it presses on the SMS
+// gateway.
+const senderPrefetch = 5
+
+// workChunk is the most rows one message names: a worker claims a
+// message's rows as it comes to it, so its lease starts then.
+const workChunk = 20
+
+// brokerWork is service.WorkQueue on RabbitMQ.
+type brokerWork struct {
+	b     *broker.Broker
+	kinds map[string]bool
+}
+
+// workMessage is what notify.sms, notify.email and webhook.deliver carry.
+type workMessage struct {
+	IDs []pgtype.UUID `json:"ids"`
+}
+
+func (w brokerWork) Has(kind string) bool { return w.kinds[kind] }
+
+func (w brokerWork) Publish(ctx context.Context, kind string, ids []pgtype.UUID) error {
+	queue := senderQueues[kind]
+	var msgs []broker.Message
+	for chunk := range slices.Chunk(ids, workChunk) {
+		env, err := broker.NewEnvelope(queue, "", workMessage{IDs: chunk})
+		if err != nil {
+			return err
+		}
+		msgs = append(msgs, broker.Message{Exchange: broker.Commands, RoutingKey: queue, Envelope: env})
+	}
+	return w.b.Publish(ctx, msgs...)
+}
+
+func (w brokerWork) Ready(ctx context.Context, kind string) (int, error) {
+	return w.b.Waiting(ctx, senderQueues[kind])
+}
+
+// deliverWork is a sender's consumer: each message's rows are claimed and
+// sent in turn.
+func deliverWork(deliver func(context.Context, []pgtype.UUID) error) broker.Handler {
+	return func(ctx context.Context, batch []broker.Delivery) error {
+		for _, d := range batch {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			var m workMessage
+			if err := json.Unmarshal(d.Envelope.Payload, &m); err != nil {
+				return err
+			}
+			if err := deliver(ctx, m.IDs); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }

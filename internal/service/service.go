@@ -79,6 +79,8 @@ type Deps struct {
 	// Outbox writes events to event_outbox for the relay to publish. Off
 	// without RabbitMQ: nothing would read them.
 	Outbox bool
+	// Work, when set, carries the senders' work through RabbitMQ.
+	Work WorkQueue
 	// RemoteWorkers says the senders of texts, email and webhooks run in
 	// other processes: work queued here wakes them through Postgres
 	// (WorkChannel) instead of in this process.
@@ -132,7 +134,7 @@ func New(d Deps) *Services {
 		d.Publisher = nopPublisher{}
 	}
 	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings,
-		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers}
+		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
 	s.Audit = &AuditService{core: c}
@@ -179,6 +181,7 @@ type core struct {
 	positions     PositionQueue
 	outbox        bool
 	remoteWorkers bool
+	work          WorkQueue
 }
 
 // WorkChannel is the Postgres channel that wakes the senders in worker

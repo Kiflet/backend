@@ -358,12 +358,13 @@ func (s *WebhookService) SendTest(ctx context.Context, p *Principal, id pgtype.U
 	body := webhookBody(WebhookTest, s.now(), map[string]any{
 		"message": "A test from " + s.cfg.AppName + ", sent from the webhook's page by " + p.Name + ".",
 	})
-	if _, err := s.q.EnqueueWebhookTo(ctx, db.EnqueueWebhookToParams{
+	row, err := s.q.EnqueueWebhookTo(ctx, db.EnqueueWebhookToParams{
 		TenantID: p.TenantID, EndpointID: e.ID, EventID: eventID, EventType: WebhookTest, Payload: body,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
-	s.kick()
+	s.handOff(nil, WorkWebhooks, []pgtype.UUID{row.ID}, s.kick)
 	return nil
 }
 
@@ -373,14 +374,14 @@ func (s *WebhookService) Resend(ctx context.Context, p *Principal, deliveryID pg
 	if !p.CanManageCompany() {
 		return ErrUnauthorized
 	}
-	_, err := s.q.ResendWebhook(ctx, db.ResendWebhookParams{ID: deliveryID, TenantID: p.TenantID})
+	row, err := s.q.ResendWebhook(ctx, db.ResendWebhookParams{ID: deliveryID, TenantID: p.TenantID})
 	if isNoRows(err) {
 		return notFound("That message doesn't exist or is still being sent.")
 	}
 	if err != nil {
 		return err
 	}
-	s.kick()
+	s.handOff(nil, WorkWebhooks, []pgtype.UUID{row.ID}, s.kick)
 	return nil
 }
 
@@ -431,19 +432,19 @@ func (c *core) enqueueWebhooks(ctx context.Context, q *db.Queries, after *afterC
 			Source: a.Source, Actor: a.Name, Lat: e.Lat, Lng: e.Lng, At: at.UTC(),
 		},
 	}
-	var sent int64
+	var sent []pgtype.UUID
 	for _, t := range types {
-		n, err := q.EnqueueWebhooks(ctx, db.EnqueueWebhooksParams{
+		ids, err := q.EnqueueWebhooks(ctx, db.EnqueueWebhooksParams{
 			EventID: newUUID(), EventType: t, ShipmentID: sh.ID, Payload: webhookBody(t, at, data), TenantID: sh.TenantID,
 		})
 		if err != nil {
 			c.log.Error().Err(err).Str("event", t).Msg("enqueue webhook")
 			return
 		}
-		sent += n
+		sent = append(sent, ids...)
 	}
-	if sent > 0 && after != nil {
-		after.do(c.webhooks.kick)
+	if len(sent) > 0 && after != nil {
+		c.handOff(after, WorkWebhooks, sent, c.webhooks.kick)
 	}
 }
 
@@ -474,6 +475,10 @@ func (s *WebhookService) poke() {
 
 // Run sends queued messages until ctx ends.
 func (s *WebhookService) Run(ctx context.Context) {
+	if s.queued(WorkWebhooks) {
+		s.sweep(ctx, WorkWebhooks, s.wake, 10*time.Second, s.q.DueWebhookIDs)
+		return
+	}
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()
 	for {

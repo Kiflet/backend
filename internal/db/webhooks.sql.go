@@ -64,6 +64,56 @@ func (q *Queries) ClaimQueuedWebhooks(ctx context.Context, limit int32) ([]Webho
 	return items, nil
 }
 
+const claimWebhooksByIDs = `-- name: ClaimWebhooksByIDs :many
+UPDATE webhook_deliveries
+SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
+WHERE id IN (
+    SELECT d.id FROM webhook_deliveries d
+    JOIN webhook_endpoints e ON e.id = d.endpoint_id
+    WHERE d.id = ANY($1::uuid[]) AND d.status = 'queued' AND d.next_attempt_at <= NOW() AND e.active
+    FOR UPDATE OF d SKIP LOCKED
+)
+RETURNING id, tenant_id, endpoint_id, event_id, event_type, shipment_id, payload, status, attempts, next_attempt_at, response_status, response_body, last_error, duration_ms, created_at, delivered_at
+`
+
+// As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
+func (q *Queries) ClaimWebhooksByIDs(ctx context.Context, ids []pgtype.UUID) ([]WebhookDelivery, error) {
+	rows, err := q.db.Query(ctx, claimWebhooksByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WebhookDelivery{}
+	for rows.Next() {
+		var i WebhookDelivery
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.EndpointID,
+			&i.EventID,
+			&i.EventType,
+			&i.ShipmentID,
+			&i.Payload,
+			&i.Status,
+			&i.Attempts,
+			&i.NextAttemptAt,
+			&i.ResponseStatus,
+			&i.ResponseBody,
+			&i.LastError,
+			&i.DurationMs,
+			&i.CreatedAt,
+			&i.DeliveredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countWebhookEndpoints = `-- name: CountWebhookEndpoints :one
 SELECT COUNT(*) FROM webhook_endpoints WHERE tenant_id = $1
 `
@@ -149,6 +199,35 @@ func (q *Queries) DeleteWebhookEndpoint(ctx context.Context, arg DeleteWebhookEn
 	return i, err
 }
 
+const dueWebhookIDs = `-- name: DueWebhookIDs :many
+SELECT d.id FROM webhook_deliveries d
+JOIN webhook_endpoints e ON e.id = d.endpoint_id
+WHERE d.status = 'queued' AND d.next_attempt_at <= NOW() AND e.active
+ORDER BY d.next_attempt_at
+LIMIT $1
+`
+
+// Not a paused endpoint's: they would go round until it is resumed.
+func (q *Queries) DueWebhookIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, dueWebhookIDs, maxMessages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const enqueueWebhookTo = `-- name: EnqueueWebhookTo :one
 INSERT INTO webhook_deliveries (tenant_id, endpoint_id, event_id, event_type, payload)
 VALUES ($1, $2, $3, $4, $5)
@@ -194,11 +273,12 @@ func (q *Queries) EnqueueWebhookTo(ctx context.Context, arg EnqueueWebhookToPara
 	return i, err
 }
 
-const enqueueWebhooks = `-- name: EnqueueWebhooks :execrows
+const enqueueWebhooks = `-- name: EnqueueWebhooks :many
 INSERT INTO webhook_deliveries (tenant_id, endpoint_id, event_id, event_type, shipment_id, payload)
 SELECT e.tenant_id, e.id, $1, $2::text, $3, $4
 FROM webhook_endpoints e
 WHERE e.tenant_id = $5 AND $2::text = ANY(e.events)
+RETURNING id
 `
 
 type EnqueueWebhooksParams struct {
@@ -211,8 +291,8 @@ type EnqueueWebhooksParams struct {
 
 // One message to each of the company's endpoints that asked for this
 // event. A paused endpoint's wait for it to be resumed.
-func (q *Queries) EnqueueWebhooks(ctx context.Context, arg EnqueueWebhooksParams) (int64, error) {
-	result, err := q.db.Exec(ctx, enqueueWebhooks,
+func (q *Queries) EnqueueWebhooks(ctx context.Context, arg EnqueueWebhooksParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, enqueueWebhooks,
 		arg.EventID,
 		arg.EventType,
 		arg.ShipmentID,
@@ -220,9 +300,21 @@ func (q *Queries) EnqueueWebhooks(ctx context.Context, arg EnqueueWebhooksParams
 		arg.TenantID,
 	)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getWebhookEndpoint = `-- name: GetWebhookEndpoint :one

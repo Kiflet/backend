@@ -132,3 +132,24 @@ DELETE FROM sms_opt_outs WHERE phone = $1;
 
 -- name: DeleteOldSMS :exec
 DELETE FROM sms_messages WHERE created_at < $1;
+
+-- name: ClaimSMSByIDs :many
+-- ClaimQueuedSMS for the messages RabbitMQ named (notify.sms): those still
+-- queued and due. One sent already, held by another worker or waiting for
+-- a retry is left alone.
+UPDATE sms_messages
+SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
+WHERE id IN (
+    SELECT id FROM sms_messages
+    WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND status = 'queued' AND next_attempt_at <= NOW()
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING *;
+
+-- name: DueSMSIDs :many
+-- Messages due to be sent, for the sweeper to hand to RabbitMQ: retries
+-- whose time has come, and any whose message was lost.
+SELECT id FROM sms_messages
+WHERE status = 'queued' AND next_attempt_at <= NOW()
+ORDER BY next_attempt_at
+LIMIT sqlc.arg(max_messages);

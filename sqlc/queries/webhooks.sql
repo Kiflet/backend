@@ -40,13 +40,14 @@ RETURNING *;
 DELETE FROM webhook_endpoints WHERE id = $1 AND tenant_id = $2
 RETURNING *;
 
--- name: EnqueueWebhooks :execrows
+-- name: EnqueueWebhooks :many
 -- One message to each of the company's endpoints that asked for this
 -- event. A paused endpoint's wait for it to be resumed.
 INSERT INTO webhook_deliveries (tenant_id, endpoint_id, event_id, event_type, shipment_id, payload)
 SELECT e.tenant_id, e.id, sqlc.arg(event_id), sqlc.arg(event_type)::text, sqlc.narg(shipment_id), sqlc.arg(payload)
 FROM webhook_endpoints e
-WHERE e.tenant_id = sqlc.arg(tenant_id) AND sqlc.arg(event_type)::text = ANY(e.events);
+WHERE e.tenant_id = sqlc.arg(tenant_id) AND sqlc.arg(event_type)::text = ANY(e.events)
+RETURNING id;
 
 -- name: EnqueueWebhookTo :one
 -- A message to one endpoint, whatever it asked for: a test.
@@ -117,3 +118,23 @@ LIMIT $3 OFFSET $4;
 
 -- name: DeleteOldWebhookDeliveries :exec
 DELETE FROM webhook_deliveries WHERE created_at < $1;
+
+-- name: ClaimWebhooksByIDs :many
+-- As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
+UPDATE webhook_deliveries
+SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
+WHERE id IN (
+    SELECT d.id FROM webhook_deliveries d
+    JOIN webhook_endpoints e ON e.id = d.endpoint_id
+    WHERE d.id = ANY(sqlc.arg(ids)::uuid[]) AND d.status = 'queued' AND d.next_attempt_at <= NOW() AND e.active
+    FOR UPDATE OF d SKIP LOCKED
+)
+RETURNING *;
+
+-- name: DueWebhookIDs :many
+-- Not a paused endpoint's: they would go round until it is resumed.
+SELECT d.id FROM webhook_deliveries d
+JOIN webhook_endpoints e ON e.id = d.endpoint_id
+WHERE d.status = 'queued' AND d.next_attempt_at <= NOW() AND e.active
+ORDER BY d.next_attempt_at
+LIMIT sqlc.arg(max_messages);

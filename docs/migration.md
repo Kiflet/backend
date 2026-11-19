@@ -304,6 +304,13 @@ Roll back: each module is one PR; revert it.
       record and its retry schedule.
    2. Email (`notify.email`).
    3. SMS (`notify.sms`), rate-limited by prefetch to the gateway's limit.
+
+   1 to 3 done, together, since they are the same pattern
+   (`internal/service/workqueue.go`; `WORKER_WEBHOOKS`, `WORKER_MAIL`,
+   `WORKER_SMS`): the tables stay the record, a message names rows due,
+   a worker claims them by ID, and a sweeper republishes what is due when
+   a queue is empty (retries, and messages lost). CI runs the integration
+   tests a second time with every worker on RabbitMQ (`TEST_RABBITMQ`).
    4. Alerts evaluation from events (`alerts.evaluate`).
    5. Audit writes (`audit.write`).
    6. Live updates: `kiflet.live` exchange replaces `LISTEN`/`NOTIFY`

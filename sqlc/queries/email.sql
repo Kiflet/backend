@@ -50,3 +50,20 @@ WHERE status = 'sending' AND next_attempt_at < NOW();
 
 -- name: DeleteOldEmails :exec
 DELETE FROM emails WHERE created_at < $1;
+
+-- name: ClaimEmailsByIDs :many
+-- As ClaimSMSByIDs (notify.email).
+UPDATE emails
+SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
+WHERE id IN (
+    SELECT id FROM emails
+    WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND status = 'queued' AND next_attempt_at <= NOW()
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING *;
+
+-- name: DueEmailIDs :many
+SELECT id FROM emails
+WHERE status = 'queued' AND next_attempt_at <= NOW()
+ORDER BY next_attempt_at
+LIMIT sqlc.arg(max_messages);

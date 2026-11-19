@@ -68,14 +68,15 @@ func (c *core) enqueueEmail(ctx context.Context, q *db.Queries, after *afterComm
 		c.log.Warn().Str("purpose", m.Purpose).Msg("email not sent: invalid address")
 		return
 	}
-	if _, err := q.EnqueueEmail(ctx, db.EnqueueEmailParams{
+	row, err := q.EnqueueEmail(ctx, db.EnqueueEmailParams{
 		TenantID: m.TenantID, ToAddress: addr.Address, Subject: m.Subject,
 		Body: m.Body, Purpose: m.Purpose, Sensitive: m.Sensitive,
-	}); err != nil {
+	})
+	if err != nil {
 		c.log.Error().Err(err).Str("purpose", m.Purpose).Msg("enqueue email")
 		return
 	}
-	after.do(c.mail.kick)
+	c.handOff(after, WorkMail, []pgtype.UUID{row.ID}, c.mail.kick)
 }
 
 // emailBody lays out a message: greeting, paragraphs, sign-off.
@@ -116,6 +117,10 @@ func (s *MailService) poke() {
 
 // Run delivers queued email until ctx ends.
 func (s *MailService) Run(ctx context.Context) {
+	if s.queued(WorkMail) {
+		s.sweep(ctx, WorkMail, s.wake, 10*time.Second, s.q.DueEmailIDs)
+		return
+	}
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()
 	for {

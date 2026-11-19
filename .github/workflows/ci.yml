@@ -103,6 +103,38 @@ jobs:
             scripts/coverage-summary.sh coverage.out
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # The same tests with every worker on RabbitMQ (TEST_RABBITMQ), as
+  # production runs with it: positions, live updates, texts, email and
+  # webhooks through their queues, from a container the tests start.
+  integration-rabbitmq:
+    name: Integration tests on RabbitMQ
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgis/postgis:17-3.6-alpine
+        env:
+          POSTGRES_USER: logistics
+          POSTGRES_PASSWORD: logistics
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U logistics -h 127.0.0.1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: make test-integration
+        env:
+          TEST_DATABASE_URL: postgres://logistics:logistics@localhost:5432/postgres?sslmode=disable
+          TEST_RABBITMQ: "1"
+
   e2e:
     name: Staging, end to end
     runs-on: ubuntu-24.04

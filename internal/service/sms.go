@@ -107,14 +107,15 @@ func (c *core) enqueueSMS(ctx context.Context, q *db.Queries, after *afterCommit
 			return
 		}
 	}
-	if _, err := q.EnqueueSMS(ctx, db.EnqueueSMSParams{
+	row, err := q.EnqueueSMS(ctx, db.EnqueueSMSParams{
 		TenantID: m.TenantID, ShipmentID: m.ShipmentID, Phone: local,
 		Body: m.Body, Purpose: m.Purpose, Sensitive: m.Sensitive, Segments: segments,
-	}); err != nil {
+	})
+	if err != nil {
 		c.log.Error().Err(err).Str("purpose", m.Purpose).Msg("enqueue sms")
 		return
 	}
-	after.do(c.sms.kick)
+	c.handOff(after, WorkSMS, []pgtype.UUID{row.ID}, c.sms.kick)
 }
 
 // smsRefusal says why a company's text must not be sent, or "" if it may.
@@ -206,6 +207,10 @@ func (s *SMSService) poke() {
 
 // Run delivers queued messages until ctx ends.
 func (s *SMSService) Run(ctx context.Context) {
+	if s.queued(WorkSMS) {
+		s.sweep(ctx, WorkSMS, s.wake, 5*time.Second, s.q.DueSMSIDs)
+		return
+	}
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 	for {
