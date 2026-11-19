@@ -59,6 +59,12 @@ type Config struct {
 	S3AccessKey string
 	S3SecretKey string
 	S3UseSSL    bool
+	// S3ForcePathStyle names the bucket in the URL's path; Garage behind
+	// Caddy wants it.
+	S3ForcePathStyle bool
+	// S3PublicEndpoint is where browsers and phones reach the store, for
+	// presigned URLs, when the app reaches it at a private address.
+	S3PublicEndpoint string
 
 	SMSProvider          string
 	SMSNumber            string
@@ -168,6 +174,8 @@ func Load() (*Config, error) {
 		S3AccessKey:             getEnv("S3_ACCESS_KEY", ""),
 		S3SecretKey:             getEnv("S3_SECRET_KEY", ""),
 		S3UseSSL:                getBoolEnv("S3_USE_SSL", true),
+		S3ForcePathStyle:        getBoolEnv("S3_FORCE_PATH_STYLE", false),
+		S3PublicEndpoint:        strings.TrimRight(getEnv("S3_PUBLIC_ENDPOINT", ""), "/"),
 		SMSProvider:             getEnv("SMS_PROVIDER", "mock"),
 		SMSNumber:               getEnv("SMS_NUMBER", ""),
 		SMSInboundSecret:        getEnv("SMS_INBOUND_SECRET", ""),

@@ -21,10 +21,11 @@ import (
 // TestBackupAndRestore is the restore drill: scripts/backup.sh,
 // fetch-backup.sh and restore.sh, run on staging as on a production machine
 // with staging's backup.env. The backup is encrypted with a key the test
-// makes and copied to a bucket (a second one in SeaweedFS). Then the copies
-// on the machine are lost, as with the machine, and the backup comes back
-// from the bucket. A company that signed up before the backup is back after
-// the restore, still signed in, and one that signed up after it is gone.
+// makes and copied to a bucket (a second one in staging's Garage). Then the
+// copies on the machine are lost, as with the machine, and the backup comes
+// back from the bucket. A company that signed up before the backup is back
+// after the restore, still signed in, and one that signed up after it is
+// gone.
 //
 // It replaces staging's data, so it is in the last file: Go runs a
 // package's tests in the order of their files.
@@ -63,6 +64,16 @@ func TestBackupAndRestore(t *testing.T) {
 	if names := archived(t, decrypt(t, key, made["Files"])); !names["./keys/app_secret"] {
 		t.Errorf("the files backup holds %v, without the app secret", names)
 	}
+	// The delivery test stored a signature and a photo in the bucket.
+	objects := 0
+	for name := range archived(t, decrypt(t, key, made["Objects"])) {
+		if !strings.HasSuffix(name, "/") {
+			objects++
+		}
+	}
+	if objects == 0 {
+		t.Error("the objects backup holds nothing from the bucket")
+	}
 	envFile := setting("E2E_ENV_FILE", "deployments/staging/staging.env")
 	if names := archived(t, decrypt(t, key, made["Settings"])); !names[envFile] || !names["deployments/staging/backup.env"] {
 		t.Errorf("the settings backup holds %v, without %s and backup.env", names, envFile)
@@ -83,14 +94,14 @@ func TestBackupAndRestore(t *testing.T) {
 
 	// With another key nothing changes, the app included.
 	other, _ := ageKey(t)
-	if out, err := run(t, "restore.sh", []string{"CONFIRM=yes", "AGE_IDENTITY=" + other}, fetched["Database"], fetched["Files"]); err == nil || !strings.Contains(out, "Nothing changed") {
+	if out, err := run(t, "restore.sh", []string{"CONFIRM=yes", "AGE_IDENTITY=" + other}, fetched["Database"], fetched["Files"], fetched["Objects"]); err == nil || !strings.Contains(out, "Nothing changed") {
 		t.Fatalf("restore.sh with the wrong key: %v, want it to refuse", err)
 	}
 	if p := after.get("/app"); p.Status != http.StatusOK {
 		t.Fatalf("after restore.sh refused, the app answers %d", p.Status)
 	}
 
-	script(t, "restore.sh", []string{"CONFIRM=yes", "AGE_IDENTITY=" + key}, fetched["Database"], fetched["Files"])
+	script(t, "restore.sh", []string{"CONFIRM=yes", "AGE_IDENTITY=" + key}, fetched["Database"], fetched["Files"], fetched["Objects"])
 	within(t, 2*time.Minute, "the app to be ready again", func() bool {
 		res, err := newClient(nil).Get(appURL + "/readyz")
 		if err != nil {
@@ -202,7 +213,7 @@ func compose(t *testing.T, args ...string) string {
 	return string(b)
 }
 
-var backupFileRe = regexp.MustCompile(`(?m)^(Database|Files|Settings): +(\S+)$`)
+var backupFileRe = regexp.MustCompile(`(?m)^(Database|Files|Settings|Objects): +(\S+)$`)
 
 // backupFiles reads the files a script named: Database, Files and Settings.
 func backupFiles(t *testing.T, out string) map[string]string {
@@ -211,8 +222,9 @@ func backupFiles(t *testing.T, out string) map[string]string {
 	for _, m := range backupFileRe.FindAllStringSubmatch(out, -1) {
 		files[m[1]] = m[2]
 	}
-	if len(files) != 3 {
-		t.Fatalf("the script named %v, want the database, files and settings", files)
+	// Staging keeps its files in Garage, so the bucket is backed up too.
+	if len(files) != 4 {
+		t.Fatalf("the script named %v, want the database, files, settings and objects", files)
 	}
 	return files
 }

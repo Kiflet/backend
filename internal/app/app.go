@@ -70,6 +70,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		Type: cfg.StorageType, LocalPath: cfg.StoragePath,
 		S3Bucket: cfg.S3Bucket, S3Region: cfg.S3Region, S3Endpoint: cfg.S3Endpoint,
 		S3AccessKey: cfg.S3AccessKey, S3SecretKey: cfg.S3SecretKey, S3UseSSL: cfg.S3UseSSL,
+		S3ForcePathStyle: cfg.S3ForcePathStyle, S3PublicEndpoint: cfg.S3PublicEndpoint,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("storage: %w", err)

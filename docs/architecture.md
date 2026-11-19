@@ -400,19 +400,20 @@ How it is set up:
 - **Keys:** Garage has no bucket policies or ACLs, only "this key may
   read, write or own this bucket". So each process gets its own key with
   only what it needs: the app reads and writes `kiflet` and
-  `kiflet-exports`; the copying job (below) only reads them. Keys are
-  made through the admin API by an init job, not in the config file.
+  `kiflet-exports`. Keys are imported through the admin API by
+  `kiflet setup-storage` (`pkg/storage/garage`), run as an init container
+  at every deploy, not written in the config file.
 - **Addressing:** path-style (`files.kiflet.et/kiflet/<key>`), so one
-  certificate and no wildcard DNS. `pkg/storage` gets a
-  `S3_FORCE_PATH_STYLE` setting; today it uses path-style only for plain
-  `http://` endpoints. `s3_region` in `garage.toml` and `S3_REGION` must be
-  the same string, or every signature is refused.
+  certificate and no wildcard DNS (`S3_FORCE_PATH_STYLE`). `s3_region` in
+  `deployments/garage/garage.toml` and `S3_REGION` must be the same string,
+  or every signature is refused.
 - **Reached from outside** only through Caddy at `files.kiflet.et`, which
   forwards the S3 port (3900) and nothing else. Presigned URLs are signed
-  for that host, so the app's client is configured with the public
-  endpoint, not the private one. The admin (3903) and RPC (3901) ports
-  stay on the private network. CORS on the buckets allows PUT and GET from
-  `app.kiflet.et` for the web's uploads.
+  for that host (`S3_PUBLIC_ENDPOINT`), not the private one the app uses.
+  The admin (3903) and RPC (3901) ports stay on the private network. CORS
+  on the buckets lets pages on `app.kiflet.et` read the answers to their
+  uploads; Garage answers every preflight with `*`, so the URL's signature,
+  not CORS, is what keeps a file private.
 - **Checksums:** recent AWS SDKs add CRC32 checksums to every request by
   default, and Garage's support for them varies by version. `pkg/storage`
   already sends and checks them only where S3 requires them, and that
@@ -422,9 +423,10 @@ What Garage does not do, and what covers it:
 
 - **No versioning and no object lock.** A file deleted or overwritten (by a
   bug, a stolen key or a mistake) is gone from Garage, whatever the
-  replication. Proof of delivery is evidence, so a nightly job (rclone, as
-  `scripts/backup.sh` uses) copies new objects, encrypted with age, to the
-  **off-site bucket** with another provider, which keeps versions. The app
+  replication. Proof of delivery is evidence, so the nightly
+  `scripts/backup.sh` archives the bucket (rclone), encrypts it with age,
+  and copies it to the **off-site bucket** with another provider, which
+  keeps versions; `scripts/restore.sh` puts it back. The app
   never deletes a POD file except through retention and company deletion
   (`purgeTx`), and those are logged.
 - **Not a backup of itself.** Replication protects against a disk or a VM,
@@ -937,8 +939,8 @@ flowchart TB
   restore tested in CI as `tests/e2e`'s last test does today. RabbitMQ
   definitions exported nightly; Redis needs none. Garage's files are copied
   nightly to the same off-site provider (section 5); Garage's own metadata
-  snapshots cover a damaged node, and its cluster layout is kept in this
-  repository's runbook.
+  snapshots cover a damaged node, and the setup job below makes its layout
+  again on a new one.
 - **Garage's setup** is a one-off init container that, through the admin
   API, assigns and applies the layout, makes the buckets and keys, and
   sets CORS and lifecycle rules; it does nothing when they exist already.
@@ -1043,7 +1045,7 @@ module boundary already allows.
   Redis caches.
 - **MinIO, SeaweedFS or a hosted S3 for the app's files.** Garage was
   chosen (2026-11-19): self-hosted, small, made for a few nodes on ordinary
-  machines. MinIO no longer publishes images; SeaweedFS stays only until
-  staging and the tests move to Garage.
+  machines. MinIO no longer publishes images; SeaweedFS, which staging and
+  the tests ran before, is gone.
 - **GraphQL.** REST with generated types covers both clients; the driver
   sync is a single purpose-built endpoint.

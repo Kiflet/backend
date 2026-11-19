@@ -14,6 +14,15 @@ regexes = [
   # The integration tests' object store, a container that lives as long as
   # the test run.
   '''secret: "integration-secret-0123456789"''',
+  # Staging's Garage: its secrets and the two keys it makes, which exist
+  # only on a machine running staging (deployments/staging). Garage wants
+  # them in its own format, so they look random.
+  '''GARAGE_RPC_SECRET=85b454c3c3df677987d07fa32ceb8767cfce5a979455f80f2faf3aa3f22e51f7$''',
+  '''GARAGE_ADMIN_TOKEN=674eb0783bad7f77c01f879b7c09e9aa6770c2d4032d2a59$''',
+  '''(BACKUP_)?S3_ACCESS_KEY[=:] ?GK(ce381cc9bfcceefe92a1350d|759d14905547a25e6ea26c15)$''',
+  '''(BACKUP_)?S3_SECRET_KEY[=:] ?(708d43dc57d37cd5cf878aa712c741580564e75ef494f47cb21aab056af89de9|c6a06c844b05d69f4a78cc3dd16cb6cede41d7892b9d48e6020185381626a41f)$''',
+  # A secret in Garage's format, in pkg/storage/garage's unit test.
+  '''secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"''',
   # The characters generated passwords are made of.
   '''const passwordAlphabet = "''',
   # A request ID in a test of the retired API package.

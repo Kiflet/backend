@@ -1,6 +1,6 @@
 # Laid over deployments/docker-compose.backup.yml for staging: the copying
-# container joins staging's network, where its bucket is SeaweedFS
-# (http://s3:8333, deployments/staging/backup.env).
+# container joins staging's network, where its bucket is in Garage
+# (http://garage:3900, deployments/staging/backup.env).
 services:
   offsite:
     networks: [staging]

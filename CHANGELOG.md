@@ -24,6 +24,23 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Garage for files** (`docs/architecture.md`, section 5). Production's
+  compose file runs [Garage](https://garagehq.deuxfleurs.fr/) beside the
+  app with `COMPOSE_PROFILES=garage`, and `kiflet setup-storage`, run
+  before the app at every deploy, makes its layout, imports the app's key,
+  makes the bucket and sets its rules through Garage's admin API
+  (`pkg/storage/garage`). `.env.example` has the settings and
+  `docs/deploy.md`, "Files in Garage", how to move the files a machine
+  already has. Staging runs it in place of SeaweedFS, and the integration
+  tests start it. `S3_FORCE_PATH_STYLE` and `S3_PUBLIC_ENDPOINT` are new
+  settings, and the S3 store signs upload URLs for phase 5's uploads.
+- **The bucket in the backups.** With `STORAGE_TYPE=s3`,
+  `scripts/backup.sh` also archives every object of the app's bucket
+  (`kiflet_<time>_objects.tar.gz`), encrypted and copied off the machine
+  like the rest, and `scripts/restore.sh` takes it as a third archive and
+  makes the bucket the same as it. Files kept in S3 weren't backed up
+  before. Prometheus reads Garage's own figures.
+
 - **The event outbox** (`docs/migration.md`, phase 2). Two tables for the
   move to RabbitMQ: `event_outbox`, where a change will write the events
   others must hear about in its own transaction, for a relay to publish,

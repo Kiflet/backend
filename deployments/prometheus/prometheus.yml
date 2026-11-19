@@ -15,3 +15,17 @@ scrape_configs:
         type: A
         port: 8080
         refresh_interval: 30s
+
+  # Garage's own figures, with the garage profile (docs/architecture.md,
+  # section 14). Its metrics token is METRICS_TOKEN too. Without the
+  # profile the name doesn't resolve and there is nothing to scrape.
+  - job_name: garage
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics_token
+    dns_sd_configs:
+      - names: ["garage."]
+        type: A
+        port: 3903
+        refresh_interval: 30s

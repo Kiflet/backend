@@ -7,7 +7,12 @@
 #   kiflet_<time>_settings.tar.gz   this machine's settings: .env,
 #                                   backup.env and deployments/secrets/
 #
-# and with WAL archiving on (WAL_ARCHIVE=on in .env), a fourth:
+# when the app keeps its files in S3 (STORAGE_TYPE=s3: Garage, which keeps
+# no versions of its own), a fourth:
+#
+#   kiflet_<time>_objects.tar.gz    every object in the app's bucket
+#
+# and with WAL archiving on (WAL_ARCHIVE=on in .env), another:
 #
 #   kiflet_<time>_base.tar.gz       the database's files as they are
 #                                   (pg_basebackup), which the archived
@@ -30,9 +35,8 @@
 #   COMPOSE_FILE=deployments/docker-compose.prod.yml:deployments/staging/compose.yml \
 #     ENV_FILE=deployments/staging/staging.env scripts/backup.sh
 #
-# Photos kept in S3 aren't included: keep that bucket with the provider's
-# tools (versioning, replication). Backups hold the app secret and
-# customers' details, so they are readable by their owner only.
+# Backups hold the app secret and customers' details, so they are readable
+# by their owner only.
 set -euo pipefail
 umask 077
 
@@ -80,17 +84,34 @@ offsite() {
     --user "$(id -u):$(id -g)" -v "$BACKUP_DIR:/backups" offsite "$@"
 }
 
+# The app's bucket, read with its own keys over the stack's network.
+store() {
+  COMPOSE_FILE="${BACKUP_COMPOSE_FILE:-deployments/docker-compose.backup.yml}" \
+    docker compose --progress quiet --env-file /dev/null run --rm --no-deps -T \
+    --user "$(id -u):$(id -g)" -v "$BACKUP_DIR:/backups" objects "$@"
+}
+app_env() { compose exec -T app printenv "$1" 2>/dev/null || true; }
+
 stamp="$(date +%Y%m%d_%H%M%S)"
 db="$BACKUP_DIR/kiflet_${stamp}.dump$ext"
 files="$BACKUP_DIR/kiflet_${stamp}_files.tar.gz$ext"
 settings="$BACKUP_DIR/kiflet_${stamp}_settings.tar.gz$ext"
+objects=""
+if [ "$(app_env STORAGE_TYPE)" = s3 ]; then
+  objects="$BACKUP_DIR/kiflet_${stamp}_objects.tar.gz$ext"
+  STORE_S3_ENDPOINT="$(app_env S3_ENDPOINT)" STORE_S3_REGION="$(app_env S3_REGION)"
+  STORE_S3_ACCESS_KEY="$(app_env S3_ACCESS_KEY)" STORE_S3_SECRET_KEY="$(app_env S3_SECRET_KEY)"
+  store_bucket="$(app_env S3_BUCKET)"
+  STACK_NETWORK="$(compose config | sed -n 's/^name: //p')_default"
+  export STORE_S3_ENDPOINT STORE_S3_REGION STORE_S3_ACCESS_KEY STORE_S3_SECRET_KEY STACK_NETWORK
+fi
 base=""
 if [ "$(compose exec -T postgres psql -U logistics -d logistics -tAc 'SHOW archive_mode')" = on ]; then
   base="$BACKUP_DIR/kiflet_${stamp}_base.tar.gz$ext"
 fi
 # Written under a temporary name, so a failed run leaves nothing that looks
 # like a backup.
-trap 'rm -f "$db.partial" "$files.partial" "$settings.partial" ${base:+"$base.partial"}' EXIT
+trap 'rm -rf "$db.partial" "$files.partial" "$settings.partial" ${base:+"$base.partial"} ${objects:+"$objects.partial" "$BACKUP_DIR/.objects-$stamp"}' EXIT
 
 compose exec -T postgres pg_dump -U logistics -Fc logistics | seal >"$db.partial"
 mv "$db.partial" "$db"
@@ -100,6 +121,15 @@ keep=("$ENV_FILE" deployments/secrets)
 if [ -f "$settings_file" ]; then keep+=("$settings_file"); fi
 tar -czf - "${keep[@]}" | seal >"$settings.partial"
 mv "$settings.partial" "$settings"
+if [ -n "$objects" ]; then
+  # Copied out plain into a folder only the owner reads, then archived and
+  # encrypted like the rest; the folder goes at once.
+  mkdir -m 700 "$BACKUP_DIR/.objects-$stamp"
+  store copy "store:$store_bucket" "/backups/.objects-$stamp"
+  tar -C "$BACKUP_DIR/.objects-$stamp" -czf - . | seal >"$objects.partial"
+  rm -rf "$BACKUP_DIR/.objects-$stamp"
+  mv "$objects.partial" "$objects"
+fi
 if [ -n "$base" ]; then
   # One tar of the data directory with the WAL it needs to be consistent,
   # over the socket. A checkpoint first, so it starts at once.
@@ -110,7 +140,7 @@ fi
 if [ -n "$bucket" ]; then
   # rclone checks each file's size and checksum once it is in the bucket.
   offsite copy --include "${db##*/}" --include "${files##*/}" --include "${settings##*/}" \
-    ${base:+--include "${base##*/}"} /backups "offsite:$bucket"
+    ${base:+--include "${base##*/}"} ${objects:+--include "${objects##*/}"} /backups "offsite:$bucket"
   keep_days="${BACKUP_S3_KEEP_DAYS:-90}"
   if [ "$keep_days" != 0 ]; then
     offsite delete --include 'kiflet_*' --min-age "${keep_days}d" "offsite:$bucket"
@@ -121,6 +151,7 @@ find "$BACKUP_DIR" -name 'kiflet_*' -mtime "+${KEEP_DAYS}" -delete
 echo "Database: $db"
 echo "Files:    $files"
 echo "Settings: $settings"
+if [ -n "$objects" ]; then echo "Objects:  $objects"; fi
 if [ -n "$base" ]; then echo "Base:     $base"; fi
 if [ -n "$bucket" ]; then echo "Off-site: $bucket"; fi
-echo "Restore with: ${ext:+AGE_IDENTITY=<private key file> }scripts/restore.sh $db $files"
+echo "Restore with: ${ext:+AGE_IDENTITY=<private key file> }scripts/restore.sh $db $files${objects:+ $objects}"
