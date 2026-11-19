@@ -256,19 +256,19 @@ func (j *Jobs) Retention(ctx context.Context) error {
 	if err := j.q.DeleteOldWebhookDeliveries(ctx, toTimestamp(now.Add(-retainWebhooks))); err != nil {
 		return err
 	}
-	if err := j.q.DeleteOldEmailTokens(ctx, toTimestamp(now.Add(-retainLinks))); err != nil {
+	if err := j.links.DeleteOld(ctx, now.Add(-retainLinks)); err != nil {
 		return err
 	}
 	if err := j.q.DeleteOldBroadcasts(ctx, toTimestamp(now.Add(-retainBroadcasts))); err != nil {
 		return err
 	}
-	if err := j.q.DeleteExpiredPendingSignups(ctx, toTimestamp(now)); err != nil {
+	if err := j.signups.DeleteExpired(ctx, now); err != nil {
 		return err
 	}
 	if err := j.sessions.DeleteExpired(ctx); err != nil {
 		return err
 	}
-	return j.q.DeleteExpiredVerificationCodes(ctx)
+	return j.codes.DeleteExpired(ctx)
 }
 
 // TrackingPartitions makes the coming week's partitions of

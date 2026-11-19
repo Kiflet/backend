@@ -534,6 +534,26 @@ func (q *Queries) RecordSuccessfulLogin(ctx context.Context, id pgtype.UUID) err
 	return err
 }
 
+const resetUserPassword = `-- name: ResetUserPassword :exec
+UPDATE users
+SET password_hash = $3, password_reset_required = false,
+    failed_login_attempts = 0, locked_until = NULL,
+    email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW()
+WHERE id = $1 AND tenant_id = $2
+`
+
+type ResetUserPasswordParams struct {
+	ID           pgtype.UUID `db:"id" json:"id"`
+	TenantID     pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	PasswordHash *string     `db:"password_hash" json:"password_hash"`
+}
+
+// Following a reset link proves the address, and ends any lockout.
+func (q *Queries) ResetUserPassword(ctx context.Context, arg ResetUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, resetUserPassword, arg.ID, arg.TenantID, arg.PasswordHash)
+	return err
+}
+
 const setDriverAppSettings = `-- name: SetDriverAppSettings :exec
 UPDATE users
 SET language = COALESCE($1::text, language),
@@ -592,6 +612,28 @@ type SetDriverVehicleParams struct {
 func (q *Queries) SetDriverVehicle(ctx context.Context, arg SetDriverVehicleParams) error {
 	_, err := q.db.Exec(ctx, setDriverVehicle, arg.ID, arg.TenantID, arg.VehicleID)
 	return err
+}
+
+const setEmailVerified = `-- name: SetEmailVerified :execrows
+
+UPDATE users SET email_verified_at = NOW(), updated_at = NOW()
+WHERE id = $1 AND tenant_id = $2 AND email = $3 AND email_verified_at IS NULL
+`
+
+type SetEmailVerifiedParams struct {
+	ID       pgtype.UUID `db:"id" json:"id"`
+	TenantID pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	Email    *string     `db:"email" json:"email"`
+}
+
+// Confirming an address and resetting a password from a link (the
+// identity module's links), until users move into it.
+func (q *Queries) SetEmailVerified(ctx context.Context, arg SetEmailVerifiedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setEmailVerified, arg.ID, arg.TenantID, arg.Email)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setUserActive = `-- name: SetUserActive :exec

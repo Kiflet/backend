@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/identity"
 	"github.com/kiflet/backend/internal/modules/tenancy"
 	"strings"
 	"time"
@@ -44,8 +45,6 @@ type SignupInput struct {
 
 // A sign-up waits this long for the code texted to the admin's phone.
 const signupTTL = time.Hour
-
-var errSignupExpired = &Error{Kind: KindNotFound, Message: "This sign-up has expired or is already complete. If you finished it, sign in; otherwise fill in the form again."}
 
 // newCompany is a validated sign-up.
 type newCompany struct {
@@ -118,13 +117,11 @@ func (s *TenantService) StartSignup(ctx context.Context, in SignupInput) (token 
 	if err := s.issueCode(ctx, pgtype.UUID{}, *c.admin.phone, codePurposeSignup, s.signupText); err != nil {
 		return "", err
 	}
-	token = randomToken(32)
-	err = s.q.CreatePendingSignup(ctx, db.CreatePendingSignupParams{
-		TokenHash: hashToken(token), Company: c.name, City: c.city, FullName: c.admin.name,
+	return s.signups.Hold(ctx, identity.NewSignup{
+		Company: c.name, City: c.city, FullName: c.admin.name,
 		Email: *c.admin.email, Phone: *c.admin.phone, PasswordHash: c.passwordHash,
-		Plan: c.plan, BillingCycle: c.cycle, ExpiresAt: toTimestamp(s.now().Add(signupTTL)),
+		Plan: c.plan, BillingCycle: c.cycle, Expires: s.now().Add(signupTTL),
 	})
-	return token, err
 }
 
 func (s *TenantService) signupText(code string) string {
@@ -132,12 +129,8 @@ func (s *TenantService) signupText(code string) string {
 }
 
 // PendingSignup is a sign-up waiting for its code.
-func (s *TenantService) PendingSignup(ctx context.Context, token string) (db.PendingSignup, error) {
-	ps, err := s.q.GetPendingSignup(ctx, hashToken(token))
-	if isNoRows(err) {
-		return ps, errSignupExpired
-	}
-	return ps, err
+func (s *TenantService) PendingSignup(ctx context.Context, token string) (identity.PendingSignup, error) {
+	return s.signups.Find(ctx, s.q.Conn(), token)
 }
 
 // ResendSignupCode texts a new code for a waiting sign-up.
@@ -168,10 +161,7 @@ func (s *TenantService) CompleteSignup(ctx context.Context, token, code string, 
 	err := s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		// Locked, so a second submission of the same code waits for this
 		// one and then finds the sign-up finished.
-		ps, err := q.GetPendingSignup(ctx, hashToken(token))
-		if isNoRows(err) {
-			return errSignupExpired
-		}
+		ps, err := s.signups.Find(ctx, q.Conn(), token)
 		if err != nil {
 			return err
 		}
@@ -182,7 +172,7 @@ func (s *TenantService) CompleteSignup(ctx context.Context, token, code string, 
 		if err != nil {
 			return err
 		}
-		if err := consumeCode(ctx, q, codeID); err != nil {
+		if err := s.consumeCode(ctx, q, codeID); err != nil {
 			return err
 		}
 		if err := signupClash(ctx, q, ps.Email, ps.Phone); err != nil {
@@ -200,7 +190,7 @@ func (s *TenantService) CompleteSignup(ctx context.Context, token, code string, 
 			return err
 		}
 		plan, cycle = ps.Plan, ps.BillingCycle
-		return q.DeletePendingSignup(ctx, ps.ID)
+		return s.signups.Done(ctx, q.Conn(), ps.ID)
 	})
 	if err != nil {
 		return nil, err

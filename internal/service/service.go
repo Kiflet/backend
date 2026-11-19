@@ -73,10 +73,14 @@ type PositionQueue interface {
 // Deps is everything the services share.
 type Deps struct {
 	Pool *pgxpool.Pool
-	// Audit, Tenancy and Sessions are modules (internal/modules).
+	// Audit, Tenancy and the identity module's parts are modules
+	// (internal/modules).
 	Audit     audit.Log
 	Tenancy   tenancy.Companies
 	Sessions  identity.Sessions
+	Codes     identity.Codes
+	Links     identity.Links
+	Signups   identity.Signups
 	Log       zerolog.Logger
 	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
@@ -139,7 +143,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups,
 		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -186,6 +190,9 @@ type core struct {
 	auditLog audit.Log
 	tenancy  tenancy.Companies
 	sessions identity.Sessions
+	codes    identity.Codes
+	links    identity.Links
+	signups  identity.Signups
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	outbox        bool

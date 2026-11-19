@@ -259,8 +259,8 @@ throughout; only imports move.
    5. `make test test-integration`; one PR per module.
 
    Done: audit, tenancy; identity in part (sessions, roles, `Principal`
-   and `Actor`; users, verification codes, email links and pending sign-ups
-   are next). How it went, for the rest:
+   and `Actor`, verification codes, email links, pending sign-ups; `users`
+   is next). How it went, for the rest:
    - **The server-rendered handlers stay in `internal/web`.** Phase 4
      replaces those pages with Kiflet/web and phase 6 deletes them, so
      moving them would be work thrown away. A module's `http/` holds the
@@ -301,6 +301,11 @@ throughout; only imports move.
      (`GetSessionPrincipal`) joins `users`, `tenants` and `invoices`, as
      every request runs it; it stays one query until the session is
      cached in Redis.
+   - **A check that needs another module's data is passed in:**
+     `identity.Codes.Issue` takes the daily SMS budget, which counts
+     messaging's texts, as a function it runs where it ran before. An email
+     link no longer joins `tenants`: whether the company is active comes
+     from tenancy.
    - `internal/service` keeps a thin service where the dashboard needs a
      check the module can't make yet (the platform admin's), until the
      module that owns it moves.

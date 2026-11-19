@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/kiflet/backend/internal/modules/identity"
-	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -69,8 +68,6 @@ type (
 	ClientInfo  = identity.ClientInfo
 	LoginResult = identity.LoginResult
 )
-
-func hashToken(token string) string { return identityapp.HashToken(token) }
 
 // DriverLogin signs a driver into the app with phone and PIN (FR-002). A
 // driver has one device: signing in elsewhere ends the other sessions.
