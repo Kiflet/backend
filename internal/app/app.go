@@ -19,7 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/platform/config"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/internal/web"
 	"github.com/kiflet/backend/pkg/broker"

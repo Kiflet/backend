@@ -9,7 +9,7 @@ import (
 
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
-	"github.com/kiflet/backend/internal/text"
+	"github.com/kiflet/backend/internal/platform/text"
 )
 
 // The texts customers and drivers receive. They are kept short — a single
@@ -37,7 +37,7 @@ func place(city *string, address string) string {
 
 // The customer's texts are written in the language the company chose for
 // its customers (tenants.customer_language), from the catalogue in
-// internal/text.
+// internal/platform/text.
 
 func (s *ShipmentService) customerCreatedText(t db.Tenant, sh db.Shipment) string {
 	return text.T(t.CustomerLanguage, "sms.created",

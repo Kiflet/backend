@@ -19,7 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 
-	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/platform/config"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/pkg/metrics"
 	"github.com/kiflet/backend/pkg/payments"

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/platform/config"
 )
 
 // A client may send any forwarding header it likes. Behind a proxy, only

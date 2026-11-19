@@ -103,7 +103,7 @@ What already fits the target and must be kept:
 - The provider adapters (`pkg/sms`, `pkg/payments`) and the sandbox.
 - The public API, its OpenAPI file and `TestOpenAPIMatchesTheAPI`.
 - The design (Desk and Night tokens, Geist, lucide), the words in
-  `internal/text`, the E2E guide.
+  `internal/platform/text`, the E2E guide.
 
 ---
 
@@ -239,7 +239,8 @@ throughout; only imports move.
 1. **Platform packages first:** move `config`, `geo`, `phone`, `text`,
    `storage`, `mail`, `sms`, `payments` under `internal/platform/` (or keep
    `pkg/` where it is, see ROADMAP "Considered and not planned"). One
-   commit, `go build ./...` and all tests green.
+   commit, `go build ./...` and all tests green. Done: `config`, `geo`,
+   `phone` and `text` are in `internal/platform/`; `pkg/` stays.
 2. **One module at a time**, in this order (fewest dependencies first):
    audit → tenancy → identity → fleet → shipments → proof → tracking →
    messaging → customer → notify → alerts → integrations → billing →

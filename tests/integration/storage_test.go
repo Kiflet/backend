@@ -23,7 +23,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/kiflet/backend/internal/geo"
+	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/pkg/storage"
 	"github.com/kiflet/backend/pkg/storage/garage"

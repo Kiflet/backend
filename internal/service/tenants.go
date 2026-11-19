@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kiflet/backend/internal/db"
-	"github.com/kiflet/backend/internal/geo"
 	"github.com/kiflet/backend/internal/model"
-	"github.com/kiflet/backend/internal/phone"
-	"github.com/kiflet/backend/internal/text"
+	"github.com/kiflet/backend/internal/platform/geo"
+	"github.com/kiflet/backend/internal/platform/phone"
+	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/pkg/hash"
 )
 

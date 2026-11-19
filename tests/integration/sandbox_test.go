@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/platform/config"
 	"github.com/kiflet/backend/internal/sandbox"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/pkg/console"

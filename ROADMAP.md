@@ -47,7 +47,7 @@ What is left:
       reviewed the words. The design's language switch waits for it.
       The same reviewer should read the tracking page's words added with
       its redesign (`track.tracked_with` to `track.call` in
-      `internal/text/am.go`), which were not reviewed by a native speaker.
+      `internal/platform/text/am.go`), which were not reviewed by a native speaker.
 
 ## Finish the rename
 
@@ -149,7 +149,7 @@ In order. The first two can run side by side.
    else in the driver app.
 3. **A native speaker reads the Amharic, then Amharic for the office**
    (W1). The texts customers get and their tracking and confirmation
-   pages are in Amharic, drafted without one: `internal/text/am.go` is
+   pages are in Amharic, drafted without one: `internal/platform/text/am.go` is
    the whole of it, beside `en.go`. The same reader should go through the
    driver app's `static/driver/text.js`, and say whether customers expect
    dates in the Ethiopian calendar, which they are not in. Until then no

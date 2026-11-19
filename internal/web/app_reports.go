@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/kiflet/backend/internal/geo"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/service"
 )
 

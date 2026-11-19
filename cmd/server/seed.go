@@ -18,10 +18,10 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/kiflet/backend/internal/app"
-	"github.com/kiflet/backend/internal/config"
 	"github.com/kiflet/backend/internal/db"
-	"github.com/kiflet/backend/internal/geo"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/platform/config"
+	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/pkg/hash"
 )

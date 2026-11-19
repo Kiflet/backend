@@ -6,6 +6,10 @@ What changed in each release, newest first.
 
 ### Moved
 
+- **The platform packages** (`docs/migration.md`, phase 1, step 1):
+  `internal/config`, `geo`, `phone` and `text` are now under
+  `internal/platform/`, the packages without business rules that the
+  modules will share. Nothing else changes.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside
