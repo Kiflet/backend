@@ -242,6 +242,10 @@ runs beside the app with the `rabbitmq` profile. With it:
 - Every event in a shipment's history is written to `event_outbox` with
   the change, and published to the `kiflet.events` exchange once it
   commits, for the consumers to come.
+- The timed jobs are named on `jobs.scheduled` by the leading scheduler
+  and run by the workers, each job on whichever worker takes it, so a long
+  retention run doesn't hold up the alert checks. A job not taken before
+  its next turn is dropped rather than run twice in a row.
 - Texts, email and webhooks reach the workers through `notify.sms`,
   `notify.email` and `webhook.deliver`. Each is still written to its
   table first, which keeps its record, its lease and its retry schedule:
@@ -259,8 +263,8 @@ To turn it on, in `.env`:
 3. `docker compose … up -d --wait`.
 
 Each part can be switched back to the old way on its own, with
-`WORKER_TRACKING`, `WORKER_LIVE`, `WORKER_SMS`, `WORKER_MAIL` or
-`WORKER_WEBHOOKS` set to `inprocess`. Without
+`WORKER_TRACKING`, `WORKER_LIVE`, `WORKER_SMS`, `WORKER_MAIL`,
+`WORKER_WEBHOOKS` or `WORKER_JOBS` set to `inprocess`. Without
 `RABBITMQ_URL` the app works as it did, and if RabbitMQ can't take a
 phone's fixes, the app writes them itself, so a phone never waits on it.
 
@@ -282,7 +286,10 @@ run only some of it, `kiflet serve --roles=…` (or `ROLES`):
 
 - `web`: the pages, the APIs, and live updates to the dashboards open on it
 - `worker`: texts, email and webhooks, and GPS fixes from RabbitMQ
-- `scheduler`: the timed jobs (one instance runs them at a time)
+- `scheduler`: the timed jobs. Without RabbitMQ one scheduler runs them
+  all at a time; with it, one scheduler (holding a lock) names each job
+  on `jobs.scheduled` as it falls due and the workers run them
+  (`WORKER_JOBS`)
 - `relay`: publishing the event outbox to RabbitMQ (one leads)
 
 To give the background work processes of its own, so that a burst of

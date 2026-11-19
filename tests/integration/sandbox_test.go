@@ -363,7 +363,7 @@ func TestTextsThroughTheGateway(t *testing.T) {
 	// Signing up takes the code texted to the sandbox's phone.
 	office := e.company("Gateway Freight")
 	within(t, 5*time.Second, "the code reported delivered", func() bool {
-		return scalar[bool](t, `SELECT COUNT(*) > 0 AND bool_and(delivery = 'delivered') FROM sms_messages WHERE phone = $1 AND direction = 'outbound'`, office.phone)
+		return scalar[bool](t, `SELECT COUNT(*) > 0 AND COALESCE(bool_and(delivery = 'delivered'), false) FROM sms_messages WHERE phone = $1 AND direction = 'outbound'`, office.phone)
 	})
 	if n := scalar[int64](t, `SELECT COUNT(*) FROM sms_messages WHERE phone = $1 AND direction = 'outbound'
 		AND NOT (status = 'sent' AND provider = 'ethiotelecom' AND provider_message_id LIKE 'ET%')`, office.phone); n != 0 {

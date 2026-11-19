@@ -76,6 +76,7 @@ func withRabbitMQ(url string) func(*setup) {
 		s.cfg.WorkerLive = "queue"
 		s.cfg.WorkerSMS = "queue"
 		s.cfg.WorkerMail = "queue"
+		s.cfg.WorkerJobs = "queue"
 		s.cfg.WorkerWebhooks = "queue"
 	}
 }
@@ -335,4 +336,39 @@ func TestBrokerRetries(t *testing.T) {
 		t.Errorf("parked message %q, headers %v", d.MessageId, d.Headers)
 	}
 	_, _ = ch.QueuePurge("test.flaky.dead", false)
+}
+
+// TestScheduledJobs: with two apps on RabbitMQ, one scheduler leads and
+// names each timed job once on jobs.scheduled, and the workers run them:
+// every job runs, and none twice.
+func TestScheduledJobs(t *testing.T) {
+	amqpURL := rabbitURL(t)
+	runs := func() map[string]int64 {
+		got := map[string]int64{}
+		for _, name := range service.JobNames() {
+			got[name] = scalar[int64](t, `SELECT COALESCE((SELECT runs FROM job_runs WHERE name = $1), 0)`, name)
+		}
+		return got
+	}
+	before := runs()
+	first, second := newEnv(t, withRabbitMQ(amqpURL), withJobs), newEnv(t, withRabbitMQ(amqpURL), withJobs)
+
+	within(t, 30*time.Second, "every job run", func() bool {
+		now := runs()
+		for name := range now {
+			if now[name] == before[name] {
+				return false
+			}
+		}
+		return true
+	})
+	// Until the next minute, nothing runs again.
+	time.Sleep(2 * time.Second)
+	for name, n := range runs() {
+		if n-before[name] != 1 {
+			t.Errorf("%s ran %d times, want once", name, n-before[name])
+		}
+	}
+	first.stop()
+	second.stop()
 }

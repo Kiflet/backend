@@ -172,6 +172,11 @@ type InvoiceCounter struct {
 	Last int32 `db:"last" json:"last"`
 }
 
+type JobLease struct {
+	Name  string             `db:"name" json:"name"`
+	Until pgtype.Timestamptz `db:"until" json:"until"`
+}
+
 type JobRun struct {
 	Name       string             `db:"name" json:"name"`
 	StartedAt  pgtype.Timestamptz `db:"started_at" json:"started_at"`

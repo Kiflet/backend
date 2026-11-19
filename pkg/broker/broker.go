@@ -72,6 +72,9 @@ type Message struct {
 	Exchange   string
 	RoutingKey string
 	Envelope   Envelope
+	// Expires, when set, drops the message if no consumer has taken it in
+	// that time.
+	Expires time.Duration
 }
 
 // Queue is a durable queue with its bindings and its retry policy.
@@ -108,6 +111,12 @@ var Topology = []Queue{
 	{
 		Name: "webhook.deliver", Bindings: []Binding{{Commands, "webhook.deliver"}},
 		RetryAfter: 30 * time.Second, MaxAttempts: 5,
+	},
+	// The timed jobs, named by the scheduler as they fall due. A job that
+	// fails is recorded and runs at its next turn, so there is no retry.
+	{
+		Name: "jobs.scheduled", Bindings: []Binding{{Jobs, "jobs.scheduled"}},
+		RetryAfter: time.Minute, MaxAttempts: 1,
 	},
 }
 
@@ -253,7 +262,7 @@ func (b *Broker) Publish(ctx context.Context, msgs ...Message) error {
 		}
 		dc, err := ch.PublishWithDeferredConfirmWithContext(ctx, m.Exchange, m.RoutingKey, false, false, amqp.Publishing{
 			ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: m.Envelope.ID,
-			Type: m.Envelope.Type, Timestamp: m.Envelope.OccurredAt, Body: body,
+			Type: m.Envelope.Type, Timestamp: m.Envelope.OccurredAt, Body: body, Expiration: expiration(m.Expires),
 		})
 		if err != nil {
 			return fmt.Errorf("rabbitmq: publish: %w", err)
@@ -456,6 +465,14 @@ func attempts(d amqp.Delivery) int {
 		}
 	}
 	return n
+}
+
+// expiration is a message's TTL as AMQP writes it, or none.
+func expiration(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	return strconv.FormatInt(d.Milliseconds(), 10)
 }
 
 // Waiting is how many messages wait in a queue, not yet handed to a

@@ -313,10 +313,24 @@ Roll back: each module is one PR; revert it.
    tests a second time with every worker on RabbitMQ (`TEST_RABBITMQ`).
    4. Alerts evaluation from events (`alerts.evaluate`).
    5. Audit writes (`audit.write`).
+
+   4 and 5 wait for phase 1. Today a change, the alerts it raises and its
+   audit row are written in one transaction, so none is ever missing or
+   left over. As consumers, they would still be calls into the same
+   `internal/service` package until phase 1 makes alerts and audit
+   modules of their own, and the change would only add a way for them to
+   lag. They move once those modules exist, onto the `events.Bus` that
+   phase 1 adds, and from it to RabbitMQ.
    6. Live updates: `kiflet.live` exchange replaces `LISTEN`/`NOTIFY`
       (`internal/app/live.go`). Done (`WORKER_LIVE`).
    7. Timed jobs: `cmd/scheduler` publishes to `jobs.scheduled` on the
       schedule `Jobs.Run` keeps today; the jobs worker runs them.
+      Done (`WORKER_JOBS`), as the `scheduler` role rather than a command
+      of its own: the scheduler holding a Postgres lock publishes each job
+      as it falls due (`internal/service/jobs_queue.go`), and a worker
+      runs it under a lease of that job's own (`job_leases`), so
+      different jobs run on different workers and no job runs twice at
+      once.
 6. **Positions through the queue:** the sync handler publishes positions
    to `tracking.ingest` (with confirms) instead of inserting them; the
    tracking worker batch-inserts, updates `driver_positions` and Redis,
