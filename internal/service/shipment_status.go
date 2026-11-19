@@ -353,7 +353,7 @@ func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, r
 			s.notifyCustomer(ctx, q, after, tenant, out, body, body)
 		}
 		if cur.DriverID.Valid && model.IsActiveStatus(cur.Status) {
-			if d, err := q.GetUserByID(ctx, db.GetUserByIDParams{ID: cur.DriverID, TenantID: a.TenantID}); err == nil && d.Phone != nil {
+			if d, err := s.user(ctx, q, a.TenantID, cur.DriverID); err == nil && d.Phone != nil {
 				s.enqueueSMS(ctx, q, after, outboundSMS{
 					TenantID: a.TenantID, ShipmentID: id, Phone: *d.Phone, Purpose: PurposeDriverMessage,
 					Body: fmt.Sprintf("%s: shipment %s (%s) is CANCELLED: %s. Do not deliver it; call the office.",
@@ -488,7 +488,7 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 			}
 		}
 		if bySMS || auto {
-			d, err := q.GetUserByID(ctx, db.GetUserByIDParams{ID: sh.DriverID, TenantID: a.TenantID})
+			d, err := s.user(ctx, q, a.TenantID, sh.DriverID)
 			if err == nil && d.Phone != nil {
 				tenant, err := s.tenant(ctx, q, a.TenantID)
 				if err != nil {

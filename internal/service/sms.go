@@ -513,7 +513,7 @@ func (s *SMSService) Inbound(ctx context.Context, in InboundSMS) (InboundResult,
 			s.q.RemoveSMSOptOut(ctx, local)
 	}
 
-	user, err := s.q.GetUserByPhone(ctx, &local)
+	user, err := s.userByPhone(ctx, s.q, &local)
 	if err != nil || user.Role != model.RoleDriver || !user.IsActive {
 		return InboundResult{Outcome: "unknown_sender",
 			Detail: local + " is not an active driver's number, so the message was logged and not answered."}, nil

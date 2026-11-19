@@ -118,7 +118,7 @@ func (s *BillingService) Overview(ctx context.Context, p *Principal) (*BillingOv
 	now := s.now()
 	o := &BillingOverview{Tenant: t, Subscribed: subscribed(t) && !ended(t, now)}
 	o.Ending = o.Subscribed && t.RenewalCancelledAt.Valid
-	if o.ActiveDrivers, err = s.q.CountActiveDriversByTenant(ctx, t.ID); err != nil {
+	if o.ActiveDrivers, err = s.users.CountDrivers(ctx, s.q.Conn(), t.ID); err != nil {
 		return nil, err
 	}
 	if o.Invoices, err = s.q.ListInvoices(ctx, db.ListInvoicesParams{TenantID: t.ID, Limit: 50}); err != nil {

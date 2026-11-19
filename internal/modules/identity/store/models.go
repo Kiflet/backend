@@ -39,6 +39,34 @@ type Session struct {
 	LastSeenAt       pgtype.Timestamptz `db:"last_seen_at" json:"last_seen_at"`
 }
 
+type User struct {
+	ID                    pgtype.UUID        `db:"id" json:"id"`
+	TenantID              pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	Role                  string             `db:"role" json:"role"`
+	FullName              string             `db:"full_name" json:"full_name"`
+	Phone                 *string            `db:"phone" json:"phone"`
+	Email                 *string            `db:"email" json:"email"`
+	PasswordHash          *string            `db:"password_hash" json:"password_hash"`
+	PinHash               *string            `db:"pin_hash" json:"pin_hash"`
+	IsActive              bool               `db:"is_active" json:"is_active"`
+	CreatedAt             pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	FailedLoginAttempts   int32              `db:"failed_login_attempts" json:"failed_login_attempts"`
+	LockedUntil           pgtype.Timestamptz `db:"locked_until" json:"locked_until"`
+	PasswordResetRequired bool               `db:"password_reset_required" json:"password_reset_required"`
+	VehicleID             pgtype.UUID        `db:"vehicle_id" json:"vehicle_id"`
+	LastLoginAt           pgtype.Timestamptz `db:"last_login_at" json:"last_login_at"`
+	EmailVerifiedAt       pgtype.Timestamptz `db:"email_verified_at" json:"email_verified_at"`
+	AlertEmails           []string           `db:"alert_emails" json:"alert_emails"`
+	Language              *string            `db:"language" json:"language"`
+	AppBatterySaver       bool               `db:"app_battery_saver" json:"app_battery_saver"`
+	AppVibrate            bool               `db:"app_vibrate" json:"app_vibrate"`
+	AnonymisedAt          pgtype.Timestamptz `db:"anonymised_at" json:"anonymised_at"`
+	AlertsSeenAt          pgtype.Timestamptz `db:"alerts_seen_at" json:"alerts_seen_at"`
+	LicenceExpiresOn      pgtype.Date        `db:"licence_expires_on" json:"licence_expires_on"`
+	AlertSms              []string           `db:"alert_sms" json:"alert_sms"`
+}
+
 type VerificationCode struct {
 	ID         pgtype.UUID        `db:"id" json:"id"`
 	Phone      string             `db:"phone" json:"phone"`

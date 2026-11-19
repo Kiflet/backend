@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/identity"
 	"net/mail"
 	"strings"
 	"time"
@@ -82,10 +83,10 @@ func (c *core) duplicateUser(ctx context.Context, tenantID pgtype.UUID, v validP
 	if strings.Contains(con, "email") {
 		field, what = "email", "email address"
 		if v.email != nil {
-			holder, lerr = c.q.GetUserByEmail(ctx, *v.email)
+			holder, lerr = c.userByEmail(ctx, c.q, *v.email)
 		}
 	} else if v.phone != nil {
-		holder, lerr = c.q.GetUserByPhone(ctx, v.phone)
+		holder, lerr = c.userByPhone(ctx, c.q, v.phone)
 	}
 	if lerr == nil && holder.TenantID != tenantID {
 		return invalid(field, fmt.Sprintf("This %s is already used by an account at another company on %s. "+
@@ -96,7 +97,7 @@ func (c *core) duplicateUser(ctx context.Context, tenantID pgtype.UUID, v validP
 
 // Get loads a user of a tenant.
 func (s *UserService) Get(ctx context.Context, tenantID, id pgtype.UUID) (db.User, error) {
-	u, err := s.q.GetUserByID(ctx, db.GetUserByIDParams{ID: id, TenantID: tenantID})
+	u, err := s.user(ctx, s.q, tenantID, id)
 	if isNoRows(err) {
 		return u, notFound("Person not found.")
 	}
@@ -105,7 +106,7 @@ func (s *UserService) Get(ctx context.Context, tenantID, id pgtype.UUID) (db.Use
 
 // Staff lists the office accounts of a tenant.
 func (s *UserService) Staff(ctx context.Context, tenantID pgtype.UUID) ([]db.User, error) {
-	return s.q.ListUsersByTenant(ctx, db.ListUsersByTenantParams{TenantID: tenantID, Limit: 500, Offset: 0})
+	return s.staff(ctx, s.q, tenantID)
 }
 
 // Drivers lists a tenant's drivers with their load and device status.
@@ -148,7 +149,7 @@ func (s *UserService) CreateDriver(ctx context.Context, p *Principal, in PersonI
 		if err := s.requireWritable(ctx, q, tenant); err != nil {
 			return err
 		}
-		if err := checkDriverQuota(ctx, q, tenant); err != nil {
+		if err := s.checkDriverQuota(ctx, q, tenant); err != nil {
 			return err
 		}
 		vehicle, err := s.ownVehicle(ctx, q, p.TenantID, in.VehicleID)
@@ -163,7 +164,7 @@ func (s *UserService) CreateDriver(ctx context.Context, p *Principal, in PersonI
 		if err != nil {
 			return err
 		}
-		u, err := q.CreateUser(ctx, db.CreateUserParams{
+		u, err := s.createUser(ctx, q, identity.NewUser{
 			TenantID: p.TenantID, Role: model.RoleDriver, FullName: v.name, Phone: v.phone, Email: v.email,
 			PinHash: &h, PasswordResetRequired: true, VehicleID: vehicle,
 		})
@@ -219,7 +220,7 @@ func (s *UserService) UpdateDriver(ctx context.Context, p *Principal, id pgtype.
 		if err != nil {
 			return err
 		}
-		out, err = q.UpdateUserProfile(ctx, db.UpdateUserProfileParams{ID: id, TenantID: p.TenantID, FullName: v.name, Phone: v.phone, Email: v.email})
+		out, err = s.updateProfile(ctx, q, identity.Profile{ID: id, TenantID: p.TenantID, FullName: v.name, Phone: v.phone, Email: v.email})
 		if err != nil {
 			return s.duplicateUser(ctx, p.TenantID, v, err)
 		}
@@ -264,8 +265,8 @@ func (s *UserService) ownVehicle(ctx context.Context, q *db.Queries, tenantID pg
 	return v.ID, nil
 }
 
-func checkDriverQuota(ctx context.Context, q *db.Queries, t db.Tenant) error {
-	n, err := q.CountActiveDriversByTenant(ctx, t.ID)
+func (c *core) checkDriverQuota(ctx context.Context, q *db.Queries, t db.Tenant) error {
+	n, err := c.users.CountDrivers(ctx, q.Conn(), t.ID)
 	if err != nil {
 		return err
 	}
@@ -305,7 +306,7 @@ func (s *UserService) CreateStaff(ctx context.Context, p *Principal, in PersonIn
 		if err != nil {
 			return err
 		}
-		u, err := q.CreateUser(ctx, db.CreateUserParams{
+		u, err := s.createUser(ctx, q, identity.NewUser{
 			TenantID: p.TenantID, Role: in.Role, FullName: v.name, Phone: v.phone, Email: v.email,
 			PasswordHash: &h, PasswordResetRequired: true,
 		})
@@ -365,7 +366,7 @@ func (s *UserService) UpdateStaff(ctx context.Context, p *Principal, id pgtype.U
 		if cur.AnonymisedAt.Valid {
 			return errAnonymised
 		}
-		out, err = q.UpdateUserProfile(ctx, db.UpdateUserProfileParams{ID: id, TenantID: p.TenantID, FullName: v.name, Phone: v.phone, Email: v.email})
+		out, err = s.updateProfile(ctx, q, identity.Profile{ID: id, TenantID: p.TenantID, FullName: v.name, Phone: v.phone, Email: v.email})
 		if err != nil {
 			return s.duplicateUser(ctx, p.TenantID, v, err)
 		}
@@ -386,7 +387,7 @@ func (s *UserService) UpdateStaff(ctx context.Context, p *Principal, id pgtype.U
 					return err
 				}
 			}
-			if err := q.SetUserRole(ctx, db.SetUserRoleParams{ID: id, TenantID: p.TenantID, Role: in.Role}); err != nil {
+			if err := s.users.SetRole(ctx, q.Conn(), p.TenantID, id, in.Role); err != nil {
 				return err
 			}
 			out.Role = in.Role
@@ -399,7 +400,7 @@ func (s *UserService) UpdateStaff(ctx context.Context, p *Principal, id pgtype.U
 }
 
 func (s *UserService) ensureAnotherAdmin(ctx context.Context, q *db.Queries, tenantID, except pgtype.UUID) error {
-	staff, err := q.ListUsersByTenant(ctx, db.ListUsersByTenantParams{TenantID: tenantID, Limit: 500})
+	staff, err := s.staff(ctx, q, tenantID)
 	if err != nil {
 		return err
 	}
@@ -455,12 +456,12 @@ func (s *UserService) SetActive(ctx context.Context, p *Principal, id pgtype.UUI
 				return err
 			}
 			if u.Role == model.RoleDriver {
-				if err := checkDriverQuota(ctx, q, tenant); err != nil {
+				if err := s.checkDriverQuota(ctx, q, tenant); err != nil {
 					return err
 				}
 			}
 		}
-		if err := q.SetUserActive(ctx, db.SetUserActiveParams{ID: id, TenantID: p.TenantID, IsActive: active}); err != nil {
+		if err := s.users.SetActive(ctx, q.Conn(), p.TenantID, id, active); err != nil {
 			return err
 		}
 		if !active {
@@ -545,13 +546,5 @@ func (s *UserService) Names(ctx context.Context, p *Principal, ids []pgtype.UUID
 	if !p.IsPlatformAdmin() {
 		return nil, ErrUnauthorized
 	}
-	rows, err := s.q.UserNamesByIDs(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[pgtype.UUID]string, len(rows))
-	for _, r := range rows {
-		out[r.ID] = r.FullName
-	}
-	return out, nil
+	return s.users.Names(ctx, ids)
 }

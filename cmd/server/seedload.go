@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
 	"io"
 	"net/url"
 	"os"
@@ -16,7 +17,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/kiflet/backend/internal/app"
-	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/platform/config"
 	"github.com/kiflet/backend/internal/service"
@@ -97,7 +97,7 @@ func seedLoad(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log z
 		slots <- struct{}{}
 		wg.Go(func() {
 			defer func() { <-slots }()
-			got, err := loadCompany(ctx, a.Services, db.New(pool), pool, pinHash, c, *perCompany)
+			got, err := loadCompany(ctx, a.Services, pool, pinHash, c, *perCompany)
 			mu.Lock()
 			defer mu.Unlock()
 			phones = append(phones, got...)
@@ -125,7 +125,7 @@ func seedLoad(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log z
 
 // loadCompany makes one company on the Enterprise plan, with its drivers
 // each on the road and signed in.
-func loadCompany(ctx context.Context, svc *service.Services, q *db.Queries, pool *pgxpool.Pool, pinHash string, c, drivers int) ([]loadPhone, error) {
+func loadCompany(ctx context.Context, svc *service.Services, pool *pgxpool.Pool, pinHash string, c, drivers int) ([]loadPhone, error) {
 	ci := service.ClientInfo{IP: "127.0.0.1", UserAgent: "seed-load"}
 	res, err := svc.Tenants.CreateCompany(ctx, service.SignupInput{
 		Company: fmt.Sprintf("Load Freight %d", c), City: "Addis Ababa", AdminName: "Load Admin",
@@ -150,7 +150,7 @@ func loadCompany(ctx context.Context, svc *service.Services, q *db.Queries, pool
 		if err != nil {
 			return phones, fmt.Errorf("driver %d: %w", d, err)
 		}
-		if err := q.UpdatePIN(ctx, db.UpdatePINParams{ID: acct.User.ID, PinHash: &pinHash, PasswordResetRequired: false}); err != nil {
+		if err := identityapp.NewUsers(pool).SetPIN(ctx, pool, acct.User.ID, pinHash, false); err != nil {
 			return phones, err
 		}
 		// Somewhere along the road, so that the trucks spread out.
