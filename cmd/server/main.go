@@ -71,13 +71,20 @@ func main() {
 			}
 			return seed(ctx, cfg, pool, log)
 		})
+	case "seed-load":
+		err = withPool(ctx, cfg, log, func(pool *pgxpool.Pool) error {
+			if err := migrate(ctx, pool, log); err != nil {
+				return err
+			}
+			return seedLoad(ctx, cfg, pool, log, os.Args[2:])
+		})
 	case "sms-in":
 		err = smsIn(ctx, cfg, os.Args[2:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: server [serve [--roles=web,worker,scheduler,relay] | migrate | seed | sms-in <phone> <text> | setup-storage]")
+		fmt.Println("usage: server [serve [--roles=web,worker,scheduler,relay] | migrate | seed | seed-load --on=<host> [--companies=60 --drivers=200 --out=-] | sms-in <phone> <text> | setup-storage]")
 		return
 	default:
-		err = fmt.Errorf("unknown command %q (want serve, migrate, seed, sms-in or setup-storage)", cmd)
+		err = fmt.Errorf("unknown command %q (want serve, migrate, seed, seed-load, sms-in or setup-storage)", cmd)
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("exiting")
