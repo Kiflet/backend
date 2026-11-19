@@ -168,6 +168,7 @@ func New(d Deps) *Services {
 	s.Webhooks = newWebhookService(c)
 	c.webhooks = s.Webhooks
 	c.bus.Within("shipment.*", c.webhooksFor)
+	c.bus.Within("shipment.*", c.alertsFor)
 	c.bus.After("shipment.*", c.liveShipment)
 	s.Alerts = &AlertService{core: c}
 	c.alerts = s.Alerts

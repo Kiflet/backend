@@ -244,15 +244,6 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 				Type: "pod_held", Lat: in.Lat, Lng: in.Lng, OccurredAt: recorded, DriverID: driverID,
 				Note: "Received by " + in.RecipientName, Details: details,
 			})
-			who := a.Name
-			if who == "" {
-				who = "A driver"
-			}
-			s.raise(ctx, q, after, newAlert{
-				TenantID: cur.TenantID, ShipmentID: cur.ID, DriverID: driverID, Type: AlertDeliveryHeld, Severity: SeverityCritical,
-				Message: fmt.Sprintf("%s recorded delivery of %s to %s at %s. %s Accept or dismiss it on the shipment page.",
-					who, cur.TrackingNumber, in.RecipientName, recorded.In(s.cfg.Location).Format("2 Jan 15:04"), HeldReasonLabel(held)),
-			})
 			result = conflict(heldMessage(held))
 			return nil
 		}
@@ -260,28 +251,11 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 		s.event(ctx, q, after, a, cur, shipmentEvent{
 			Type: "pod_recorded", Lat: in.Lat, Lng: in.Lng, OccurredAt: recorded,
 			Note: "Received by " + in.RecipientName, Details: details,
+			pod: &podCheck{driver: driverID, haveFix: haveFix, verified: verified, distance: distance, reason: in.LocationReason},
 		})
-		switch {
-		case haveFix && !verified && cur.DestinationLat != nil:
-			msg := fmt.Sprintf("Delivery of %s was recorded %s from the destination.", cur.TrackingNumber, formatDistance(distance))
-			if in.LocationReason != "" {
-				msg += " The driver's reason: " + model.ReasonLabel(in.LocationReason) + "."
-			}
-			s.raise(ctx, q, after, newAlert{
-				TenantID: cur.TenantID, ShipmentID: cur.ID, DriverID: driverID, Type: AlertPODLocation, Severity: SeverityWarning,
-				Message: msg,
-			})
-		case !haveFix:
-			s.raise(ctx, q, after, newAlert{
-				TenantID: cur.TenantID, ShipmentID: cur.ID, DriverID: driverID, Type: AlertPODLocation, Severity: SeverityInfo,
-				Message: fmt.Sprintf("Delivery of %s was recorded without a GPS fix, so its location could not be checked.", cur.TrackingNumber),
-			})
-		}
-
 		if cur.Status == model.StatusDelivered {
 			// The office confirmed it first, by phone or from the driver's
 			// SMS; this is the proof it lacked.
-			_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{TenantID: a.TenantID, ShipmentID: id, AlertTypes: []string{AlertDeliveredNoPOD}})
 			return nil
 		}
 		out, err = s.applyStatus(ctx, q, after, a, cur, StatusChange{
@@ -352,13 +326,6 @@ func (s *ShipmentService) AcceptHeldPOD(ctx context.Context, a Actor, id, podID 
 			Details: map[string]any{"pod_id": podID.String(), "driver": pod.DriverName},
 		})
 		s.audit(ctx, q, a, "pod_accepted", "shipment", id, map[string]any{"status": cur.Status}, map[string]any{"pod_id": podID.String()})
-		if n, err := q.CountHeldPODs(ctx, db.CountHeldPODsParams{ShipmentID: id, TenantID: a.TenantID}); err == nil && n == 0 {
-			_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{
-				TenantID: a.TenantID, ShipmentID: id, AlertTypes: []string{AlertDeliveryHeld, AlertDeliveryOnCanceled},
-			})
-		}
-		_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{TenantID: a.TenantID, ShipmentID: id, AlertTypes: []string{AlertDeliveredNoPOD}})
-
 		out, err = s.applyStatus(ctx, q, after, a, cur, StatusChange{
 			Status: model.StatusDelivered, By: model.ActorReview, recipient: pod.RecipientName,
 			Note:        fmt.Sprintf("Delivery by %s accepted on review", pod.DriverName),
@@ -397,11 +364,6 @@ func (s *ShipmentService) DismissHeldPOD(ctx context.Context, a Actor, id, podID
 			Details: map[string]any{"pod_id": podID.String(), "driver": pod.DriverName},
 		})
 		s.audit(ctx, q, a, "pod_dismissed", "shipment", id, nil, map[string]any{"pod_id": podID.String()})
-		if n, err := q.CountHeldPODs(ctx, db.CountHeldPODsParams{ShipmentID: id, TenantID: a.TenantID}); err == nil && n == 0 {
-			_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{
-				TenantID: a.TenantID, ShipmentID: id, AlertTypes: []string{AlertDeliveryHeld, AlertDeliveryOnCanceled},
-			})
-		}
 		return nil
 	})
 	return err

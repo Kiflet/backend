@@ -55,7 +55,11 @@ What changed in each release, newest first.
   customers and drivers are sent when a load is booked, given to a driver,
   moves, changes destination or is cancelled is decided by a subscriber
   of the shipment's events, in the same transaction, instead of beside
-  each change. A test now covers the cancellation texts.
+  each change. A test now covers the cancellation texts. Then alerts:
+  those a shipment's events raise or clear (problems and delays
+  reported, deliveries, proof held or recorded away from the
+  destination, a customer's complaint, a driver's message) come from a
+  subscriber too. A new test covers the four that had none.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

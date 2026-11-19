@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -9,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/platform/events"
 )
 
 // Alert types.
@@ -100,6 +103,137 @@ type newAlert struct {
 	// alert is about, such as the ETA that passed. The check raises it once:
 	// dismissed, it does not return until the episode changes.
 	Episode string
+}
+
+// alertsFor raises and clears the alerts an event in a shipment's history
+// calls for, in the transaction of the change: it subscribes to
+// shipment.* on the bus.
+func (c *core) alertsFor(ctx context.Context, tx events.Tx, ev events.Event) error {
+	m, ok := ev.Payload.(ShipmentEventMessage)
+	if !ok {
+		return fmt.Errorf("%s carries %T, not a ShipmentEventMessage", ev.Type, ev.Payload)
+	}
+	e, sh, a := m.event, m.shipment, m.actor
+	q, after := db.New(tx.Conn), afterOf(tx)
+	clear := func(types ...string) {
+		_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{TenantID: sh.TenantID, ShipmentID: sh.ID, AlertTypes: types})
+	}
+	raise := func(driver pgtype.UUID, typ, severity, msg string) {
+		c.raise(ctx, q, after, newAlert{TenantID: sh.TenantID, ShipmentID: sh.ID, DriverID: driver, Type: typ, Severity: severity, Message: msg})
+	}
+	// Proof the office has reviewed clears the alerts about it, once none
+	// is left waiting.
+	clearHeld := func() {
+		if n, err := q.CountHeldPODs(ctx, db.CountHeldPODsParams{ShipmentID: sh.ID, TenantID: sh.TenantID}); err == nil && n == 0 {
+			clear(AlertDeliveryHeld, AlertDeliveryOnCanceled)
+		}
+	}
+	who := func(nobody string) string {
+		if a.Name == "" {
+			return nobody
+		}
+		return a.Name
+	}
+
+	switch e.Type {
+	case "status_changed":
+		switch e.To {
+		// A report replaces an open alert about an earlier problem or
+		// delay on the load, which would otherwise hide it: a breakdown,
+		// then a delay, then an accident is news three times.
+		case model.StatusIssue:
+			clear(AlertIssueReported)
+			raise(sh.DriverID, AlertIssueReported, SeverityCritical, fmt.Sprintf("%s reported a problem on %s: %s%s",
+				who("The driver"), sh.TrackingNumber, model.ReasonLabel(e.Reason), noteSuffix(e.Note)))
+		case model.StatusDelayed:
+			clear(AlertDelayReported)
+			raise(sh.DriverID, AlertDelayReported, SeverityWarning, fmt.Sprintf("%s reported a delay on %s: %s%s",
+				who("The driver"), sh.TrackingNumber, model.ReasonLabel(e.Reason), noteSuffix(e.Note)))
+		case model.StatusInTransit:
+			clear(AlertDelayReported, AlertIssueReported)
+		case model.StatusCancelled:
+			clear(resolvedByCompletion...)
+		case model.StatusDelivered:
+			clear(resolvedByCompletion...)
+			if e.by == model.ActorDriverSMS {
+				raise(sh.DriverID, AlertDeliveredNoPOD, SeverityWarning, fmt.Sprintf(
+					"%s reported %s delivered by SMS, without a signature or photos. Confirm with the customer.", who("The driver"), sh.TrackingNumber))
+			}
+			t, err := c.tenant(ctx, q, sh.TenantID)
+			if err != nil {
+				return err
+			}
+			if t.AlertOnDelivery {
+				to := ""
+				if e.recipient != "" {
+					to = " to " + e.recipient
+				}
+				raise(sh.DriverID, AlertDelivered, SeverityInfo, fmt.Sprintf("%s was delivered%s in %s.",
+					sh.TrackingNumber, to, place(sh.DestinationCity, sh.DestinationAddress)))
+			}
+		}
+
+	case "status_updated":
+		// The new alert replaces the open one, which described the old cause.
+		typ, severity, what := AlertDelayReported, SeverityWarning, "delay"
+		if e.To == model.StatusIssue {
+			typ, severity, what = AlertIssueReported, SeverityCritical, "problem"
+		}
+		clear(typ)
+		raise(sh.DriverID, typ, severity, fmt.Sprintf("%s updated the %s on %s: %s%s",
+			who("The driver"), what, sh.TrackingNumber, model.ReasonLabel(e.Reason), noteSuffix(e.Note)))
+
+	case "conflict":
+		if e.To == model.StatusIssue || e.To == model.StatusDelayed {
+			raise(sh.DriverID, AlertSyncConflict, SeverityWarning, fmt.Sprintf(
+				"%s reported %s on %s while offline, after the shipment had been changed to %s.",
+				a.Name, strings.ToLower(model.StatusLabel(e.To)), sh.TrackingNumber, model.StatusLabel(sh.Status)))
+		}
+
+	case "pod_held":
+		recipient, _ := e.Details["recipient"].(string)
+		held, _ := e.Details["reason"].(string)
+		raise(e.DriverID, AlertDeliveryHeld, SeverityCritical, fmt.Sprintf(
+			"%s recorded delivery of %s to %s at %s. %s Accept or dismiss it on the shipment page.",
+			who("A driver"), sh.TrackingNumber, recipient, e.OccurredAt.In(c.cfg.Location).Format("2 Jan 15:04"), HeldReasonLabel(held)))
+
+	case "pod_recorded":
+		if p := e.pod; p != nil {
+			switch {
+			case p.haveFix && !p.verified && sh.DestinationLat != nil:
+				msg := fmt.Sprintf("Delivery of %s was recorded %s from the destination.", sh.TrackingNumber, formatDistance(p.distance))
+				if p.reason != "" {
+					msg += " The driver's reason: " + model.ReasonLabel(p.reason) + "."
+				}
+				raise(p.driver, AlertPODLocation, SeverityWarning, msg)
+			case !p.haveFix:
+				raise(p.driver, AlertPODLocation, SeverityInfo, fmt.Sprintf(
+					"Delivery of %s was recorded without a GPS fix, so its location could not be checked.", sh.TrackingNumber))
+			}
+		}
+		if sh.Status == model.StatusDelivered {
+			// The office confirmed it first, by phone or from the driver's
+			// SMS; this is the proof it lacked.
+			clear(AlertDeliveredNoPOD)
+		}
+
+	case "pod_accepted":
+		clearHeld()
+		clear(AlertDeliveredNoPOD)
+
+	case "pod_dismissed":
+		clearHeld()
+
+	case "customer_issue":
+		raise(sh.DriverID, AlertCustomerIssue, SeverityCritical, fmt.Sprintf("%s reported a problem with %s: %s",
+			a.Name, sh.TrackingNumber, truncate(e.Note, 200)))
+
+	case "message":
+		if a.IsDriver() {
+			raise(a.UserID, AlertDriverMessage, SeverityInfo, fmt.Sprintf("%s on %s: %s", a.Name, sh.TrackingNumber, truncate(e.Note, 200)))
+		}
+	}
+	return nil
 }
 
 // raise records an alert within the caller's transaction and pushes it to
