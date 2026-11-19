@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-
 )
 
 // What the public API sends, and webhooks with it: one shape for a

@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
 )
 
 // Booking many shipments from a spreadsheet (FR-013 AC-013.1). The file is
