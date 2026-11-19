@@ -70,6 +70,38 @@ var (
 	}, []string{"channel"})
 )
 
+// RabbitMQ (docs/architecture.md, section 14): what is published, what
+// consumers make of it, and how far the event outbox lags.
+var (
+	BrokerPublished = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "kiflet_broker_published_total",
+		Help: "Messages published to RabbitMQ and confirmed, by exchange.",
+	}, []string{"exchange"})
+
+	BrokerConsumed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "kiflet_broker_consumed_total",
+		Help: "Messages taken from a RabbitMQ queue, by queue and result: ok, retry or parked.",
+	}, []string{"queue", "result"})
+
+	EventOutboxWaiting = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "kiflet_event_outbox_waiting",
+		Help: "Events written and not yet published to RabbitMQ.",
+	})
+
+	EventOutboxOldest = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "kiflet_event_outbox_oldest_seconds",
+		Help: "Age of the oldest event not yet published to RabbitMQ: the outbox's lag.",
+	})
+
+	// PositionsQueued counts GPS fixes handed to RabbitMQ for the tracking
+	// workers, and how many went to the database directly because it
+	// couldn't take them.
+	PositionsQueued = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "kiflet_positions_queued_total",
+		Help: "GPS fixes accepted from phones, by path: queue (RabbitMQ) or direct (the database, RabbitMQ being away).",
+	}, []string{"path"})
+)
+
 // VerificationBudgetUsed is how much of the day's budget of verification
 // codes has been texted. Sign-up and lookup codes go to any number, so the
 // budget is what stops a script running up the SMS bill.

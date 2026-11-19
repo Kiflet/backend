@@ -66,6 +66,17 @@ type Config struct {
 	// presigned URLs, when the app reaches it at a private address.
 	S3PublicEndpoint string
 
+	// RabbitMQURL connects to RabbitMQ (amqp://user:password@host:5672/).
+	// Empty, the app works without it: positions are written at once, live
+	// updates pass through Postgres, and no events are published.
+	RabbitMQURL string
+	// WorkerTracking and WorkerLive say where GPS fixes and live updates
+	// go: "queue" (RabbitMQ, the default with it) or "inprocess" (the
+	// database, and Postgres's NOTIFY), to switch one back
+	// (docs/migration.md, phase 2).
+	WorkerTracking string
+	WorkerLive     string
+
 	SMSProvider          string
 	SMSNumber            string
 	SMSInboundSecret     string
@@ -176,6 +187,7 @@ func Load() (*Config, error) {
 		S3UseSSL:                getBoolEnv("S3_USE_SSL", true),
 		S3ForcePathStyle:        getBoolEnv("S3_FORCE_PATH_STYLE", false),
 		S3PublicEndpoint:        strings.TrimRight(getEnv("S3_PUBLIC_ENDPOINT", ""), "/"),
+		RabbitMQURL:             getEnv("RABBITMQ_URL", ""),
 		SMSProvider:             getEnv("SMS_PROVIDER", "mock"),
 		SMSNumber:               getEnv("SMS_NUMBER", ""),
 		SMSInboundSecret:        getEnv("SMS_INBOUND_SECRET", ""),
@@ -278,6 +290,22 @@ func Load() (*Config, error) {
 			// browsers refuse the driver app its service worker, so it
 			// stops working offline.
 			return nil, fmt.Errorf("PUBLIC_URL must be an https:// address in production, not %q", c.PublicURL)
+		}
+	}
+	for _, w := range []struct {
+		name string
+		v    *string
+	}{{"WORKER_TRACKING", &c.WorkerTracking}, {"WORKER_LIVE", &c.WorkerLive}} {
+		*w.v = getEnv(w.name, "")
+		switch {
+		case *w.v == "" && c.RabbitMQURL != "":
+			*w.v = "queue"
+		case *w.v == "":
+			*w.v = "inprocess"
+		case *w.v == "queue" && c.RabbitMQURL == "":
+			return nil, fmt.Errorf("%s=queue needs RABBITMQ_URL", w.name)
+		case *w.v != "queue" && *w.v != "inprocess":
+			return nil, fmt.Errorf("%s must be queue or inprocess, not %q", w.name, *w.v)
 		}
 	}
 	if c.SupportTelegram != "" && !telegramName.MatchString(c.SupportTelegram) {

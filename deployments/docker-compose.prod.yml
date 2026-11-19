@@ -44,7 +44,8 @@ services:
     # 30 seconds to finish.
     stop_grace_period: 45s
     # More than one instance shares the work: Caddy spreads requests by
-    # client address, and live updates pass between them through Postgres.
+    # client address, and live updates pass between them through RabbitMQ
+    # or Postgres.
     deploy:
       replicas: ${APP_REPLICAS:-1}
     logging: *logging
@@ -56,6 +57,9 @@ services:
       # With the garage profile: the bucket is ready before the app starts.
       garage-setup:
         condition: service_completed_successfully
+        required: false
+      rabbitmq:
+        condition: service_healthy
         required: false
 
   # Mounts the app's volume once, before any instance does: Docker fills a
@@ -158,6 +162,31 @@ services:
       timeout: 5s
       retries: 12
 
+  # RabbitMQ (docs/architecture.md, section 6), with
+  # COMPOSE_PROFILES=rabbitmq and RABBITMQ_URL in .env: GPS fixes wait in
+  # its queue for the tracking workers, events leave the outbox through it,
+  # and live updates cross instances on it.
+  rabbitmq:
+    image: rabbitmq:4.4-management-alpine
+    profiles: [rabbitmq]
+    restart: unless-stopped
+    # RabbitMQ keeps its data under its node's name, which comes from the
+    # host name: fixed, or a new container would start empty.
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: kiflet
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
   # Makes the layout, the app's key and bucket, and their rules, then
   # exits: `kiflet setup-storage`, safe to run at every deploy.
   garage-setup:
@@ -250,6 +279,7 @@ volumes:
   postgres17-data:
   garage-meta:
   garage-data:
+  rabbitmq-data:
   wal-archive:
   caddy-data:
   caddy-config:

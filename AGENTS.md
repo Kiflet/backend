@@ -57,6 +57,10 @@ the plan, not from those.
   playing Ethio telecom, telebirr and CBE Birr for the real adapters
   (`make sandbox`, `make run-sandbox`)
 - `migrations`: goose migrations, embedded and applied on start
+- `pkg/broker`: RabbitMQ (exchanges, queues, confirms, retries). A change
+  that others react to is written to `event_outbox` with the change
+  (`core.emit`), and `internal/app/relay.go` publishes it. The app works
+  without RabbitMQ (`RABBITMQ_URL` empty), so keep that path working.
 
 ## Working on it
 
@@ -108,7 +112,8 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   reaches a phone the next time the app starts after downloading it.
 - The app may run as several instances (`APP_REPLICAS`). Keep state that
   must be shared in Postgres, not in memory: live updates already cross
-  instances through `LISTEN`/`NOTIFY` (`internal/app/live.go`), and the
+  instances through RabbitMQ's `kiflet.live` (`internal/app/queues.go`)
+  or, without it, `LISTEN`/`NOTIFY` (`internal/app/live.go`), and the
   rate limits hold because Caddy keeps a client address on one instance.
 - Live updates: an element with `data-live-region` and an `id` is fetched
   again and swapped in when a WebSocket message says something changed

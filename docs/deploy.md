@@ -229,6 +229,43 @@ The keys are the same in both, so the files are found where they were.
 The files stay in the volume, which is the way back (`STORAGE_TYPE=local`
 again); remove them once Garage has run for a month.
 
+## RabbitMQ
+
+[RabbitMQ](https://www.rabbitmq.com/) (`docs/architecture.md`, section 6)
+runs beside the app with the `rabbitmq` profile. With it:
+
+- GPS fixes from phones wait in the `tracking.ingest` queue for the
+  tracking workers instead of being written while the phone waits. A
+  phone is told its fixes are stored once RabbitMQ holds them on disk.
+- Live updates cross instances on RabbitMQ instead of Postgres's
+  `NOTIFY`.
+- Every event in a shipment's history is written to `event_outbox` with
+  the change, and published to the `kiflet.events` exchange once it
+  commits, for the consumers to come.
+
+To turn it on, in `.env`:
+
+1. `COMPOSE_PROFILES=rabbitmq` (`garage,rabbitmq` with Garage).
+2. `RABBITMQ_PASSWORD`, letters and digits only (`openssl rand -hex 24`),
+   and `RABBITMQ_URL=amqp://kiflet:<the password>@rabbitmq:5672/`.
+3. `docker compose … up -d --wait`.
+
+Each part can be switched back to the old way on its own, with
+`WORKER_TRACKING=inprocess` or `WORKER_LIVE=inprocess`. Without
+`RABBITMQ_URL` the app works as it did, and if RabbitMQ can't take a
+phone's fixes, the app writes them itself, so a phone never waits on it.
+
+A message whose handler keeps failing is tried again after a delay, and
+after its last attempt it is parked in its queue's `.dead` queue (for
+example, `tracking.ingest.dead`) and logged. With the monitoring profile,
+`kiflet_broker_consumed_total{result="parked"}` counts them, and
+`kiflet_event_outbox_oldest_seconds` shows how far the outbox lags, and
+RabbitMQ's own figures (queue depths, consumers) are scraped from it.
+
+RabbitMQ keeps its queues in the `rabbitmq-data` volume. The backups
+leave it out: what is in it is either in the database already or on its
+way there.
+
 ## Upgrading PostgreSQL
 
 The compose file runs PostgreSQL 17 (PostGIS 3.6), with its data in the

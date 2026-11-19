@@ -24,6 +24,20 @@ What changed in each release, newest first.
 
 ### Added
 
+- **RabbitMQ** (`docs/architecture.md`, section 6; `docs/deploy.md`,
+  "RabbitMQ"). Production's compose file runs it with
+  `COMPOSE_PROFILES=rabbitmq`, staging and `make db` always, and the app
+  uses it when `RABBITMQ_URL` is set. GPS fixes from phones then wait in
+  the `tracking.ingest` queue for the tracking workers rather than being
+  written while the phone waits, and are written directly if RabbitMQ
+  can't take them. Live updates cross instances on it rather than on
+  Postgres's `NOTIFY`. Every event in a shipment's history is written to
+  the event outbox with its change and published to `kiflet.events` by
+  the outbox relay (one instance leads). `WORKER_TRACKING` and
+  `WORKER_LIVE` switch each part back. A message that keeps failing is
+  parked in its queue's `.dead` queue. `pkg/broker` is the connection:
+  confirms, retries through delay queues, and metrics.
+
 - **Garage for files** (`docs/architecture.md`, section 5). Production's
   compose file runs [Garage](https://garagehq.deuxfleurs.fr/) beside the
   app with `COMPOSE_PROFILES=garage`, and `kiflet setup-storage`, run

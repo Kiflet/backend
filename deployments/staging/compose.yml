@@ -54,6 +54,8 @@ services:
       # exited, and that nothing waits for, as failed.
       garage-setup-backups:
         condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
       mailpit:
         condition: service_started
 
@@ -139,6 +141,9 @@ services:
     <<: *hardened
 
   # Production's Garage, with its profile on.
+  rabbitmq:
+    profiles: !reset []
+
   garage:
     profiles: !reset []
 

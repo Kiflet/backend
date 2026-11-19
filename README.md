@@ -184,7 +184,7 @@ scripts/             backup and restore
 You need Go 1.26+ and Docker.
 
 ```bash
-make db      # PostGIS on localhost:5434 (DB_PORT=… to change)
+make db      # PostGIS on localhost:5434 and RabbitMQ on 5673 (DB_PORT=…, RABBITMQ_PORT=… to change)
 make seed    # migrate and load a demo company
 make run     # http://localhost:8080
 ```
@@ -266,7 +266,8 @@ make test-integration   # end-to-end: signup → book → driver sync → POD �
 
 The integration tests create a scratch database on the server from `make db`
 and drop it afterwards. Without `TEST_DATABASE_URL` they start their own PostGIS
-container instead. The S3 tests start a Garage container.
+container instead. The S3 tests start a Garage container, and the RabbitMQ tests
+a RabbitMQ one.
 
 `make staging-up && make test-e2e` tests the production images and compose
 file over HTTPS, with the providers played by the sandbox, and the driver

@@ -20,6 +20,7 @@ import (
 	"github.com/kiflet/backend/internal/config"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/internal/web"
+	"github.com/kiflet/backend/pkg/broker"
 	"github.com/kiflet/backend/pkg/console"
 	"github.com/kiflet/backend/pkg/mail"
 	"github.com/kiflet/backend/pkg/payments"
@@ -43,8 +44,10 @@ type Options struct {
 type App struct {
 	Services *service.Services
 	web      *web.Server
-	live     *liveRelay
 	noJobs   bool
+	// workers are the background loops Run runs, besides the services'.
+	workers []func(context.Context)
+	broker  *broker.Broker
 }
 
 // New builds the app. It refuses stand-in providers in production unless
@@ -94,11 +97,34 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 
 	hub := websocket.NewHub(log.With().Str("component", "live").Logger())
 	go hub.Run()
-	// Updates reach the hub through Postgres, so that every instance's
-	// dashboards get them.
-	live := &liveRelay{pool: pool, hub: hub, log: log.With().Str("component", "live").Logger()}
+	a := &App{noJobs: opts.NoJobs}
+	if cfg.RabbitMQURL != "" {
+		a.broker, err = broker.Dial(context.Background(), cfg.RabbitMQURL, log.With().Str("component", "broker").Logger())
+		if err != nil {
+			return nil, err
+		}
+		a.workers = append(a.workers, (&relay{pool: pool, broker: a.broker, log: log.With().Str("component", "relay").Logger()}).Run)
+	}
+	// Updates reach the hub through RabbitMQ or Postgres, so that every
+	// instance's dashboards get them.
+	liveLog := log.With().Str("component", "live").Logger()
+	var live service.Publisher
+	if cfg.WorkerLive == "queue" {
+		bl := &brokerLive{broker: a.broker, hub: hub, log: liveLog}
+		live = bl
+		a.workers = append(a.workers, bl.Run)
+	} else {
+		pl := &liveRelay{pool: pool, hub: hub, log: liveLog}
+		live = pl
+		a.workers = append(a.workers, pl.Run)
+	}
+	var positions service.PositionQueue
+	if cfg.WorkerTracking == "queue" {
+		positions = brokerPositions{a.broker}
+	}
 	svc := service.New(service.Deps{
-		Pool: pool, Log: log, Publisher: live, Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},
+		Pool: pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
+		Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},
 		Payments: providers,
 		Settings: service.Settings{
 			AppName: cfg.AppName, BaseURL: cfg.PublicURL, Location: cfg.Timezone,
@@ -113,7 +139,13 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 	if err != nil {
 		return nil, err
 	}
-	return &App{Services: svc, web: srv, live: live, noJobs: opts.NoJobs}, nil
+	a.Services, a.web = svc, srv
+	if positions != nil {
+		a.workers = append(a.workers, func(ctx context.Context) {
+			a.broker.Consume(ctx, "tracking.ingest", trackingPrefetch, storePositions(svc.Tracking))
+		})
+	}
+	return a, nil
 }
 
 // Handler serves the dashboard, the public pages, the driver app and the
@@ -126,7 +158,7 @@ func (a *App) Handler() http.Handler { return a.web.Handler() }
 // hand. Texts and email it had taken but not started are handed back, for
 // the next start to send at once.
 func (a *App) Run(ctx context.Context) {
-	workers := []func(context.Context){a.live.Run, a.Services.SMS.Run, a.Services.Mail.Run, a.Services.Webhooks.Run}
+	workers := append([]func(context.Context){a.Services.SMS.Run, a.Services.Mail.Run, a.Services.Webhooks.Run}, a.workers...)
 	if !a.noJobs {
 		workers = append(workers, a.Services.Jobs.Run)
 	}
@@ -135,6 +167,13 @@ func (a *App) Run(ctx context.Context) {
 		wg.Go(func() { run(ctx) })
 	}
 	wg.Wait()
+}
+
+// Close lets go of what New connected to, once Run has returned.
+func (a *App) Close() {
+	if a.broker != nil {
+		a.broker.Close()
+	}
 }
 
 // paymentProviders are the mobile-money methods offered. The stand-ins are

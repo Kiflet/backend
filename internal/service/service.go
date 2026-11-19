@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -60,14 +61,27 @@ type Publisher interface {
 	BroadcastToTenant(tenantID string, message []byte)
 }
 
+// PositionQueue hands drivers' GPS fixes to the tracking workers through
+// RabbitMQ (docs/architecture.md, section 6), so a burst of phones coming
+// back into coverage waits in a queue instead of on the database.
+type PositionQueue interface {
+	Enqueue(ctx context.Context, b PositionBatch) error
+}
+
 // Deps is everything the services share.
 type Deps struct {
 	Pool      *pgxpool.Pool
 	Log       zerolog.Logger
 	Publisher Publisher
-	Storage   storage.Storage
-	SMS       SMSSender
-	Mail      MailSender
+	// Positions, when set, takes GPS fixes for the tracking workers; nil
+	// stores them at once.
+	Positions PositionQueue
+	// Outbox writes events to event_outbox for the relay to publish. Off
+	// without RabbitMQ: nothing would read them.
+	Outbox  bool
+	Storage storage.Storage
+	SMS     SMSSender
+	Mail    MailSender
 	// Payments are the mobile-money providers, in the order offered.
 	Payments []payments.Provider
 	Settings Settings
@@ -113,7 +127,8 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings}
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings,
+		positions: d.Positions, outbox: d.Outbox}
 
 	s := &Services{}
 	s.Audit = &AuditService{core: c}
@@ -156,6 +171,9 @@ type core struct {
 	mail     *MailService
 	alerts   *AlertService
 	webhooks *WebhookService
+	// positions and outbox: see Deps.
+	positions PositionQueue
+	outbox    bool
 }
 
 // tx runs fn in a transaction, committing if it returns nil. Work that must
@@ -298,4 +316,28 @@ func mustJSON(v any) []byte {
 		return nil
 	}
 	return b
+}
+
+// emit writes an event to event_outbox in the transaction of the change it
+// tells of; the relay publishes it to RabbitMQ once it commits
+// (docs/architecture.md, section 6). Without RabbitMQ it writes nothing.
+func (c *core) emit(ctx context.Context, q *db.Queries, tenantID pgtype.UUID, typ string, payload any) {
+	if !c.outbox {
+		return
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		c.log.Error().Err(err).Str("type", typ).Msg("marshal event")
+		return
+	}
+	id := pgtype.UUID{Bytes: uuid.New(), Valid: true}
+	err = q.InsertOutboxEvent(ctx, db.InsertOutboxEventParams{
+		ID: id, TenantID: tenantID, Type: typ, Version: 1, Exchange: "kiflet.events",
+		RoutingKey: typ, Payload: raw, CreatedAt: toTimestamp(c.now()),
+	})
+	if err != nil {
+		// The transaction is spoilt, so the change fails with it: no
+		// change goes in without its event.
+		c.log.Error().Err(err).Str("type", typ).Msg("write event to the outbox")
+	}
 }
