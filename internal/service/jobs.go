@@ -21,7 +21,7 @@ type Jobs struct {
 }
 
 const (
-	jobsLockKey = 7_311_042 // arbitrary, unique to this application
+	jobsLockKey = 7_311_042 // arbitrary, unique to this application; see schedulerLockKey
 
 	// pickupGrace is how long after its planned pickup a load may still be
 	// waiting before the office is told.

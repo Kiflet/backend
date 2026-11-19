@@ -8,8 +8,11 @@ import (
 )
 
 // schedulerLockKey makes one scheduler the leader when the timed jobs go
-// through RabbitMQ (WORKER_JOBS=queue).
-const schedulerLockKey = jobsLockKey + 1
+// through RabbitMQ (WORKER_JOBS=queue). The application's other advisory
+// locks: jobsLockKey, cmd/server's migrateLockKey (7_311_043) and the
+// relay's relayLock. Each must differ, or a leader holding its lock for
+// good would keep another process waiting.
+const schedulerLockKey = 7_311_044
 
 // JobNames are the timed jobs, in the order they run.
 func JobNames() []string {
