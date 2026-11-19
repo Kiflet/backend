@@ -121,7 +121,6 @@ type Querier interface {
 	CreatePOD(ctx context.Context, arg CreatePODParams) (pgtype.UUID, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreatePendingSignup(ctx context.Context, arg CreatePendingSignupParams) error
-	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateShipment(ctx context.Context, arg CreateShipmentParams) (Shipment, error)
 	CreateShipmentCharge(ctx context.Context, arg CreateShipmentChargeParams) (ShipmentCharge, error)
 	CreateShipmentDocument(ctx context.Context, arg CreateShipmentDocumentParams) (ShipmentDocument, error)
@@ -147,7 +146,6 @@ type Querier interface {
 	CreateWebhookEndpoint(ctx context.Context, arg CreateWebhookEndpointParams) (WebhookEndpoint, error)
 	DeleteDocumentsForShipments(ctx context.Context, ids []pgtype.UUID) error
 	DeleteExpiredPendingSignups(ctx context.Context, expiresAt pgtype.Timestamptz) error
-	DeleteExpiredSessions(ctx context.Context) error
 	DeleteExpiredVerificationCodes(ctx context.Context) error
 	// Texts and emails that went to the person, with their number or address.
 	DeleteMessagesToPerson(ctx context.Context, arg DeleteMessagesToPersonParams) error
@@ -200,7 +198,6 @@ type Querier interface {
 	FlagRefundDue(ctx context.Context, arg FlagRefundDueParams) error
 	// The one query not scoped by company: the key is what says which company.
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error)
-	GetActiveSessionByTokenHash(ctx context.Context, arg GetActiveSessionByTokenHashParams) (Session, error)
 	GetActiveVerificationCode(ctx context.Context, arg GetActiveVerificationCodeParams) (VerificationCode, error)
 	GetAlertRules(ctx context.Context, tenantID pgtype.UUID) (AlertRule, error)
 	GetCompanyTicket(ctx context.Context, arg GetCompanyTicketParams) (GetCompanyTicketRow, error)
@@ -237,9 +234,6 @@ type Querier interface {
 	// What the stand-in payment prompt shows: the reference is the secret.
 	GetPaymentByReference(ctx context.Context, reference string) (GetPaymentByReferenceRow, error)
 	GetPendingSignup(ctx context.Context, tokenHash string) (PendingSignup, error)
-	GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error)
-	// Everything a request needs to know about who is calling, in one lookup.
-	GetSessionPrincipal(ctx context.Context, arg GetSessionPrincipalParams) (GetSessionPrincipalRow, error)
 	GetShipmentByConfirmToken(ctx context.Context, confirmToken *string) (Shipment, error)
 	GetShipmentByID(ctx context.Context, arg GetShipmentByIDParams) (Shipment, error)
 	// Row lock for the read-modify-write of a status transition, so two
@@ -275,7 +269,6 @@ type Querier interface {
 	// taken.
 	LeaseJob(ctx context.Context, arg LeaseJobParams) (bool, error)
 	ListAPIKeys(ctx context.Context, tenantID pgtype.UUID) ([]ApiKey, error)
-	ListActiveSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]Session, error)
 	ListActiveShipmentsByDriver(ctx context.Context, arg ListActiveShipmentsByDriverParams) ([]Shipment, error)
 	ListActiveShipmentsForMap(ctx context.Context, tenantID pgtype.UUID) ([]ListActiveShipmentsForMapRow, error)
 	ListActiveVehiclesByTenant(ctx context.Context, tenantID pgtype.UUID) ([]Vehicle, error)
@@ -515,10 +508,6 @@ type Querier interface {
 	ResetUserPassword(ctx context.Context, arg ResetUserPasswordParams) error
 	ReviewPOD(ctx context.Context, arg ReviewPODParams) error
 	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (ApiKey, error)
-	RevokeAllUserSessions(ctx context.Context, userID pgtype.UUID) error
-	RevokeOtherUserSessions(ctx context.Context, arg RevokeOtherUserSessionsParams) error
-	RevokeSession(ctx context.Context, id pgtype.UUID) error
-	RevokeSessionByUser(ctx context.Context, arg RevokeSessionByUserParams) error
 	// Hours from departure to delivery for recent deliveries between two cities.
 	// ETA estimation takes the median once enough history exists.
 	RouteTransitHours(ctx context.Context, arg RouteTransitHoursParams) ([]float64, error)
@@ -527,10 +516,6 @@ type Querier interface {
 	// Writes a company's subscription as the billing service decided it. The
 	// month's text allowance only ever rises until the month ends.
 	SaveSubscription(ctx context.Context, arg SaveSubscriptionParams) error
-	// Whether a session still lets its holder in, for connections that outlive
-	// the request that opened them: not signed out or expired, the person
-	// active, and their company not suspended.
-	SessionStillValid(ctx context.Context, id pgtype.UUID) (bool, error)
 	// Which alert types a member of staff is emailed and texted.
 	SetAlertChannels(ctx context.Context, arg SetAlertChannelsParams) error
 	SetAlertEmails(ctx context.Context, arg SetAlertEmailsParams) error
@@ -581,8 +566,6 @@ type Querier interface {
 	TenantForDeletion(ctx context.Context, id pgtype.UUID) (TenantForDeletionRow, error)
 	// At most one write a minute, however busy the key.
 	TouchAPIKey(ctx context.Context, id pgtype.UUID) error
-	// Sliding expiry: a session in use is pushed out, never pulled in.
-	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdatePIN(ctx context.Context, arg UpdatePINParams) error
 	UpdatePassword(ctx context.Context, arg UpdatePasswordParams) error
 	// Edits replace every editable field; the form always submits all of them.

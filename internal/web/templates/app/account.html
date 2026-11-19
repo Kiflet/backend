@@ -54,7 +54,7 @@
       <div>
         <strong>{{if eq .ID $d.Current}}This browser{{else if eq .Kind "api"}}Driver app{{else}}Browser{{end}}</strong>
         {{$ua := .UserAgent}}{{with device $ua}}<p class="small muted" title="{{$ua}}">{{.}}</p>{{end}}
-        <p class="small muted">{{with .IpAddress}}{{.}} · {{end}}active {{ago .LastSeenAt}}</p>
+        <p class="small muted">{{with .IP}}{{.}} · {{end}}active {{ago .LastSeen}}</p>
       </div>
       {{if ne .ID $d.Current}}<form method="post" action="/app/account/sessions/{{uuid .ID}}/revoke"><button class="btn btn-sm btn-ghost" type="submit">Sign out</button></form>{{end}}
     </li>

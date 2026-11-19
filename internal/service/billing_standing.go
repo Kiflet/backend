@@ -91,8 +91,8 @@ func daysUntil(now, t time.Time) int {
 	return int((t.Sub(now) + day - 1) / day)
 }
 
-// Standing is where the caller's company is with paying.
-func (p *Principal) Standing(now time.Time) Standing {
+// StandingOf is where the caller's company is with paying.
+func StandingOf(p *Principal, now time.Time) Standing {
 	return standingOf(p.TenantPlan, p.TrialEnds, p.SubscriptionEnds, p.DebtNumber, p.DebtDue, now)
 }
 

@@ -79,7 +79,7 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 			return cur, err
 		}
 	}
-	if a.isDriver() && cur.DriverID != a.UserID {
+	if a.IsDriver() && cur.DriverID != a.UserID {
 		return cur, ErrNotAssigned
 	}
 
@@ -452,7 +452,7 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 		if err != nil {
 			return err
 		}
-		if a.isDriver() {
+		if a.IsDriver() {
 			if sh.DriverID != a.UserID {
 				return ErrNotAssigned
 			}

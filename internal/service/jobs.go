@@ -265,7 +265,7 @@ func (j *Jobs) Retention(ctx context.Context) error {
 	if err := j.q.DeleteExpiredPendingSignups(ctx, toTimestamp(now)); err != nil {
 		return err
 	}
-	if err := j.q.DeleteExpiredSessions(ctx); err != nil {
+	if err := j.sessions.DeleteExpired(ctx); err != nil {
 		return err
 	}
 	return j.q.DeleteExpiredVerificationCodes(ctx)

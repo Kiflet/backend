@@ -464,7 +464,7 @@ func (s *UserService) SetActive(ctx context.Context, p *Principal, id pgtype.UUI
 			return err
 		}
 		if !active {
-			if err := q.RevokeAllUserSessions(ctx, id); err != nil {
+			if err := s.sessions.EndAll(ctx, q.Conn(), id); err != nil {
 				return err
 			}
 			// Someone who has left needs no reminder about their licence.

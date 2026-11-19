@@ -197,7 +197,7 @@ func (s *Server) view(w http.ResponseWriter, r *http.Request, title, nav string,
 			v.Unread = n
 		}
 		if !v.Me.IsPlatformAdmin() {
-			v.Standing = v.Me.Standing(v.Now)
+			v.Standing = service.StandingOf(v.Me, v.Now)
 		} else if n, err := s.svc.Support.Waiting(r.Context()); err == nil {
 			v.Waiting = n
 		}

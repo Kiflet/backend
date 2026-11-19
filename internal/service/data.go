@@ -140,7 +140,7 @@ func (s *DataService) AnonymisePerson(ctx context.Context, p *Principal, id pgty
 		}); err != nil {
 			return err
 		}
-		if err := q.RevokeAllUserSessions(ctx, id); err != nil {
+		if err := s.sessions.EndAll(ctx, q.Conn(), id); err != nil {
 			return err
 		}
 		s.audit(ctx, q, p.Actor(SourceDashboard, ci.IP, ci.UserAgent), "user_anonymised", "user", id, nil, map[string]any{"role": u.Role})

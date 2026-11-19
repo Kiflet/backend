@@ -148,7 +148,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 		}
 		out = cur
 		driverID := cur.DriverID
-		if a.isDriver() {
+		if a.IsDriver() {
 			driverID = a.UserID
 		}
 
@@ -173,7 +173,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 			return nil // a replay from a client that doesn't identify its proofs
 		}
 
-		reassigned := a.isDriver() && cur.DriverID != a.UserID
+		reassigned := a.IsDriver() && cur.DriverID != a.UserID
 		if reassigned {
 			had, err := q.WasAssignedTo(ctx, db.WasAssignedToParams{TenantID: a.TenantID, ShipmentID: id, DriverID: a.UserID})
 			if err != nil {
