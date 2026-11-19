@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -16,7 +17,7 @@ import (
 // 160-character SMS where possible — and always name the company, since the
 // sender ID is the platform's rather than theirs.
 
-func (c *core) trackURL(sh db.Shipment) string {
+func (c *core) trackURL(sh shipments.Shipment) string {
 	return c.cfg.BaseURL + "/track/" + sh.TrackingNumber
 }
 
@@ -39,7 +40,7 @@ func place(city *string, address string) string {
 // its customers (tenants.customer_language), from the catalogue in
 // internal/platform/text.
 
-func (s *ShipmentService) customerCreatedText(t db.Tenant, sh db.Shipment) string {
+func (s *ShipmentService) customerCreatedText(t db.Tenant, sh shipments.Shipment) string {
 	return text.T(t.CustomerLanguage, "sms.created",
 		t.Name, sh.TrackingNumber, place(sh.OriginCity, sh.OriginAddress),
 		place(sh.DestinationCity, sh.DestinationAddress), s.trackURL(sh))
@@ -50,7 +51,7 @@ func (s *ShipmentService) customerCreatedText(t db.Tenant, sh db.Shipment) strin
 // told apart only when the shipment names a consignee: the receiver is the
 // one the driver hands over to, so the arrival and the link to confirm
 // receipt are theirs, and the customer is told the delivery was made.
-func (s *ShipmentService) customerStatusText(t db.Tenant, sh db.Shipment, status string, firstDeparture bool, reason, recipient string) (toReceiver, toCustomer string) {
+func (s *ShipmentService) customerStatusText(t db.Tenant, sh shipments.Shipment, status string, firstDeparture bool, reason, recipient string) (toReceiver, toCustomer string) {
 	lang := t.CustomerLanguage
 	dest := place(sh.DestinationCity, sh.DestinationAddress)
 	switch status {
@@ -99,7 +100,7 @@ func (s *ShipmentService) customerStatusText(t db.Tenant, sh db.Shipment, status
 	return "", ""
 }
 
-func (s *ShipmentService) customerCancelledText(t db.Tenant, sh db.Shipment) string {
+func (s *ShipmentService) customerCancelledText(t db.Tenant, sh shipments.Shipment) string {
 	contact := ""
 	if t.ContactPhone != nil && *t.ContactPhone != "" {
 		contact = text.T(t.CustomerLanguage, "sms.questions", *t.ContactPhone)
@@ -109,7 +110,7 @@ func (s *ShipmentService) customerCancelledText(t db.Tenant, sh db.Shipment) str
 
 // receiver is who takes delivery of a shipment: its consignee, or the
 // customer who booked it when it names none.
-func receiver(sh db.Shipment) (name, phone string) {
+func receiver(sh shipments.Shipment) (name, phone string) {
 	if sh.ConsigneePhone != nil {
 		return deref(sh.ConsigneeName), *sh.ConsigneePhone
 	}
@@ -119,7 +120,7 @@ func receiver(sh db.Shipment) (name, phone string) {
 // notifyCustomer texts the people a shipment is for: toReceiver goes to
 // whoever takes delivery, and toCustomer to the customer who booked, when
 // that is someone else. An empty text is not sent.
-func (s *ShipmentService) notifyCustomer(ctx context.Context, q *db.Queries, after *afterCommit, t db.Tenant, sh db.Shipment, toReceiver, toCustomer string) {
+func (s *ShipmentService) notifyCustomer(ctx context.Context, q *db.Queries, after *afterCommit, t db.Tenant, sh shipments.Shipment, toReceiver, toCustomer string) {
 	send := func(phone, body string) {
 		if body == "" {
 			return
@@ -137,7 +138,7 @@ func (s *ShipmentService) notifyCustomer(ctx context.Context, q *db.Queries, aft
 
 // meet is who the driver is told to meet: "Customer Name 09…", or "Deliver
 // to Name 09…" when the receiver isn't the customer.
-func meet(sh db.Shipment) string {
+func meet(sh shipments.Shipment) string {
 	name, phone := receiver(sh)
 	if sh.ConsigneePhone != nil {
 		return "Deliver to " + name + " " + phone
@@ -145,7 +146,7 @@ func meet(sh db.Shipment) string {
 	return "Customer " + name + " " + phone
 }
 
-func (s *ShipmentService) notifyDriverAssigned(ctx context.Context, q *db.Queries, after *afterCommit, t db.Tenant, sh db.Shipment, d db.User) {
+func (s *ShipmentService) notifyDriverAssigned(ctx context.Context, q *db.Queries, after *afterCommit, t db.Tenant, sh shipments.Shipment, d db.User) {
 	if d.Phone == nil {
 		return
 	}
@@ -189,7 +190,7 @@ type SMSPreview struct {
 func (s *TenantService) SMSPreviews(t db.Tenant) []SMSPreview {
 	now := s.now().In(s.cfg.Location)
 	eta := time.Date(now.Year(), now.Month(), now.Day()+1, 14, 0, 0, 0, s.cfg.Location)
-	sh := db.Shipment{TrackingNumber: "ET-" + now.Format("20060102") + "-7KQ2MZ4RXA"}
+	sh := shipments.Shipment{TrackingNumber: "ET-" + now.Format("20060102") + "-7KQ2MZ4RXA"}
 	var out []SMSPreview
 	for _, l := range text.Languages {
 		body := text.T(l.Code, "sms.on_way", t.Name, sh.TrackingNumber, "Dire Dawa", // the town as the load names it, in either language

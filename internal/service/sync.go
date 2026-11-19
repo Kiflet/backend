@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/kiflet/backend/internal/modules/fleet"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"sort"
 	"time"
 
@@ -305,7 +306,7 @@ func (s *SyncService) Sync(ctx context.Context, p *Principal, req SyncRequest, c
 	}
 
 	// Positions may only be attributed to the driver's own shipments.
-	mine, err := s.q.ListShipmentsForDriverSync(ctx, db.ListShipmentsForDriverSyncParams{DriverID: p.UserID, TenantID: p.TenantID})
+	mine, err := s.shipmentData.ForDriverSync(ctx, s.q.Conn(), shipments.SyncQuery{DriverID: p.UserID, TenantID: p.TenantID})
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +324,7 @@ func (s *SyncService) Sync(ctx context.Context, p *Principal, req SyncRequest, c
 				continue
 			}
 			checked[id] = true
-			had, err := s.q.WasAssignedTo(ctx, db.WasAssignedToParams{TenantID: p.TenantID, ShipmentID: id, DriverID: p.UserID})
+			had, err := s.shipmentData.WasAssignedTo(ctx, s.q.Conn(), shipments.AssignedQuery{TenantID: p.TenantID, ShipmentID: id, DriverID: p.UserID})
 			if err != nil {
 				return nil, err
 			}
@@ -439,7 +440,7 @@ func (s *SyncService) applyPOD(ctx context.Context, a Actor, in SyncPOD, at time
 	if sh.DriverID != a.UserID {
 		// Handed over while this driver was offline: their proof is held for
 		// review, but only if the shipment was ever theirs.
-		had, err := s.q.WasAssignedTo(ctx, db.WasAssignedToParams{TenantID: a.TenantID, ShipmentID: id, DriverID: a.UserID})
+		had, err := s.shipmentData.WasAssignedTo(ctx, s.q.Conn(), shipments.AssignedQuery{TenantID: a.TenantID, ShipmentID: id, DriverID: a.UserID})
 		if err != nil {
 			return resultFor(r, err)
 		}
@@ -498,7 +499,7 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 	if since != nil {
 		sinceTS = toTimestamp(*since)
 	}
-	ships, err := s.q.ListShipmentsForDriverSync(ctx, db.ListShipmentsForDriverSyncParams{
+	ships, err := s.shipmentData.ForDriverSync(ctx, s.q.Conn(), shipments.SyncQuery{
 		DriverID: p.UserID, TenantID: p.TenantID, Since: sinceTS,
 	})
 	if err != nil {
@@ -538,7 +539,7 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 	}
 
 	if since != nil {
-		removed, err := s.q.ListShipmentsUnassignedFromDriverSince(ctx, db.ListShipmentsUnassignedFromDriverSinceParams{
+		removed, err := s.shipmentData.UnassignedFromDriverSince(ctx, s.q.Conn(), shipments.UnassignedQuery{
 			TenantID: p.TenantID, DriverID: p.UserID, Since: sinceTS,
 		})
 		if err != nil {
@@ -553,7 +554,7 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 	if since != nil {
 		msgSince = *since
 	}
-	msgs, err := s.q.ListDriverMessagesSince(ctx, db.ListDriverMessagesSinceParams{
+	msgs, err := s.shipmentData.DriverMessagesSince(ctx, s.q.Conn(), shipments.DriverMessagesQuery{
 		TenantID: p.TenantID, DriverID: p.UserID, Since: toTimestamp(msgSince),
 	})
 	if err != nil {
@@ -640,7 +641,7 @@ func (s *SyncService) cutCursor(resp *SyncResponse, since, last time.Time) {
 	resp.More = true
 }
 
-func toDriverShipment(sh db.Shipment, plate string) DriverShipment {
+func toDriverShipment(sh shipments.Shipment, plate string) DriverShipment {
 	return DriverShipment{
 		ID:                 sh.ID.String(),
 		TrackingNumber:     sh.TrackingNumber,

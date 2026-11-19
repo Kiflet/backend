@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"slices"
 	"strings"
 	"time"
@@ -120,7 +121,7 @@ func (in *PODInput) mediaKeys() []string {
 // told so with a conflict. A replay of a proof already stored changes
 // nothing. RecordPOD owns the stored media: it is kept with the proof, or
 // deleted when the proof is refused or was a replay.
-func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID, in PODInput) (db.Shipment, error) {
+func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID, in PODInput) (shipments.Shipment, error) {
 	kept := false
 	defer func() {
 		if !kept {
@@ -128,10 +129,10 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 		}
 	}()
 	if err := in.Check(); err != nil {
-		return db.Shipment{}, err
+		return shipments.Shipment{}, err
 	}
 	if in.SignatureKey == "" {
-		return db.Shipment{}, invalid("signature", "The recipient's signature is required.")
+		return shipments.Shipment{}, invalid("signature", "The recipient's signature is required.")
 	}
 	now := s.now()
 	recorded := in.RecordedAt
@@ -139,7 +140,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 		recorded = now
 	}
 
-	var out db.Shipment
+	var out shipments.Shipment
 	var result error
 	err := s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		cur, err := s.lock(ctx, q, a.TenantID, id)
@@ -175,7 +176,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 
 		reassigned := a.IsDriver() && cur.DriverID != a.UserID
 		if reassigned {
-			had, err := q.WasAssignedTo(ctx, db.WasAssignedToParams{TenantID: a.TenantID, ShipmentID: id, DriverID: a.UserID})
+			had, err := s.shipmentData.WasAssignedTo(ctx, q.Conn(), shipments.AssignedQuery{TenantID: a.TenantID, ShipmentID: id, DriverID: a.UserID})
 			if err != nil {
 				return err
 			}
@@ -310,8 +311,8 @@ func (s *ShipmentService) ReviewPODs(ctx context.Context, tenantID, id pgtype.UU
 // AcceptHeldPOD completes a shipment with a proof of delivery that was held
 // for review, crediting the delivery to the driver who recorded it. A
 // cancelled shipment becomes delivered: the signature says it was.
-func (s *ShipmentService) AcceptHeldPOD(ctx context.Context, a Actor, id, podID pgtype.UUID) (db.Shipment, error) {
-	var out db.Shipment
+func (s *ShipmentService) AcceptHeldPOD(ctx context.Context, a Actor, id, podID pgtype.UUID) (shipments.Shipment, error) {
+	var out shipments.Shipment
 	err := s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		cur, err := s.lock(ctx, q, a.TenantID, id)
 		if err != nil {
@@ -335,7 +336,7 @@ func (s *ShipmentService) AcceptHeldPOD(ctx context.Context, a Actor, id, podID 
 
 		if cur.DriverID != pod.DriverID {
 			previous := cur.DriverID
-			if cur, err = q.SetShipmentDriver(ctx, db.SetShipmentDriverParams{DriverID: pod.DriverID, ID: id, TenantID: a.TenantID}); err != nil {
+			if cur, err = s.shipmentData.SetDriver(ctx, q.Conn(), shipments.DriverChange{DriverID: pod.DriverID, ID: id, TenantID: a.TenantID}); err != nil {
 				return err
 			}
 			// The previous driver's app drops the shipment on its next sync.

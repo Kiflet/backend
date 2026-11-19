@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/kiflet/backend/internal/modules/identity"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/modules/tenancy"
 	"strings"
 	"time"
@@ -336,10 +337,10 @@ func (s *TenantService) Usage(ctx context.Context, tenantID pgtype.UUID) (*Usage
 	if u.Staff, err = s.users.CountStaff(ctx, s.q.Conn(), tenantID); err != nil {
 		return nil, err
 	}
-	if u.ShipmentsThisMonth, err = s.q.CountShipmentsCreatedSince(ctx, db.CountShipmentsCreatedSinceParams{TenantID: tenantID, CreatedAt: toTimestamp(month)}); err != nil {
+	if u.ShipmentsThisMonth, err = s.shipmentData.CountCreatedSince(ctx, s.q.Conn(), shipments.CreatedSince{TenantID: tenantID, CreatedAt: toTimestamp(month)}); err != nil {
 		return nil, err
 	}
-	if u.DeliveredThisMonth, err = s.q.CountDeliveredSince(ctx, db.CountDeliveredSinceParams{TenantID: tenantID, ActualDelivery: toTimestamp(month)}); err != nil {
+	if u.DeliveredThisMonth, err = s.shipmentData.CountDeliveredSince(ctx, s.q.Conn(), shipments.DeliveredSince{TenantID: tenantID, ActualDelivery: toTimestamp(month)}); err != nil {
 		return nil, err
 	}
 	// A trial's allowance covers the whole trial (smsRefusal), so its

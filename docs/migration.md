@@ -258,7 +258,9 @@ throughout; only imports move.
       `http/` (still rendering templates for now).
    5. `make test test-integration`; one PR per module.
 
-   Done: audit, tenancy, identity, fleet. How it went, for the rest:
+   Done: audit, tenancy, identity, fleet; shipments in part (its tables,
+   its history and the status rules; booking, assigning, status changes,
+   documents and charges, and the driver sync still in `internal/service`). How it went, for the rest:
    - **The server-rendered handlers stay in `internal/web`.** Phase 4
      replaces those pages with Kiflet/web and phase 6 deletes them, so
      moving them would be work thrown away. A module's `http/` holds the
@@ -313,7 +315,13 @@ throughout; only imports move.
    - **Pages that gather from several modules are read models:** the
      platform's companies (`tenants.sql`), the vehicles page
      (`vehicles.sql`) and the drivers page (`drivers.sql`) stay in
-     `sqlc/queries` until reports moves; the modules own the tables.
+     `sqlc/queries` until reports moves; the modules own the tables. So
+     do the shipments lists, the map and the overdue checks
+     (`shipments.sql`), which read drivers, vehicles, positions and rules.
+   - **A module's types replace the `db` ones** when no query outside it
+     returns them: `shipments.Shipment` and `shipments.Event` are used
+     across `internal/service` and `internal/web`, and a read model that
+     embeds `db.Shipment` converts with `shipments.Shipment(row.Shipment)`.
    - **What still reaches into identity's tables**, to go through
      `identity.Users` when that code moves: joins on `users` for names
      and drivers in `alerts`, `billing`, `dashboard`, `pod`, `reports`,

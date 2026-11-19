@@ -14,6 +14,7 @@ import (
 	"github.com/kiflet/backend/internal/modules/audit"
 	"github.com/kiflet/backend/internal/modules/fleet"
 	"github.com/kiflet/backend/internal/modules/identity"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/modules/tenancy"
 	"time"
 
@@ -84,6 +85,7 @@ type Deps struct {
 	Signups   identity.Signups
 	Users     identity.Users
 	Fleet     fleet.Fleet
+	Shipments shipments.Shipments
 	Log       zerolog.Logger
 	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
@@ -146,7 +148,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments,
 		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -198,6 +200,9 @@ type core struct {
 	signups  identity.Signups
 	users    identity.Users
 	fleet    fleet.Fleet
+	// shipmentData is the shipments module; shipments is a field of
+	// some services already (the ShipmentService they call).
+	shipmentData shipments.Shipments
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	outbox        bool
@@ -306,10 +311,11 @@ func randomToken(n int) string {
 }
 
 // isNoRows reports whether a query found nothing.
-// A person who isn't there counts too (identity.ErrNoUser), while the
+// A person or shipment that isn't there counts too (identity.ErrNoUser,
+// shipments.ErrNoShipment), while the
 // code here still checks for no rows after looking one up.
 func isNoRows(err error) bool {
-	return errors.Is(err, pgx.ErrNoRows) || errors.Is(err, identity.ErrNoUser)
+	return errors.Is(err, pgx.ErrNoRows) || errors.Is(err, identity.ErrNoUser) || errors.Is(err, shipments.ErrNoShipment)
 }
 
 // isUniqueViolation reports whether err is a unique-constraint failure, and

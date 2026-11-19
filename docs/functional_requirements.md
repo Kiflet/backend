@@ -1039,7 +1039,8 @@ the requirement, what Kiflet does instead, and why.
   that is on the road, with on-road reasons (refused by the recipient,
   returned to origin, cargo lost or damaged). Otherwise a refused load would
   have no final state. Appendix B's state machine gains these transitions;
-  `model.AllowedTransitions` is the authority.
+  `AllowedTransitions` (`internal/modules/shipments/domain`) is the
+  authority.
 - **FR-014, encryption (AC-014.4)**: the driver app's local data is not
   encrypted. A web app would have to keep the key in the same origin as the
   data, which protects nothing. Android's file-based encryption covers the

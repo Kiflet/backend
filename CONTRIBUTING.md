@@ -71,7 +71,8 @@ the Go release, in CI and the Dockerfile, move by hand.
   read the request, call a service and render.
 - `internal/app` builds the app from its settings. `cmd/server` and the
   integration tests both use it, so new wiring goes there, not in `main.go`.
-- `internal/model` holds the statuses and the table of allowed transitions.
+- `internal/modules/shipments/domain` holds the statuses and the table of
+  allowed transitions.
   The driver app gets its rules from `/api/v1/driver/config`, which is
   derived from that table. Change the rules there, not in JavaScript.
 

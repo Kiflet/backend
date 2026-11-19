@@ -1,10 +1,10 @@
 package service
 
 import (
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"strings"
 	"testing"
 
-	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
 )
 
@@ -42,26 +42,26 @@ func TestParseSMSCommand(t *testing.T) {
 }
 
 func TestMatchShipment(t *testing.T) {
-	a := db.Shipment{TrackingNumber: "ET-20261028-AAAA11K3M7"}
-	b := db.Shipment{TrackingNumber: "ET-20261028-BBBB22Q9X2"}
+	a := shipments.Shipment{TrackingNumber: "ET-20261028-AAAA11K3M7"}
+	b := shipments.Shipment{TrackingNumber: "ET-20261028-BBBB22Q9X2"}
 
-	if got, _ := matchShipment([]db.Shipment{a}, ""); got == nil || got.TrackingNumber != a.TrackingNumber {
+	if got, _ := matchShipment([]shipments.Shipment{a}, ""); got == nil || got.TrackingNumber != a.TrackingNumber {
 		t.Error("a sole active shipment should be matched without a reference")
 	}
-	if got, msg := matchShipment([]db.Shipment{a, b}, ""); got != nil || msg == "" {
+	if got, msg := matchShipment([]shipments.Shipment{a, b}, ""); got != nil || msg == "" {
 		t.Error("several shipments without a reference should ask for one")
 	}
-	if got, _ := matchShipment([]db.Shipment{a, b}, "Q9X2"); got == nil || got.TrackingNumber != b.TrackingNumber {
+	if got, _ := matchShipment([]shipments.Shipment{a, b}, "Q9X2"); got == nil || got.TrackingNumber != b.TrackingNumber {
 		t.Error("suffix should select the matching shipment")
 	}
-	if got, msg := matchShipment([]db.Shipment{a, b}, "ZZZZ"); got != nil || msg == "" {
+	if got, msg := matchShipment([]shipments.Shipment{a, b}, "ZZZZ"); got != nil || msg == "" {
 		t.Error("unknown suffix should be refused")
 	}
 	if got, msg := matchShipment(nil, "Q9X2"); got != nil || msg == "" {
 		t.Error("no active shipments should be explained")
 	}
-	c := db.Shipment{TrackingNumber: "ET-20261029-CCCC33Q9X2"}
-	if got, msg := matchShipment([]db.Shipment{b, c}, "Q9X2"); got != nil || msg == "" {
+	c := shipments.Shipment{TrackingNumber: "ET-20261029-CCCC33Q9X2"}
+	if got, msg := matchShipment([]shipments.Shipment{b, c}, "Q9X2"); got != nil || msg == "" {
 		t.Error("an ambiguous suffix should ask for more characters")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/kiflet/backend/internal/modules/identity"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"net/mail"
 	"strings"
 	"time"
@@ -434,7 +435,7 @@ func (s *UserService) SetActive(ctx context.Context, p *Principal, id pgtype.UUI
 		}
 		if !active {
 			if u.Role == model.RoleDriver {
-				n, err := q.CountActiveShipmentsByDriver(ctx, db.CountActiveShipmentsByDriverParams{DriverID: id, TenantID: p.TenantID})
+				n, err := s.shipmentData.CountActiveForDriver(ctx, q.Conn(), shipments.DriverCount{DriverID: id, TenantID: p.TenantID})
 				if err != nil {
 					return err
 				}
@@ -491,7 +492,7 @@ type DriverDetail struct {
 	Vehicle     *db.Vehicle
 	Counts      db.GetDriverDeliveryCountsRow
 	Performance db.GetDriverPerformanceRow
-	Recent      []db.Shipment
+	Recent      []shipments.Shipment
 	Location    *db.GetLatestDriverLocationRow
 	Device      *db.SyncMetadatum
 }
@@ -520,7 +521,7 @@ func (s *UserService) Driver(ctx context.Context, tenantID, id pgtype.UUID) (*Dr
 	}); err != nil {
 		return nil, err
 	}
-	if d.Recent, err = s.q.ListRecentShipmentsByDriver(ctx, db.ListRecentShipmentsByDriverParams{DriverID: id, TenantID: tenantID, Limit: 20}); err != nil {
+	if d.Recent, err = s.shipmentData.RecentForDriver(ctx, s.q.Conn(), shipments.DriverRecent{DriverID: id, TenantID: tenantID, Limit: 20}); err != nil {
 		return nil, err
 	}
 	if loc, err := s.q.GetLatestDriverLocation(ctx, db.GetLatestDriverLocationParams{TenantID: tenantID, DriverID: id}); err == nil {

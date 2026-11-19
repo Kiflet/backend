@@ -37,6 +37,11 @@ What changed in each release, newest first.
   form's rules and the paper states are in its `domain`, with unit tests.
   The vehicles and drivers pages, which gather from several modules, stay
   as read models until reports moves.
+- **The shipments module, its tables and rules**: `internal/modules/shipments`
+  owns `shipments` and their history (`shipment_events`). The statuses,
+  who may move a shipment between them, and the reasons given are in its
+  `domain`. Booking, assigning and status changes follow; the lists, the
+  map and the overdue checks stay as read models.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

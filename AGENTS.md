@@ -62,11 +62,14 @@ the plan, not from those.
   platform packages, `pkg/`, its own packages and other modules' root
   packages, never `internal/service`, `db` or `model`. Errors a person
   can act on are `internal/platform/apperror`'s (`service.Error` is the
-  same type). Moved so far: audit, tenancy, identity, fleet.
+  same type). Moved so far: audit, tenancy, identity, fleet, and
+  shipments' tables and rules (booking, assigning and status changes
+  still in `internal/service`).
 - `internal/service`: the business rules not yet in a module. Handlers
   stay thin.
-- `internal/model`: statuses and the transition table, reasons, roles, plans
-  and prices
+- `internal/model`: plans and prices, and aliases of what moved to the
+  modules' `domain` packages (statuses, transitions and reasons to
+  `shipments/domain`, roles to `identity/domain`)
 - `internal/platform`: packages without business rules: `config`, `geo`,
   `phone`, `database`, `apperror`, and `text`, the words customers read, in English
   (`en.go`) and Amharic (`am.go`)
@@ -122,7 +125,8 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   `webhookTypes` in `internal/service/webhooks.go`. Their payload is the
   API's `ShipmentJSON` and `EventJSON` (`internal/service/api_json.go`).
 - The driver app's status rules come from `/api/v1/driver/config`, which is
-  derived from `model.AllowedTransitions`. Change the rules there, not in JS.
+  derived from `AllowedTransitions` in `internal/modules/shipments/domain`.
+  Change the rules there, not in JS.
 - The driver app is ES modules with no build step. `app.js` starts it;
   what several modules change lives in `S` (`state.js`), since a module
   can't assign to another's variables. A new module needs a

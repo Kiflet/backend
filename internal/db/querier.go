@@ -71,12 +71,10 @@ type Querier interface {
 	// As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
 	ClaimWebhooksByIDs(ctx context.Context, ids []pgtype.UUID) ([]WebhookDelivery, error)
 	CountActiveAPIKeys(ctx context.Context, tenantID pgtype.UUID) (int64, error)
-	CountActiveShipmentsByDriver(ctx context.Context, arg CountActiveShipmentsByDriverParams) (int64, error)
 	CountAlerts(ctx context.Context, arg CountAlertsParams) (int64, error)
 	// Verification codes queued or sent across the platform, for the daily
 	// budget.
 	CountCodesTextedSince(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
-	CountDeliveredSince(ctx context.Context, arg CountDeliveredSinceParams) (int64, error)
 	CountHeldPODs(ctx context.Context, arg CountHeldPODsParams) (int64, error)
 	CountOpenRenewals(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	CountSMSByTenant(ctx context.Context, tenantID pgtype.UUID) (int64, error)
@@ -89,8 +87,6 @@ type Querier interface {
 	CountShipmentCharges(ctx context.Context, arg CountShipmentChargesParams) (int64, error)
 	CountShipmentDocuments(ctx context.Context, arg CountShipmentDocumentsParams) (int64, error)
 	CountShipments(ctx context.Context, arg CountShipmentsParams) (int64, error)
-	CountShipmentsByStatus(ctx context.Context, tenantID pgtype.UUID) ([]CountShipmentsByStatusRow, error)
-	CountShipmentsCreatedSince(ctx context.Context, arg CountShipmentsCreatedSinceParams) (int64, error)
 	// A company's texts queued or sent since a time, in SMS parts, for its
 	// limits.
 	CountTenantSMSSegmentsSince(ctx context.Context, arg CountTenantSMSSegmentsSinceParams) (int64, error)
@@ -109,10 +105,8 @@ type Querier interface {
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreatePOD(ctx context.Context, arg CreatePODParams) (pgtype.UUID, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
-	CreateShipment(ctx context.Context, arg CreateShipmentParams) (Shipment, error)
 	CreateShipmentCharge(ctx context.Context, arg CreateShipmentChargeParams) (ShipmentCharge, error)
 	CreateShipmentDocument(ctx context.Context, arg CreateShipmentDocumentParams) (ShipmentDocument, error)
-	CreateShipmentEvent(ctx context.Context, arg CreateShipmentEventParams) (ShipmentEvent, error)
 	// The people running Kiflet: every company's audit log, support tickets
 	// and the background jobs (FR-042 AC-042.7, FR-049).
 	CreateSupportTicket(ctx context.Context, arg CreateSupportTicketParams) (SupportTicket, error)
@@ -208,17 +202,7 @@ type Querier interface {
 	GetPayment(ctx context.Context, arg GetPaymentParams) (GetPaymentRow, error)
 	// What the stand-in payment prompt shows: the reference is the secret.
 	GetPaymentByReference(ctx context.Context, reference string) (GetPaymentByReferenceRow, error)
-	GetShipmentByConfirmToken(ctx context.Context, confirmToken *string) (Shipment, error)
-	GetShipmentByID(ctx context.Context, arg GetShipmentByIDParams) (Shipment, error)
-	// Row lock for the read-modify-write of a status transition, so two
-	// concurrent updates (a driver's sync and a dispatcher's click) serialise
-	// instead of both validating against the same stale status.
-	GetShipmentByIDForUpdate(ctx context.Context, arg GetShipmentByIDForUpdateParams) (Shipment, error)
-	GetShipmentByTrackingNumber(ctx context.Context, trackingNumber string) (Shipment, error)
 	GetShipmentDocument(ctx context.Context, arg GetShipmentDocumentParams) (ShipmentDocument, error)
-	// What an offline device's change was recorded as, if it was: a device
-	// sends a batch again when the answer to it was lost.
-	GetShipmentEventByClientID(ctx context.Context, arg GetShipmentEventByClientIDParams) (string, error)
 	GetSyncMetadata(ctx context.Context, driverID pgtype.UUID) (SyncMetadatum, error)
 	// Subscriptions, invoices and payments (FR-043 to FR-045).
 	GetTenantForUpdate(ctx context.Context, id pgtype.UUID) (Tenant, error)
@@ -238,7 +222,6 @@ type Querier interface {
 	// taken.
 	LeaseJob(ctx context.Context, arg LeaseJobParams) (bool, error)
 	ListAPIKeys(ctx context.Context, tenantID pgtype.UUID) ([]ApiKey, error)
-	ListActiveShipmentsByDriver(ctx context.Context, arg ListActiveShipmentsByDriverParams) ([]Shipment, error)
 	ListActiveShipmentsForMap(ctx context.Context, tenantID pgtype.UUID) ([]ListActiveShipmentsForMapRow, error)
 	// Office staff who asked to have alerts of this type emailed to them, at a
 	// confirmed address.
@@ -256,9 +239,6 @@ type Querier interface {
 	// Messages to every driver on the road that reached this driver. The LIMIT
 	// is maxDriverBroadcasts in the sync service.
 	ListDriverBroadcastsSince(ctx context.Context, arg ListDriverBroadcastsSinceParams) ([]ListDriverBroadcastsSinceRow, error)
-	// Notes and messages a dispatcher addressed to this driver: not the
-	// driver's own. The LIMIT is maxDriverMessages in the sync service.
-	ListDriverMessagesSince(ctx context.Context, arg ListDriverMessagesSinceParams) ([]ListDriverMessagesSinceRow, error)
 	// Active drivers with a shipment assigned or under way: who a message to
 	// "every driver on the road" reaches.
 	ListDriversOnTheRoad(ctx context.Context, tenantID pgtype.UUID) ([]ListDriversOnTheRoadRow, error)
@@ -297,13 +277,11 @@ type Querier interface {
 	// yet alerted for that pickup time, oldest first.
 	ListPickupOverdue(ctx context.Context, dueBefore pgtype.Timestamptz) ([]ListPickupOverdueRow, error)
 	ListPlatformAdmins(ctx context.Context) ([]ListPlatformAdminsRow, error)
-	ListPublicShipmentEvents(ctx context.Context, shipmentID pgtype.UUID) ([]ListPublicShipmentEventsRow, error)
 	ListRecentPayments(ctx context.Context, limit int32) ([]ListRecentPaymentsRow, error)
 	// Who signed for each receiver's deliveries in the last year, newest first,
 	// so the driver app can suggest the name (AC-020.4). The receiver is the
 	// consignee, or the customer when the shipment names none.
 	ListRecentRecipients(ctx context.Context, arg ListRecentRecipientsParams) ([]ListRecentRecipientsRow, error)
-	ListRecentShipmentsByDriver(ctx context.Context, arg ListRecentShipmentsByDriverParams) ([]Shipment, error)
 	ListRecentShipmentsByVehicle(ctx context.Context, arg ListRecentShipmentsByVehicleParams) ([]ListRecentShipmentsByVehicleRow, error)
 	ListRefundsDue(ctx context.Context) ([]ListRefundsDueRow, error)
 	// Proofs of delivery held for the office to review, and those it dismissed.
@@ -320,31 +298,26 @@ type Querier interface {
 	ListShipmentCharges(ctx context.Context, arg ListShipmentChargesParams) ([]ShipmentCharge, error)
 	// A shipment's documents and charges. Every query names the tenant.
 	ListShipmentDocuments(ctx context.Context, arg ListShipmentDocumentsParams) ([]ShipmentDocument, error)
-	ListShipmentEvents(ctx context.Context, arg ListShipmentEventsParams) ([]ShipmentEvent, error)
 	// A truck carries several shipments at once and its pings are attributed to
 	// only one of them, so a shipment's route is the driver's track over the time
 	// the shipment was on board, plus anything explicitly tagged to it.
 	// The newest max_points positions, oldest first, so a long trip still ends
 	// where the truck is now.
 	ListShipmentRoute(ctx context.Context, arg ListShipmentRouteParams) ([]ListShipmentRouteRow, error)
+	// Shipments with what other modules know of them (who drives, which
+	// vehicle, positions, alert rules, proofs): read models for the lists,
+	// the map and the timed checks, which move to reports. The shipments
+	// table is the shipments module's (internal/modules/shipments).
 	// Every filter is optional: an empty status list or a NULL argument means "no
 	// constraint". Sorting goes through a whitelist of keys rather than
 	// interpolated SQL.
 	ListShipments(ctx context.Context, arg ListShipmentsParams) ([]ListShipmentsRow, error)
 	// A person's shipments: the ones they booked and the ones they receive.
 	ListShipmentsByCustomerPhone(ctx context.Context, phone string) ([]ListShipmentsByCustomerPhoneRow, error)
-	// Everything the driver's device should hold: active work, plus recently
-	// finished work so the completed list survives a reinstall. On an incremental
-	// sync anything changed since the cursor is included as well, so a
-	// cancellation or a dispatcher edit reaches the device.
-	ListShipmentsForDriverSync(ctx context.Context, arg ListShipmentsForDriverSyncParams) ([]Shipment, error)
 	// Shipments that finished before the keeping period ended and still hold
 	// customer and delivery details (AC-041.2, AC-041.3). Across companies: the
 	// retention job runs for all of them.
 	ListShipmentsToAnonymise(ctx context.Context, arg ListShipmentsToAnonymiseParams) ([]pgtype.UUID, error)
-	// Shipments taken away from a driver since their last sync and not handed
-	// back. Their device should stop showing them.
-	ListShipmentsUnassignedFromDriverSince(ctx context.Context, arg ListShipmentsUnassignedFromDriverSinceParams) ([]pgtype.UUID, error)
 	// Drivers carrying a shipment who have not been heard from since the cutoff.
 	// Last contact is the later of the last app sync and the shipment's last
 	// status change, so a driver reporting by SMS counts as in touch and one who
@@ -353,7 +326,6 @@ type Querier interface {
 	ListStaleActiveDrivers(ctx context.Context) ([]ListStaleActiveDriversRow, error)
 	// Every company's tickets for the platform: waiting for an answer first.
 	ListSupportInbox(ctx context.Context, status *string) ([]ListSupportInboxRow, error)
-	ListTenantActivity(ctx context.Context, arg ListTenantActivityParams) ([]ListTenantActivityRow, error)
 	ListTenantDocumentKeys(ctx context.Context, tenantID pgtype.UUID) ([]string, error)
 	ListTenantPODMedia(ctx context.Context, tenantID pgtype.UUID) ([]ListTenantPODMediaRow, error)
 	// Companies with a finished month whose texts are not yet settled.
@@ -467,9 +439,6 @@ type Querier interface {
 	ResendWebhook(ctx context.Context, arg ResendWebhookParams) (WebhookDelivery, error)
 	ReviewPOD(ctx context.Context, arg ReviewPODParams) error
 	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (ApiKey, error)
-	// Hours from departure to delivery for recent deliveries between two cities.
-	// ETA estimation takes the median once enough history exists.
-	RouteTransitHours(ctx context.Context, arg RouteTransitHoursParams) ([]float64, error)
 	// Saving under an existing name replaces that view.
 	SaveFilter(ctx context.Context, arg SaveFilterParams) (SavedFilter, error)
 	// Writes a company's subscription as the billing service decided it. The
@@ -478,9 +447,6 @@ type Querier interface {
 	// Which alert types a member of staff is emailed and texted.
 	SetAlertChannels(ctx context.Context, arg SetAlertChannelsParams) error
 	SetAlertEmails(ctx context.Context, arg SetAlertEmailsParams) error
-	SetCustomerConfirmation(ctx context.Context, arg SetCustomerConfirmationParams) (Shipment, error)
-	// A problem report: the customer has answered but not confirmed receipt.
-	SetCustomerFeedback(ctx context.Context, arg SetCustomerFeedbackParams) (Shipment, error)
 	// Keeps the driver's newest position for the fleet map. An older fix,
 	// from a phone sending what it saved while offline, changes nothing.
 	SetDriverPosition(ctx context.Context, arg SetDriverPositionParams) error
@@ -491,24 +457,6 @@ type Querier interface {
 	SetPaymentProviderRef(ctx context.Context, arg SetPaymentProviderRefParams) error
 	// The month is settled: the next one starts with the current allowance.
 	SetSMSBilledMonth(ctx context.Context, arg SetSMSBilledMonthParams) error
-	SetShipmentAssignment(ctx context.Context, arg SetShipmentAssignmentParams) (Shipment, error)
-	SetShipmentConfirmToken(ctx context.Context, arg SetShipmentConfirmTokenParams) error
-	// Credits a delivery to the driver who made it, when the office accepts a
-	// proof recorded after the shipment was handed to someone else.
-	SetShipmentDriver(ctx context.Context, arg SetShipmentDriverParams) (Shipment, error)
-	// Recalculated estimates never overwrite one a dispatcher entered by hand.
-	SetShipmentETA(ctx context.Context, arg SetShipmentETAParams) error
-	// actual_delivery is stamped the first time a shipment is delivered and kept
-	// thereafter; picked_up_at likewise records the first departure. Both use the
-	// time the change happened, which for an offline driver is earlier than now.
-	// A delivery accepted on review is stamped with when the proof was recorded
-	// (delivered_at), not when the office accepted it. A shipment delivered
-	// without being marked departed (a proof of delivery straight from
-	// assigned) left then too, as far as anyone knows.
-	SetShipmentStatus(ctx context.Context, arg SetShipmentStatusParams) (Shipment, error)
-	// A new cause for the status a shipment is already in, such as a second
-	// delay. When the status was entered is unchanged.
-	SetShipmentStatusDetail(ctx context.Context, arg SetShipmentStatusDetailParams) (Shipment, error)
 	SetSupportTicketStatus(ctx context.Context, arg SetSupportTicketStatusParams) error
 	SetTrialEnd(ctx context.Context, arg SetTrialEndParams) error
 	SetWebhookEndpointActive(ctx context.Context, arg SetWebhookEndpointActiveParams) (WebhookEndpoint, error)
@@ -517,8 +465,6 @@ type Querier interface {
 	TenantForDeletion(ctx context.Context, id pgtype.UUID) (TenantForDeletionRow, error)
 	// At most one write a minute, however busy the key.
 	TouchAPIKey(ctx context.Context, id pgtype.UUID) error
-	// Edits replace every editable field; the form always submits all of them.
-	UpdateShipmentDetails(ctx context.Context, arg UpdateShipmentDetailsParams) (Shipment, error)
 	UpdateWebhookEndpoint(ctx context.Context, arg UpdateWebhookEndpointParams) (WebhookEndpoint, error)
 	UpsertAlertRules(ctx context.Context, arg UpsertAlertRulesParams) error
 	UpsertSyncMetadata(ctx context.Context, arg UpsertSyncMetadataParams) error
@@ -530,9 +476,6 @@ type Querier interface {
 	VoidOpenPlanInvoices(ctx context.Context, tenantID pgtype.UUID) error
 	// Invoices outlive a deleted company; those still open are cancelled.
 	VoidTenantInvoices(ctx context.Context, tenantID pgtype.UUID) ([]string, error)
-	// Whether a driver ever had the shipment, for a proof of delivery sent after
-	// it was handed to someone else.
-	WasAssignedTo(ctx context.Context, arg WasAssignedToParams) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

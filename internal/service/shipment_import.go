@@ -6,13 +6,12 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"io"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/kiflet/backend/internal/db"
 )
 
 // Booking many shipments from a spreadsheet (FR-013 AC-013.1). The file is
@@ -278,11 +277,11 @@ func upperFirst(s string) string {
 // order. A file with a bad row books nothing. If a booking is refused all
 // the same (the account turned read-only meanwhile, say), it stops there
 // and returns what was booked before it with the error.
-func (s *ShipmentService) BookImport(ctx context.Context, a Actor, im *Import) ([]db.Shipment, error) {
+func (s *ShipmentService) BookImport(ctx context.Context, a Actor, im *Import) ([]shipments.Shipment, error) {
 	if im.Bad > 0 {
 		return nil, invalid("file", "Correct the rows marked below, then choose the file again.")
 	}
-	booked := make([]db.Shipment, 0, len(im.Rows))
+	booked := make([]shipments.Shipment, 0, len(im.Rows))
 	for _, row := range im.Rows {
 		sh, err := s.Create(ctx, a, row.Input)
 		if err != nil {
