@@ -266,7 +266,7 @@ make test-integration   # end-to-end: signup → book → driver sync → POD �
 
 The integration tests create a scratch database on the server from `make db`
 and drop it afterwards. Without `TEST_DATABASE_URL` they start their own PostGIS
-container instead. The S3 tests start a SeaweedFS container.
+container instead. The S3 tests start a Garage container.
 
 `make staging-up && make test-e2e` tests the production images and compose
 file over HTTPS, with the providers played by the sandbox, and the driver

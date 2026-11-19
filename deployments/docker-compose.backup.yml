@@ -30,3 +30,33 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+  # Reads and writes the app's own bucket (Garage, or any S3 store), for the
+  # objects archive: scripts/backup.sh and restore.sh pass the app's S3_*
+  # settings as STORE_*, and the stack's network, where the store is.
+  objects:
+    image: rclone/rclone:1.76.0
+    environment:
+      RCLONE_CONFIG: ""
+      RCLONE_CONFIG_STORE_TYPE: s3
+      RCLONE_CONFIG_STORE_PROVIDER: Other
+      RCLONE_CONFIG_STORE_ENDPOINT: ${STORE_S3_ENDPOINT:-}
+      RCLONE_CONFIG_STORE_REGION: ${STORE_S3_REGION:-}
+      RCLONE_CONFIG_STORE_ACCESS_KEY_ID: ${STORE_S3_ACCESS_KEY:-}
+      RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY: ${STORE_S3_SECRET_KEY:-}
+      RCLONE_CONFIG_STORE_FORCE_PATH_STYLE: "true"
+      RCLONE_CONFIG_STORE_NO_CHECK_BUCKET: "true"
+    networks: [stack]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  stack:
+    name: ${STACK_NETWORK:-kiflet_default}
+    external: true

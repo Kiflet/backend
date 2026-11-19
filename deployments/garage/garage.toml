@@ -1,0 +1,30 @@
+# Garage, the store for signatures, photos and documents
+# (docs/architecture.md, section 5), as one node: the single machine of
+# docker-compose.prod.yml, staging, and the integration tests. The secrets
+# come from the environment (GARAGE_RPC_SECRET, GARAGE_ADMIN_TOKEN), never
+# from this file. The three-node layout of section 13 has a file of its own
+# per VM.
+#
+# One copy of each file: on one machine, three copies would share the disk
+# they could be lost with. The copy off the machine is the backup
+# (docs/deploy.md).
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+# SQLite rather than LMDB, which can be damaged by an unclean shutdown.
+db_engine = "sqlite"
+# A snapshot of the metadata every six hours, beside it: what a damaged
+# metadata database is restored from.
+metadata_auto_snapshot_interval = "6h"
+replication_factor = 1
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+# S3_REGION must be the same, or every request is refused.
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+# /health, /metrics (with GARAGE_METRICS_TOKEN) and the admin API (with
+# GARAGE_ADMIN_TOKEN), on the private network only.
+api_bind_addr = "[::]:3903"

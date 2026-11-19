@@ -48,9 +48,10 @@ db="$BACKUP_DIR/kiflet_${stamp}.dump.age"
 files="$BACKUP_DIR/kiflet_${stamp}_files.tar.gz.age"
 settings="$BACKUP_DIR/kiflet_${stamp}_settings.tar.gz.age"
 base="$BACKUP_DIR/kiflet_${stamp}_base.tar.gz.age"
+objects="$BACKUP_DIR/kiflet_${stamp}_objects.tar.gz.age"
 
 offsite copy --include "${db##*/}" --include "${files##*/}" --include "${settings##*/}" \
-  --include "${base##*/}" "offsite:$bucket" /backups
+  --include "${base##*/}" --include "${objects##*/}" "offsite:$bucket" /backups
 for f in "$db" "$files" "$settings"; do
   [ -f "$f" ] || { echo "$bucket has no $(basename "$f")." >&2; exit 1; }
 done
@@ -64,9 +65,10 @@ fi
 echo "Database: $db"
 echo "Files:    $files"
 echo "Settings: $settings"
+if [ -f "$objects" ]; then chmod 600 "$objects"; echo "Objects:  $objects"; fi
 if [ -f "$base" ]; then
   echo "Base:     $base"
   echo "WAL:      $BACKUP_DIR/wal"
   echo "Or to a moment since: AGE_IDENTITY=<private key file> BACKUP_DIR=$BACKUP_DIR scripts/restore-pitr.sh $base '<time>'"
 fi
-echo "Restore with: AGE_IDENTITY=<private key file> scripts/restore.sh $db $files"
+echo "Restore with: AGE_IDENTITY=<private key file> scripts/restore.sh $db $files$([ -f "$objects" ] && echo " $objects")"

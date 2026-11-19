@@ -5,6 +5,7 @@
 //	server migrate              apply database migrations and exit
 //	server seed                 load demo data into an empty database
 //	server sms-in <phone> <text>  text the running server, as a phone would
+//	server setup-storage        make Garage ready for the app, and exit
 package main
 
 import (
@@ -33,6 +34,18 @@ func main() {
 	if len(os.Args) > 1 {
 		cmd = os.Args[1]
 	}
+	if cmd == "setup-storage" {
+		// Before the app's settings: it needs none of them.
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		log := zerolog.New(os.Stdout).With().Timestamp().Str("component", "setup-storage").Logger()
+		if err := setupStorage(ctx, log); err != nil {
+			log.Error().Err(err).Msg("exiting")
+			stop()
+			os.Exit(1) //nolint:gocritic // stop ran above
+		}
+		return
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "configuration:", err)
@@ -57,10 +70,10 @@ func main() {
 	case "sms-in":
 		err = smsIn(ctx, cfg, os.Args[2:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: server [serve | migrate | seed | sms-in <phone> <text>]")
+		fmt.Println("usage: server [serve | migrate | seed | sms-in <phone> <text> | setup-storage]")
 		return
 	default:
-		err = fmt.Errorf("unknown command %q (want serve, migrate, seed or sms-in)", cmd)
+		err = fmt.Errorf("unknown command %q (want serve, migrate, seed, sms-in or setup-storage)", cmd)
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("exiting")

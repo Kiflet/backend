@@ -31,6 +31,9 @@ type Config struct {
 	S3AccessKey string
 	S3SecretKey string
 	S3UseSSL    bool
+	// S3ForcePathStyle and S3PublicEndpoint: see S3Config.
+	S3ForcePathStyle bool
+	S3PublicEndpoint string
 }
 
 func New(cfg *Config) (Storage, error) {
@@ -38,7 +41,11 @@ func New(cfg *Config) (Storage, error) {
 	case "local", "":
 		return NewLocalStorage(cfg.LocalPath)
 	case "s3":
-		return NewS3Storage(cfg.S3Bucket, cfg.S3Region, cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3UseSSL)
+		return NewS3Storage(S3Config{
+			Bucket: cfg.S3Bucket, Region: cfg.S3Region, Endpoint: cfg.S3Endpoint,
+			AccessKey: cfg.S3AccessKey, Secret: cfg.S3SecretKey, UseSSL: cfg.S3UseSSL,
+			ForcePathStyle: cfg.S3ForcePathStyle, PublicEndpoint: cfg.S3PublicEndpoint,
+		})
 	default:
 		return nil, ErrInvalidConfig
 	}

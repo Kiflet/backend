@@ -337,13 +337,16 @@ Roll back: each module is one PR; revert it.
        again. The health check uses Garage's binary (the image has no
        shell).
     3. Caddy: `files.kiflet.et` (staging: `files.kiflet.localhost`) to
-       Garage's S3 port only.
+       Garage's S3 port only, with phase 5's presigned uploads, the first
+       to need the store reachable from outside: until then the app
+       carries every file itself.
     4. Tests: `tests/integration/storage_test.go` starts Garage instead of
        SeaweedFS, and adds presigned PUT and GET, CORS and a lifecycle
        rule; staging's end-to-end delivery test then runs against it.
-    5. The nightly encrypted copy of new files to the off-site bucket
-       (`scripts/backup.sh` with rclone, as for the database), and a
-       restore of one file in `tests/e2e`'s restore test.
+    5. The bucket in the nightly encrypted backup to the off-site bucket
+       (`scripts/backup.sh` with rclone, as for the database: the
+       `_objects` archive), restored by `scripts/restore.sh`, in
+       `tests/e2e`'s restore test.
     6. Production: copy the files already stored (the `app-data` volume,
        or the S3 bucket if `STORAGE_TYPE=s3`) into Garage with
        `rclone copy --checksum`, switch the settings, keep the old copy a

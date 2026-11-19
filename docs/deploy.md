@@ -15,8 +15,9 @@ settings or key files are missing, and says which. The database password is
 passed to the app on its own, not in a URL, so it may contain any character.
 Provider keys, such as telebirr's key files, go in `deployments/secrets/`,
 which the app sees at `/run/secrets` (see the README there). Signatures and
-photos go to the `app-data` volume, or to S3 or another S3-compatible store
-with `STORAGE_TYPE=s3`.
+photos go to the `app-data` volume, or to Garage beside the app (below,
+"Files in Garage"), or to another S3-compatible store with
+`STORAGE_TYPE=s3`.
 
 Each container has a read-only root filesystem where it can, no Linux
 capabilities beyond what it needs and no privilege escalation, and its logs
@@ -81,8 +82,10 @@ MAILTO=you@example.et
 
 It exits with an error when any step fails, the copy off the machine
 included. Cron emails `MAILTO` only what a job prints, so the line above
-prints the end of the log when it fails. Photos kept in S3 aren't
-included: use the store's versioning or replication.
+prints the end of the log when it fails. With `STORAGE_TYPE=s3` the
+app's bucket is backed up too, every object of it, as a fourth archive
+(`kiflet_<time>_objects.tar.gz`): Garage keeps no versions, so this is
+the only copy of a file deleted by mistake.
 
 ### Off the machine, encrypted
 
@@ -194,6 +197,38 @@ encrypted backup copied to a bucket, the copies on the machine lost, and
 the backup fetched and restored, and a restore to a moment between two
 sign-ups from a base backup and WAL fetched from the bucket.
 
+## Files in Garage
+
+[Garage](https://garagehq.deuxfleurs.fr/) is the store for signatures,
+photos and documents (`docs/architecture.md`, section 5). It runs beside
+the app as one node, with the `garage` profile:
+
+1. In `.env`, the block under "Files" in `.env.example`:
+   `COMPOSE_PROFILES=garage`, two secrets for Garage, and the app's `S3_*`
+   settings with a key in Garage's format (`GK` and 24 hexadecimal
+   characters; a secret of 64).
+2. `docker compose … up -d --wait`. Garage starts, then `garage-setup`
+   (`kiflet setup-storage`) makes its layout, imports the app's key, makes
+   the bucket, allows `PUBLIC_URL` to use presigned URLs, and has
+   unfinished uploads cleaned up after a day. It runs at every deploy and
+   changes only what is missing; the app starts once it has finished.
+
+Garage keeps one copy of each file on this machine, and no older versions:
+the backups (above) hold the bucket, and take it off the machine. Its
+admin API, on port 3903, is reachable only from the compose network; with
+the monitoring profile, Prometheus reads its figures there with
+`METRICS_TOKEN`.
+
+A machine that kept its files in the `app-data` volume moves them across
+before the app is switched, with the app stopped so nothing is written
+meanwhile: stop the app, start `garage` and `garage-setup` with the new
+`.env`, copy the volume's `uploads` folder into the bucket with rclone
+(`rclone copy --checksum`, from a container on the stack's network with
+the volume mounted read-only and the app's keys), then start everything.
+The keys are the same in both, so the files are found where they were.
+The files stay in the volume, which is the way back (`STORAGE_TYPE=local`
+again); remove them once Garage has run for a month.
+
 ## Upgrading PostgreSQL
 
 The compose file runs PostgreSQL 17 (PostGIS 3.6), with its data in the
@@ -227,8 +262,9 @@ for a week.
 Production's compose file and images, with `deployments/staging/compose.yml`
 standing in for the outside world: the provider sandbox for Ethio telecom,
 telebirr and CBE Birr (the app runs its real adapters, and the sandbox calls
-back over HTTPS through Caddy), Mailpit for SMTP, SeaweedFS for S3, and
-Caddy's own certificate authority. Prometheus and Grafana are on.
+back over HTTPS through Caddy), Mailpit for SMTP, and Caddy's own
+certificate authority. Garage is production's, with a second bucket that
+stands in for the backups' provider. Prometheus and Grafana are on.
 
 ```bash
 make staging-up     # build, start, and copy Caddy's root certificate to tmp/staging-ca.crt

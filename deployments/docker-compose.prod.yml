@@ -53,6 +53,10 @@ services:
         condition: service_healthy
       app-data:
         condition: service_completed_successfully
+      # With the garage profile: the bucket is ready before the app starts.
+      garage-setup:
+        condition: service_completed_successfully
+        required: false
 
   # Mounts the app's volume once, before any instance does: Docker fills a
   # new volume from the image (its folders, owned by the app's user), and
@@ -125,6 +129,54 @@ services:
     cap_add: [CHOWN, FOWNER]
     security_opt: [no-new-privileges:true]
     logging: *logging
+  # Garage, the store for signatures, photos and documents
+  # (docs/architecture.md, section 5), with COMPOSE_PROFILES=garage and the
+  # app's S3_* settings pointing at it (.env.example). One node on this
+  # machine; the copy off the machine is the backup (docs/deploy.md). Its
+  # admin API and metrics stay on the compose network.
+  garage:
+    image: dxflrs/garage:v2.5.0
+    profiles: [garage]
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+      GARAGE_METRICS_TOKEN: ${METRICS_TOKEN:-}
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+    healthcheck:
+      # The image has no shell: Garage's own client, which fails when the
+      # daemon doesn't answer.
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Makes the layout, the app's key and bucket, and their rules, then
+  # exits: `kiflet setup-storage`, safe to run at every deploy.
+  garage-setup:
+    build:
+      context: ..
+    profiles: [garage]
+    command: ["setup-storage"]
+    env_file: ../.env
+    environment:
+      GARAGE_ADMIN_URL: http://garage:3903
+      PUBLIC_URL: https://${DOMAIN:?set DOMAIN}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+    depends_on:
+      garage:
+        condition: service_healthy
+
   caddy:
     image: caddy:2.11-alpine
     restart: unless-stopped
@@ -196,6 +248,8 @@ services:
 volumes:
   app-data:
   postgres17-data:
+  garage-meta:
+  garage-data:
   wal-archive:
   caddy-data:
   caddy-config:

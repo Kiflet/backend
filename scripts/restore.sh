@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Restores a backup made by scripts/backup.sh: the database, and the app's
-# volume when the files archive is given. Both replace what is there now. The
-# app is stopped meanwhile.
+# Restores a backup made by scripts/backup.sh: the database, the app's
+# volume when the files archive is given, and the app's bucket when the
+# objects archive is given too. Each replaces what is there now: the bucket
+# is made the same as the archive, objects added since included. The app is
+# stopped meanwhile.
 #
 #   scripts/restore.sh /var/backups/kiflet/kiflet_20261104_020000.dump \
-#     /var/backups/kiflet/kiflet_20261104_020000_files.tar.gz
+#     /var/backups/kiflet/kiflet_20261104_020000_files.tar.gz \
+#     /var/backups/kiflet/kiflet_20261104_020000_objects.tar.gz
 #
 # An encrypted backup (.age) needs AGE_IDENTITY, the file holding one of the
 # private keys it was encrypted to. Each file is decrypted before anything is
@@ -21,14 +24,15 @@ set -euo pipefail
 umask 077
 
 cd "$(dirname "$0")/.."
-if [ $# -lt 1 ] || [ $# -gt 2 ]; then
-  echo "usage: $0 <database.dump[.age]> [<files.tar.gz[.age]>]" >&2
+if [ $# -lt 1 ] || [ $# -gt 3 ]; then
+  echo "usage: $0 <database.dump[.age]> [<files.tar.gz[.age]> [<objects.tar.gz[.age]>]]" >&2
   exit 2
 fi
 db="$1"
 files="${2:-}"
+objects="${3:-}"
 encrypted=""
-for f in "$db" ${files:+"$files"}; do
+for f in "$db" ${files:+"$files"} ${objects:+"$objects"}; do
   [ -r "$f" ] || { echo "cannot read $f" >&2; exit 1; }
   case "$f" in *.age) encrypted=yes ;; esac
 done
@@ -55,12 +59,30 @@ if [ -n "$encrypted" ]; then
   }
   db="$(decrypt "$db")"
   if [ -n "$files" ]; then files="$(decrypt "$files")"; fi
+  if [ -n "$objects" ]; then objects="$(decrypt "$objects")"; fi
+fi
+
+if [ -n "$objects" ]; then
+  # The bucket the app uses, from its own settings, read while it runs.
+  app_env() { compose exec -T app printenv "$1" 2>/dev/null || true; }
+  [ "$(app_env STORAGE_TYPE)" = s3 ] || { echo "The app isn't running with STORAGE_TYPE=s3, so there is no bucket to restore $3 to. Nothing changed." >&2; exit 1; }
+  STORE_S3_ENDPOINT="$(app_env S3_ENDPOINT)" STORE_S3_REGION="$(app_env S3_REGION)"
+  STORE_S3_ACCESS_KEY="$(app_env S3_ACCESS_KEY)" STORE_S3_SECRET_KEY="$(app_env S3_SECRET_KEY)"
+  store_bucket="$(app_env S3_BUCKET)"
+  STACK_NETWORK="$(compose config | sed -n 's/^name: //p')_default"
+  export STORE_S3_ENDPOINT STORE_S3_REGION STORE_S3_ACCESS_KEY STORE_S3_SECRET_KEY STACK_NETWORK
+  # Unpacked beside the archive before anything is replaced, so a damaged
+  # one changes nothing.
+  unpacked="$(mktemp -d "$(dirname "$objects")/.objects.XXXXXX")"
+  trap 'rm -rf "$unpacked" ${plain:+"$plain"}' EXIT
+  tar -C "$unpacked" -xzf "$objects" || { echo "Cannot unpack $3. Nothing changed." >&2; exit 1; }
 fi
 
 name="$(compose config | sed -n 's/^name: //p')"
 if [ "${CONFIRM:-}" != yes ]; then
   what="the database"
   [ -n "$files" ] && what="the database and the app's files"
+  [ -n "$objects" ] && what="the database, the app's files and its bucket"
   read -r -p "This replaces $what of \"$name\" with the backup. Type \"$name\" to go on: " answer
   [ "$answer" = "$name" ] || { echo "Nothing changed."; exit 1; }
 fi
@@ -76,6 +98,11 @@ if [ -n "$files" ]; then
   # its image writes to the volume.
   compose run --rm --no-deps -T --entrypoint sh app \
     -c 'find /data -mindepth 1 -delete && tar -C /data -xzf -' <"$files"
+fi
+if [ -n "$objects" ]; then
+  COMPOSE_FILE="${BACKUP_COMPOSE_FILE:-deployments/docker-compose.backup.yml}" \
+    docker compose --progress quiet --env-file /dev/null run --rm --no-deps -T \
+    --user "$(id -u):$(id -g)" -v "$unpacked:/objects:ro" objects sync /objects "store:$store_bucket"
 fi
 compose start app
 echo "Restored. The app is starting again: \`docker compose ps\` shows it healthy once it is."
