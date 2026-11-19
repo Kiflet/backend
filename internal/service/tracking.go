@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"math"
 	"slices"
 	"time"
@@ -296,7 +297,7 @@ func (s *TrackingService) store(ctx context.Context, b PositionBatch) (stored in
 // that the driver's last position has covered. A load that has arrived is
 // at 100. It is nil when it can't be told: the load isn't under way, an end
 // has no coordinates, or the driver has sent no position.
-func Progress(sh db.Shipment, pos *DriverPin) *int {
+func Progress(sh shipments.Shipment, pos *DriverPin) *int {
 	full := 100
 	switch sh.Status {
 	case model.StatusArrived, model.StatusDelivered:

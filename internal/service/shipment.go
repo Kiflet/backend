@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"math"
 	"strconv"
 	"strings"
@@ -256,7 +257,7 @@ func (s *ShipmentService) estimateArrival(ctx context.Context, q *db.Queries, te
 	originCity, destCity *string, oLat, oLng, dLat, dLng float64, start time.Time) time.Time {
 	var history []float64
 	if originCity != nil && destCity != nil {
-		h, err := q.RouteTransitHours(ctx, db.RouteTransitHoursParams{TenantID: tenantID, OriginCity: originCity, DestinationCity: destCity})
+		h, err := s.shipmentData.RouteTransitHours(ctx, q.Conn(), shipments.Route{TenantID: tenantID, OriginCity: originCity, DestinationCity: destCity})
 		if err == nil {
 			history = h
 		}
@@ -286,7 +287,7 @@ func (s *ShipmentService) Estimate(ctx context.Context, tenantID pgtype.UUID, fr
 	if now := s.now(); start.Before(now) {
 		start = now
 	}
-	history, err := s.q.RouteTransitHours(ctx, db.RouteTransitHoursParams{TenantID: tenantID, OriginCity: &a.Name, DestinationCity: &b.Name})
+	history, err := s.shipmentData.RouteTransitHours(ctx, s.q.Conn(), shipments.Route{TenantID: tenantID, OriginCity: &a.Name, DestinationCity: &b.Name})
 	if err != nil {
 		return Estimate{}, false, err
 	}
@@ -298,14 +299,14 @@ func (s *ShipmentService) Estimate(ctx context.Context, tenantID pgtype.UUID, fr
 }
 
 // Create books a shipment, optionally assigning it straight away.
-func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput) (db.Shipment, error) {
+func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput) (shipments.Shipment, error) {
 	now := s.now()
 	v, err := validateShipment(in, now)
 	if err != nil {
-		return db.Shipment{}, err
+		return shipments.Shipment{}, err
 	}
 
-	var out db.Shipment
+	var out shipments.Shipment
 	err = s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		tenant, err := s.tenant(ctx, q, a.TenantID)
 		if err != nil {
@@ -336,7 +337,7 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 			eta = &e
 		}
 
-		params := db.CreateShipmentParams{
+		params := shipments.NewShipment{
 			TenantID:            a.TenantID,
 			Priority:            v.priority,
 			OriginCity:          v.origin.City,
@@ -372,7 +373,7 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 		// A collision is a 1-in-2^50 event, but retrying costs nothing.
 		for attempt := 0; ; attempt++ {
 			params.TrackingNumber = newTrackingNumber(now.In(s.cfg.Location))
-			out, err = q.CreateShipment(ctx, params)
+			out, err = s.shipmentData.Create(ctx, q.Conn(), params)
 			if c, dup := isUniqueViolation(err); dup && strings.Contains(c, "tracking") && attempt < 3 {
 				continue
 			}
@@ -402,14 +403,14 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 
 // Update edits a shipment's details. Delivered and cancelled shipments are
 // records and stay as they were.
-func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, in ShipmentInput) (db.Shipment, error) {
+func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, in ShipmentInput) (shipments.Shipment, error) {
 	now := s.now()
 	v, err := validateShipment(in, now)
 	if err != nil {
-		return db.Shipment{}, err
+		return shipments.Shipment{}, err
 	}
 
-	var out db.Shipment
+	var out shipments.Shipment
 	err = s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		cur, err := s.lock(ctx, q, a.TenantID, id)
 		if err != nil {
@@ -438,7 +439,7 @@ func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, i
 			}
 		}
 
-		out, err = q.UpdateShipmentDetails(ctx, db.UpdateShipmentDetailsParams{
+		out, err = s.shipmentData.UpdateDetails(ctx, q.Conn(), shipments.Details{
 			ID:                  id,
 			TenantID:            a.TenantID,
 			Priority:            v.priority,
@@ -497,7 +498,7 @@ func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, i
 
 // textNewDestination tells the assigned driver by SMS where a shipment now
 // goes.
-func (s *ShipmentService) textNewDestination(ctx context.Context, q *db.Queries, after *afterCommit, sh db.Shipment) error {
+func (s *ShipmentService) textNewDestination(ctx context.Context, q *db.Queries, after *afterCommit, sh shipments.Shipment) error {
 	d, err := s.user(ctx, q, sh.TenantID, sh.DriverID)
 	if err != nil || d.Phone == nil {
 		return nil
@@ -514,7 +515,7 @@ func (s *ShipmentService) textNewDestination(ctx context.Context, q *db.Queries,
 	return nil
 }
 
-func changedFields(a, b db.Shipment) []string {
+func changedFields(a, b shipments.Shipment) []string {
 	var out []string
 	add := func(cond bool, name string) {
 		if cond {
@@ -555,8 +556,8 @@ func driverRelevant(fields []string) bool {
 
 // Assign gives a shipment to a driver, or hands it to another one. The
 // vehicle defaults to the driver's usual truck.
-func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, driverID, vehicleID string) (db.Shipment, error) {
-	var out db.Shipment
+func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, driverID, vehicleID string) (shipments.Shipment, error) {
+	var out shipments.Shipment
 	err := s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		cur, err := s.lock(ctx, q, a.TenantID, id)
 		if err != nil {
@@ -594,7 +595,7 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 		if status == model.StatusPending {
 			status = model.StatusAssigned
 		}
-		out, err = q.SetShipmentAssignment(ctx, db.SetShipmentAssignmentParams{
+		out, err = s.shipmentData.SetAssignment(ctx, q.Conn(), shipments.Assignment{
 			ID: id, TenantID: a.TenantID, DriverID: driver.ID, VehicleID: vid, Status: status,
 		})
 		if err != nil {
@@ -628,8 +629,8 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 }
 
 // Unassign takes the driver off a shipment that has not left yet.
-func (s *ShipmentService) Unassign(ctx context.Context, a Actor, id pgtype.UUID) (db.Shipment, error) {
-	var out db.Shipment
+func (s *ShipmentService) Unassign(ctx context.Context, a Actor, id pgtype.UUID) (shipments.Shipment, error) {
+	var out shipments.Shipment
 	err := s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		cur, err := s.lock(ctx, q, a.TenantID, id)
 		if err != nil {
@@ -642,7 +643,7 @@ func (s *ShipmentService) Unassign(ctx context.Context, a Actor, id pgtype.UUID)
 		if !model.CanUnassign(cur.Status) {
 			return conflict("The shipment is already on the road. Reassign it to another driver instead.")
 		}
-		out, err = q.SetShipmentAssignment(ctx, db.SetShipmentAssignmentParams{
+		out, err = s.shipmentData.SetAssignment(ctx, q.Conn(), shipments.Assignment{
 			ID: id, TenantID: a.TenantID, Status: model.StatusPending,
 		})
 		if err != nil {
@@ -675,12 +676,12 @@ func (s *ShipmentService) assignableDriver(ctx context.Context, q *db.Queries, t
 	if err := s.licenceLapsed(d); err != nil {
 		return db.User{}, err
 	}
-	active, err := q.CountActiveShipmentsByDriver(ctx, db.CountActiveShipmentsByDriverParams{DriverID: d.ID, TenantID: tenant.ID})
+	active, err := s.shipmentData.CountActiveForDriver(ctx, q.Conn(), shipments.DriverCount{DriverID: d.ID, TenantID: tenant.ID})
 	if err != nil {
 		return db.User{}, err
 	}
 	if exclude.Valid {
-		if cur, err := q.GetShipmentByID(ctx, db.GetShipmentByIDParams{ID: exclude, TenantID: tenant.ID}); err == nil &&
+		if cur, err := s.shipmentData.Get(ctx, q.Conn(), tenant.ID, exclude); err == nil &&
 			cur.DriverID == d.ID && model.IsActiveStatus(cur.Status) {
 			active--
 		}
@@ -742,8 +743,8 @@ func (s *ShipmentService) assignableVehicle(ctx context.Context, q *db.Queries, 
 	return v.ID, nil
 }
 
-func (s *ShipmentService) lock(ctx context.Context, q *db.Queries, tenantID, id pgtype.UUID) (db.Shipment, error) {
-	sh, err := q.GetShipmentByIDForUpdate(ctx, db.GetShipmentByIDForUpdateParams{ID: id, TenantID: tenantID})
+func (s *ShipmentService) lock(ctx context.Context, q *db.Queries, tenantID, id pgtype.UUID) (shipments.Shipment, error) {
+	sh, err := s.shipmentData.GetForUpdate(ctx, q.Conn(), tenantID, id)
 	if isNoRows(err) {
 		return sh, notFound("Shipment not found.")
 	}
@@ -835,8 +836,8 @@ func escapeLike(s string) string {
 }
 
 // Get loads one shipment of a tenant.
-func (s *ShipmentService) Get(ctx context.Context, tenantID, id pgtype.UUID) (db.Shipment, error) {
-	sh, err := s.q.GetShipmentByID(ctx, db.GetShipmentByIDParams{ID: id, TenantID: tenantID})
+func (s *ShipmentService) Get(ctx context.Context, tenantID, id pgtype.UUID) (shipments.Shipment, error) {
+	sh, err := s.shipmentData.Get(ctx, s.q.Conn(), tenantID, id)
 	if isNoRows(err) {
 		return sh, notFound("Shipment not found.")
 	}
@@ -844,12 +845,12 @@ func (s *ShipmentService) Get(ctx context.Context, tenantID, id pgtype.UUID) (db
 }
 
 // ByNumber finds a company's shipment by its tracking number.
-func (s *ShipmentService) ByNumber(ctx context.Context, tenantID pgtype.UUID, number string) (db.Shipment, error) {
-	sh, err := s.q.GetShipmentByTrackingNumber(ctx, strings.ToUpper(strings.TrimSpace(number)))
+func (s *ShipmentService) ByNumber(ctx context.Context, tenantID pgtype.UUID, number string) (shipments.Shipment, error) {
+	sh, err := s.shipmentData.ByTrackingNumber(ctx, s.q.Conn(), strings.ToUpper(strings.TrimSpace(number)))
 	// Another company's shipment is no more to be found than one that
 	// doesn't exist.
 	if isNoRows(err) || (err == nil && sh.TenantID != tenantID) {
-		return db.Shipment{}, notFound("Shipment not found.")
+		return shipments.Shipment{}, notFound("Shipment not found.")
 	}
 	return sh, err
 }
@@ -858,7 +859,7 @@ func (s *ShipmentService) ByNumber(ctx context.Context, tenantID pgtype.UUID, nu
 // a caller that changes part of it: Update replaces every editable field.
 // A place keeps its coordinates only where they were pinned, so that
 // changing a town moves the shipment to that town's centre.
-func InputOf(sh db.Shipment) ShipmentInput {
+func InputOf(sh shipments.Shipment) ShipmentInput {
 	in := ShipmentInput{
 		Priority:   sh.Priority,
 		OriginCity: deref(sh.OriginCity), OriginAddress: sh.OriginAddress,
@@ -886,10 +887,10 @@ func InputOf(sh db.Shipment) ShipmentInput {
 
 // ShipmentDetail is everything the shipment page shows.
 type ShipmentDetail struct {
-	Shipment db.Shipment
+	Shipment shipments.Shipment
 	Driver   *db.User
 	Vehicle  *db.Vehicle
-	Events   []db.ShipmentEvent
+	Events   []shipments.Event
 	POD      *db.GetPODByShipmentIDRow
 	// Route is the trip's newest routePoints positions, oldest first.
 	Route []db.ListShipmentRouteRow
@@ -923,7 +924,7 @@ func (s *ShipmentService) Detail(ctx context.Context, tenantID, id pgtype.UUID) 
 			d.Vehicle = &v
 		}
 	}
-	if d.Events, err = s.q.ListShipmentEvents(ctx, db.ListShipmentEventsParams{ShipmentID: id, TenantID: tenantID}); err != nil {
+	if d.Events, err = s.shipmentData.Events(ctx, s.q.Conn(), shipments.EventsQuery{ShipmentID: id, TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 	if pod, err := s.q.GetPODByShipmentID(ctx, db.GetPODByShipmentIDParams{ShipmentID: id, TenantID: tenantID}); err == nil {
@@ -938,10 +939,10 @@ func (s *ShipmentService) Detail(ctx context.Context, tenantID, id pgtype.UUID) 
 
 // Positions is every recorded position of a shipment's trip, oldest first, for
 // the location export (AC-030.7).
-func (s *ShipmentService) Positions(ctx context.Context, tenantID, id pgtype.UUID) (db.Shipment, []db.ListShipmentRouteRow, error) {
+func (s *ShipmentService) Positions(ctx context.Context, tenantID, id pgtype.UUID) (shipments.Shipment, []db.ListShipmentRouteRow, error) {
 	sh, err := s.Get(ctx, tenantID, id)
 	if err != nil {
-		return db.Shipment{}, nil, err
+		return shipments.Shipment{}, nil, err
 	}
 	pts, err := s.route(ctx, sh, exportPoints)
 	return sh, pts, err
@@ -957,7 +958,7 @@ func (s *ShipmentService) Trail(ctx context.Context, tenantID, id pgtype.UUID) (
 	return s.route(ctx, sh, routePoints)
 }
 
-func (s *ShipmentService) route(ctx context.Context, sh db.Shipment, max int32) ([]db.ListShipmentRouteRow, error) {
+func (s *ShipmentService) route(ctx context.Context, sh shipments.Shipment, max int32) ([]db.ListShipmentRouteRow, error) {
 	start, end := shipmentWindow(sh, s.now())
 	return s.q.ListShipmentRoute(ctx, db.ListShipmentRouteParams{
 		TenantID: sh.TenantID, ShipmentID: sh.ID, DriverID: sh.DriverID,
@@ -967,7 +968,7 @@ func (s *ShipmentService) route(ctx context.Context, sh db.Shipment, max int32) 
 
 // shipmentWindow is the span during which the shipment was on its driver's
 // truck, for attributing the driver's GPS track to it.
-func shipmentWindow(sh db.Shipment, now time.Time) (time.Time, time.Time) {
+func shipmentWindow(sh shipments.Shipment, now time.Time) (time.Time, time.Time) {
 	start := sh.CreatedAt.Time
 	if sh.PickedUpAt.Valid {
 		start = sh.PickedUpAt.Time
@@ -982,13 +983,13 @@ func shipmentWindow(sh db.Shipment, now time.Time) (time.Time, time.Time) {
 }
 
 // Activity is the dashboard's recent-events feed.
-func (s *ShipmentService) Activity(ctx context.Context, tenantID pgtype.UUID, limit int32) ([]db.ListTenantActivityRow, error) {
-	return s.q.ListTenantActivity(ctx, db.ListTenantActivityParams{TenantID: tenantID, Limit: limit})
+func (s *ShipmentService) Activity(ctx context.Context, tenantID pgtype.UUID, limit int32) ([]shipments.ActivityEntry, error) {
+	return s.shipmentData.Activity(ctx, s.q.Conn(), shipments.ActivityQuery{TenantID: tenantID, Limit: limit})
 }
 
 // StatusCounts returns how many shipments are in each status.
 func (s *ShipmentService) StatusCounts(ctx context.Context, tenantID pgtype.UUID) (map[string]int64, error) {
-	rows, err := s.q.CountShipmentsByStatus(ctx, tenantID)
+	rows, err := s.shipmentData.CountByStatus(ctx, s.q.Conn(), tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -1001,7 +1002,7 @@ func (s *ShipmentService) StatusCounts(ctx context.Context, tenantID pgtype.UUID
 
 // DeliveredSince counts deliveries since a moment, for "delivered today".
 func (s *ShipmentService) DeliveredSince(ctx context.Context, tenantID pgtype.UUID, since time.Time) (int64, error) {
-	return s.q.CountDeliveredSince(ctx, db.CountDeliveredSinceParams{TenantID: tenantID, ActualDelivery: toTimestamp(since)})
+	return s.shipmentData.CountDeliveredSince(ctx, s.q.Conn(), shipments.DeliveredSince{TenantID: tenantID, ActualDelivery: toTimestamp(since)})
 }
 
 // ---------------------------------------------------------------------------
@@ -1028,7 +1029,7 @@ type shipmentEvent struct {
 //
 // Webhooks are written with it, for the endpoints that asked for what
 // happened; sh is the shipment as it is after the change.
-func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, sh db.Shipment, e shipmentEvent) bool {
+func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, sh shipments.Shipment, e shipmentEvent) bool {
 	occurred := e.OccurredAt
 	if occurred.IsZero() {
 		occurred = s.now()
@@ -1037,7 +1038,7 @@ func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *after
 	if len(e.Details) > 0 {
 		details = mustJSON(e.Details)
 	}
-	_, err := q.CreateShipmentEvent(ctx, db.CreateShipmentEventParams{
+	_, err := s.shipmentData.AddEvent(ctx, q.Conn(), shipments.NewEvent{
 		TenantID:         sh.TenantID,
 		ShipmentID:       sh.ID,
 		EventType:        e.Type,
@@ -1094,7 +1095,7 @@ type ShipmentEventMessage struct {
 	OccurredAt     time.Time `json:"occurred_at"`
 }
 
-func (s *ShipmentService) publishShipment(sh db.Shipment, change string) {
+func (s *ShipmentService) publishShipment(sh shipments.Shipment, change string) {
 	s.publish(sh.TenantID, "shipment", map[string]any{
 		"id":              sh.ID.String(),
 		"tracking_number": sh.TrackingNumber,

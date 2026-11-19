@@ -1,20 +1,20 @@
 package web
 
 import (
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/service"
 )
 
 // shipmentFormData is what the booking form needs besides the values.
-func (s *Server) shipmentFormData(r *http.Request, sh *db.Shipment) (map[string]any, error) {
+func (s *Server) shipmentFormData(r *http.Request, sh *shipments.Shipment) (map[string]any, error) {
 	p := principal(r)
 	drivers, err := s.svc.Users.Drivers(r.Context(), p.TenantID, true, "")
 	if err != nil {
@@ -34,7 +34,7 @@ func (s *Server) shipmentFormData(r *http.Request, sh *db.Shipment) (map[string]
 	}, nil
 }
 
-func shipmentFormValues(sh db.Shipment, loc *time.Location) url.Values {
+func shipmentFormValues(sh shipments.Shipment, loc *time.Location) url.Values {
 	f := func(p *float64) string {
 		if p == nil {
 			return ""

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"math"
 	"strconv"
 	"strings"
@@ -75,7 +76,7 @@ type PublicEvent struct {
 // customers in.
 func (s *ShipmentService) Track(ctx context.Context, number, lang string) (*PublicTracking, error) {
 	number = strings.ToUpper(strings.TrimSpace(number))
-	sh, err := s.q.GetShipmentByTrackingNumber(ctx, number)
+	sh, err := s.shipmentData.ByTrackingNumber(ctx, s.q.Conn(), number)
 	if isNoRows(err) {
 		return nil, &Error{Kind: KindNotFound, Key: "error.number_unknown", Message: text.T(text.English, "error.number_unknown")}
 	}
@@ -130,7 +131,7 @@ func (s *ShipmentService) Track(ctx context.Context, number, lang string) (*Publ
 
 	t.Steps = trackingSteps(lang, sh.Status)
 
-	events, err := s.q.ListPublicShipmentEvents(ctx, sh.ID)
+	events, err := s.shipmentData.PublicEvents(ctx, s.q.Conn(), sh.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +231,7 @@ const ConfirmLinkTTL = 30 * 24 * time.Hour
 
 // ConfirmView is the delivery-confirmation page.
 type ConfirmView struct {
-	Shipment    db.Shipment
+	Shipment    shipments.Shipment
 	CompanyName string
 	// Language is the one the company writes to its customers in.
 	Language string
@@ -243,7 +244,7 @@ func (s *ShipmentService) ByConfirmToken(ctx context.Context, token string) (*Co
 	if len(token) < 20 {
 		return nil, gone
 	}
-	sh, err := s.q.GetShipmentByConfirmToken(ctx, &token)
+	sh, err := s.shipmentData.ByConfirmToken(ctx, s.q.Conn(), &token)
 	if isNoRows(err) {
 		return nil, gone
 	}
@@ -284,13 +285,13 @@ func (s *ShipmentService) CustomerRespond(ctx context.Context, token string, ok 
 			if sh.CustomerConfirmedAt.Valid {
 				return nil
 			}
-			if _, err := q.SetCustomerConfirmation(ctx, db.SetCustomerConfirmationParams{ID: sh.ID, TenantID: sh.TenantID, Feedback: toText(feedback)}); err != nil {
+			if _, err := s.shipmentData.SetCustomerConfirmation(ctx, q.Conn(), shipments.CustomerConfirmation{ID: sh.ID, TenantID: sh.TenantID, Feedback: toText(feedback)}); err != nil {
 				return err
 			}
 			s.event(ctx, q, after, a, sh, shipmentEvent{Type: "customer_confirmed", Note: feedback, Public: true})
 			return nil
 		}
-		if _, err := q.SetCustomerFeedback(ctx, db.SetCustomerFeedbackParams{ID: sh.ID, TenantID: sh.TenantID, Feedback: &feedback}); err != nil {
+		if _, err := s.shipmentData.SetCustomerFeedback(ctx, q.Conn(), shipments.CustomerFeedback{ID: sh.ID, TenantID: sh.TenantID, Feedback: &feedback}); err != nil {
 			return err
 		}
 		s.event(ctx, q, after, a, sh, shipmentEvent{Type: "customer_issue", Note: feedback})

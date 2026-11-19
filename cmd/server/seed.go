@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"image"
 	"image/color"
 	"image/png"
@@ -215,7 +216,7 @@ func seed(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log zerol
 	pick := func(list []string) string { return list[rng.IntN(len(list))] }
 
 	booked := 0
-	book := func(r demoRoute, driver int, priority string) (db.Shipment, error) {
+	book := func(r demoRoute, driver int, priority string) (shipments.Shipment, error) {
 		c := demoCustomers[rng.IntN(len(demoCustomers))]
 		cargo := demoCargo[rng.IntN(len(demoCargo))]
 		in := service.ShipmentInput{

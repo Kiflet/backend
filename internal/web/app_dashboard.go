@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"net/http"
 	"strings"
 	"time"
@@ -60,7 +61,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]timelineItem, 0, len(activity))
 	for _, a := range activity {
-		it := timelineFrom(db.ShipmentEvent{
+		it := timelineFrom(shipments.Event{
 			ID: a.ID, ShipmentID: a.ShipmentID, EventType: a.EventType, FromStatus: a.FromStatus, ToStatus: a.ToStatus,
 			DriverID: a.DriverID, PreviousDriverID: a.PreviousDriverID, ActorName: a.ActorName, Source: a.Source,
 			Note: a.Note, Reason: a.Reason, Details: a.Details, OccurredAt: a.OccurredAt, CreatedAt: a.CreatedAt,
@@ -171,7 +172,7 @@ func progressFrom(m *service.MapData, rows []db.ListShipmentsRow) map[string]*in
 		if row.Shipment.DriverID.Valid {
 			pos = positions[row.Shipment.DriverID.String()]
 		}
-		out[row.Shipment.ID.String()] = service.Progress(row.Shipment, pos)
+		out[row.Shipment.ID.String()] = service.Progress(shipments.Shipment(row.Shipment), pos)
 	}
 	return out
 }
@@ -321,7 +322,7 @@ var sourceLabels = map[string]string{
 	service.SourceAPI:       "API",
 }
 
-func timelineFrom(e db.ShipmentEvent, names map[pgtype.UUID]string) timelineItem {
+func timelineFrom(e shipments.Event, names map[pgtype.UUID]string) timelineItem {
 	it := timelineItem{
 		Kind: e.EventType, Actor: e.ActorName, Source: sourceLabels[e.Source], At: e.OccurredAt.Time,
 		Note: deref(e.Note), Lat: e.Latitude, Lng: e.Longitude,

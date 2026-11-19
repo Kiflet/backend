@@ -12,6 +12,7 @@ import (
 	auditapp "github.com/kiflet/backend/internal/modules/audit/app"
 	fleetapp "github.com/kiflet/backend/internal/modules/fleet/app"
 	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
+	shipmentsapp "github.com/kiflet/backend/internal/modules/shipments/app"
 	tenancyapp "github.com/kiflet/backend/internal/modules/tenancy/app"
 	"github.com/redis/go-redis/v9"
 	"net/http"
@@ -146,15 +147,16 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		work = brokerWork{b: a.broker, kinds: senders}
 	}
 	svc := service.New(service.Deps{
-		Audit:    auditapp.New(pool, log),
-		Tenancy:  tenancyapp.New(),
-		Sessions: identityapp.NewSessions(pool, nil, cfg.SupportEmail),
-		Codes:    identityapp.NewCodes(pool, cfg.Secret, nil),
-		Links:    identityapp.NewLinks(pool),
-		Signups:  identityapp.NewSignups(pool),
-		Users:    identityapp.NewUsers(pool),
-		Fleet:    fleetapp.New(pool),
-		Pool:     pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
+		Audit:     auditapp.New(pool, log),
+		Tenancy:   tenancyapp.New(),
+		Sessions:  identityapp.NewSessions(pool, nil, cfg.SupportEmail),
+		Codes:     identityapp.NewCodes(pool, cfg.Secret, nil),
+		Links:     identityapp.NewLinks(pool),
+		Signups:   identityapp.NewSignups(pool),
+		Users:     identityapp.NewUsers(pool),
+		Fleet:     fleetapp.New(pool),
+		Shipments: shipmentsapp.New(),
+		Pool:      pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
 		RemoteWorkers: !roles.Has("worker"), Work: work,
 		Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},
 		Payments: providers,

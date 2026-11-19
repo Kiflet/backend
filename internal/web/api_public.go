@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/service"
 )
@@ -110,7 +110,7 @@ type (
 	apiEvent    = service.EventJSON
 )
 
-func (s *Server) toAPIShipment(sh db.Shipment) apiShipment {
+func (s *Server) toAPIShipment(sh shipments.Shipment) apiShipment {
 	return service.AsJSON(sh, s.cfg.PublicURL)
 }
 
@@ -213,7 +213,7 @@ func decodeAPI(r *http.Request, v any) error {
 // ---------------------------------------------------------------------------
 
 // apiFind loads the shipment a path names, by tracking number or by ID.
-func (s *Server) apiFind(r *http.Request) (db.Shipment, error) {
+func (s *Server) apiFind(r *http.Request) (shipments.Shipment, error) {
 	ref := chi.URLParam(r, "ref")
 	if id, err := parseID(ref); err == nil {
 		return s.svc.Shipments.Get(r.Context(), apiActor(r).TenantID, id)
@@ -262,7 +262,7 @@ func (s *Server) apiShipmentList(w http.ResponseWriter, r *http.Request) {
 	}
 	data := make([]apiShipment, 0, len(rows))
 	for _, row := range rows {
-		data = append(data, s.toAPIShipment(row.Shipment))
+		data = append(data, s.toAPIShipment(shipments.Shipment(row.Shipment)))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": data, "page": page, "per_page": perPage, "total": total})
 }
@@ -332,7 +332,7 @@ func (s *Server) apiShipmentAssign(w http.ResponseWriter, r *http.Request) {
 		s.apiError(w, r, err)
 		return
 	}
-	var out db.Shipment
+	var out shipments.Shipment
 	if in.DriverID == nil || *in.DriverID == "" {
 		out, err = s.svc.Shipments.Unassign(r.Context(), apiActor(r), sh.ID)
 	} else {

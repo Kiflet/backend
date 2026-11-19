@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/kiflet/backend/internal/modules/identity"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"strings"
 	"time"
 	"unicode"
@@ -545,7 +546,7 @@ func (s *SMSService) Inbound(ctx context.Context, in InboundSMS) (InboundResult,
 		return reply(pgtype.UUID{}, "replied", "Not a status report, so "+user.FullName+" was sent the list of codes.", smsHelp())
 	}
 
-	active, err := s.q.ListActiveShipmentsByDriver(ctx, db.ListActiveShipmentsByDriverParams{DriverID: user.ID, TenantID: user.TenantID})
+	active, err := s.shipmentData.ActiveForDriver(ctx, s.q.Conn(), shipments.DriverShipments{DriverID: user.ID, TenantID: user.TenantID})
 	if err != nil {
 		return InboundResult{}, err
 	}
@@ -583,7 +584,7 @@ func (s *SMSService) Inbound(ctx context.Context, in InboundSMS) (InboundResult,
 
 // matchShipment picks the shipment an SMS refers to among a driver's active
 // work, or explains why it cannot.
-func matchShipment(active []db.Shipment, ref string) (*db.Shipment, string) {
+func matchShipment(active []shipments.Shipment, ref string) (*shipments.Shipment, string) {
 	if len(active) == 0 {
 		return nil, "You have no active shipments."
 	}
@@ -597,7 +598,7 @@ func matchShipment(active []db.Shipment, ref string) (*db.Shipment, string) {
 		}
 		return nil, "You have several shipments. Start with ET and the code, e.g. ET " + refs[0] + " 1. Yours: " + strings.Join(refs, ", ")
 	}
-	var found *db.Shipment
+	var found *shipments.Shipment
 	for i := range active {
 		if strings.HasSuffix(normaliseRef(active[i].TrackingNumber), ref) {
 			if found != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"strings"
 	"time"
 
@@ -41,8 +42,8 @@ type StatusChange struct {
 // which callers treat as success, and ErrStaleUpdate when the update was
 // recorded before the shipment's current state was set: the update is kept
 // in the timeline as a conflict but not applied.
-func (s *ShipmentService) ChangeStatus(ctx context.Context, a Actor, id pgtype.UUID, ch StatusChange) (db.Shipment, error) {
-	var out db.Shipment
+func (s *ShipmentService) ChangeStatus(ctx context.Context, a Actor, id pgtype.UUID, ch StatusChange) (shipments.Shipment, error) {
+	var out shipments.Shipment
 	var result error
 	err := s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		cur, err := s.lock(ctx, q, a.TenantID, id)
@@ -63,11 +64,11 @@ func (s *ShipmentService) ChangeStatus(ctx context.Context, a Actor, id pgtype.U
 
 // applyStatus is the single place a shipment's status changes, on a row the
 // caller has locked.
-func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, cur db.Shipment, ch StatusChange) (db.Shipment, error) {
+func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, cur shipments.Shipment, ch StatusChange) (shipments.Shipment, error) {
 	// A change the device sent before, whose answer it never received, gets
 	// the same answer again, and nothing happens twice.
 	if ch.ClientID != "" {
-		kind, err := q.GetShipmentEventByClientID(ctx, db.GetShipmentEventByClientIDParams{
+		kind, err := s.shipmentData.EventByClientID(ctx, q.Conn(), shipments.ClientEventQuery{
 			TenantID: cur.TenantID, ShipmentID: cur.ID, ClientID: ch.ClientID,
 		})
 		switch {
@@ -148,7 +149,7 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 	}
 	note := strings.TrimSpace(truncate(ch.Note, 1000))
 
-	out, err := q.SetShipmentStatus(ctx, db.SetShipmentStatusParams{
+	out, err := s.shipmentData.SetStatus(ctx, q.Conn(), shipments.StatusUpdate{
 		Status: ch.Status, StatusNote: toText(note), StatusReason: toText(reason),
 		ChangedAt: toTimestamp(occurred), DeliveredAt: toTimestamp(ch.deliveredAt), ID: cur.ID, TenantID: cur.TenantID,
 	})
@@ -160,7 +161,7 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 	if firstDeparture && !out.EtaManual && out.OriginLat != nil && out.DestinationLat != nil {
 		eta := s.estimateArrival(ctx, q, out.TenantID, out.OriginCity, out.DestinationCity,
 			*out.OriginLat, *out.OriginLng, *out.DestinationLat, *out.DestinationLng, occurred)
-		if err := q.SetShipmentETA(ctx, db.SetShipmentETAParams{ID: out.ID, TenantID: out.TenantID, EstimatedDelivery: toTimestamp(eta)}); err == nil {
+		if err := s.shipmentData.SetETA(ctx, q.Conn(), shipments.ETA{ID: out.ID, TenantID: out.TenantID, EstimatedDelivery: toTimestamp(eta)}); err == nil {
 			out.EstimatedDelivery = toTimestamp(eta)
 		}
 	}
@@ -205,7 +206,7 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 		}
 		if out.ConfirmToken == nil {
 			token := randomToken(18)
-			if err := q.SetShipmentConfirmToken(ctx, db.SetShipmentConfirmTokenParams{ID: out.ID, TenantID: out.TenantID, ConfirmToken: &token}); err == nil {
+			if err := s.shipmentData.SetConfirmToken(ctx, q.Conn(), shipments.ConfirmToken{ID: out.ID, TenantID: out.TenantID, ConfirmToken: &token}); err == nil {
 				out.ConfirmToken = &token
 			}
 		}
@@ -236,7 +237,7 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 // in. A repeated delay or problem with a new cause or note is news for the
 // office, so it is recorded and alerted; anything else is a replay, answered
 // with model.ErrSameStatus.
-func (s *ShipmentService) updateStatusDetail(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, cur db.Shipment, ch StatusChange) (db.Shipment, error) {
+func (s *ShipmentService) updateStatusDetail(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, cur shipments.Shipment, ch StatusChange) (shipments.Shipment, error) {
 	var alertType, severity, what string
 	switch ch.Status {
 	case model.StatusDelayed:
@@ -273,7 +274,7 @@ func (s *ShipmentService) updateStatusDetail(ctx context.Context, q *db.Queries,
 	}) {
 		return cur, model.ErrSameStatus // this very report, replayed
 	}
-	out, err := q.SetShipmentStatusDetail(ctx, db.SetShipmentStatusDetailParams{
+	out, err := s.shipmentData.SetStatusDetail(ctx, q.Conn(), shipments.StatusDetail{
 		StatusReason: toText(reason), StatusNote: toText(note), ID: cur.ID, TenantID: cur.TenantID,
 	})
 	if err != nil {
@@ -309,14 +310,14 @@ func capitalise(s string) string {
 
 // Cancel withdraws a shipment. The customer and, if the cargo is already
 // with them, the driver are told.
-func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, reason, note string) (db.Shipment, error) {
+func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, reason, note string) (shipments.Shipment, error) {
 	reason = strings.TrimSpace(reason)
 	if !contains(model.CancelReasons, reason) {
-		return db.Shipment{}, invalid("reason", "Choose why the shipment is cancelled.")
+		return shipments.Shipment{}, invalid("reason", "Choose why the shipment is cancelled.")
 	}
 	note = strings.TrimSpace(truncate(note, 1000))
 
-	var out db.Shipment
+	var out shipments.Shipment
 	err := s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		cur, err := s.lock(ctx, q, a.TenantID, id)
 		if err != nil {
@@ -331,7 +332,7 @@ func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, r
 			}
 			return invalid("reason", "That reason is for a shipment already on the road.")
 		}
-		out, err = q.SetShipmentStatus(ctx, db.SetShipmentStatusParams{
+		out, err = s.shipmentData.SetStatus(ctx, q.Conn(), shipments.StatusUpdate{
 			Status: model.StatusCancelled, StatusNote: toText(note), StatusReason: &reason,
 			ChangedAt: toTimestamp(s.now()), ID: id, TenantID: a.TenantID,
 		})
@@ -369,8 +370,8 @@ func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, r
 
 // Reopen brings back a shipment cancelled by mistake, to pending, or to
 // assigned if its driver is still available.
-func (s *ShipmentService) Reopen(ctx context.Context, a Actor, id pgtype.UUID) (db.Shipment, error) {
-	var out db.Shipment
+func (s *ShipmentService) Reopen(ctx context.Context, a Actor, id pgtype.UUID) (shipments.Shipment, error) {
+	var out shipments.Shipment
 	err := s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		cur, err := s.lock(ctx, q, a.TenantID, id)
 		if err != nil {
@@ -403,11 +404,11 @@ func (s *ShipmentService) Reopen(ctx context.Context, a Actor, id pgtype.UUID) (
 			}
 		}
 		if to == model.StatusPending && cur.DriverID.Valid {
-			if _, err := q.SetShipmentAssignment(ctx, db.SetShipmentAssignmentParams{ID: id, TenantID: a.TenantID, Status: model.StatusCancelled}); err != nil {
+			if _, err := s.shipmentData.SetAssignment(ctx, q.Conn(), shipments.Assignment{ID: id, TenantID: a.TenantID, Status: model.StatusCancelled}); err != nil {
 				return err
 			}
 		}
-		out, err = q.SetShipmentStatus(ctx, db.SetShipmentStatusParams{
+		out, err = s.shipmentData.SetStatus(ctx, q.Conn(), shipments.StatusUpdate{
 			Status: to, ChangedAt: toTimestamp(s.now()), ID: id, TenantID: a.TenantID,
 		})
 		if err != nil {

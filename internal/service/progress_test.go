@@ -1,16 +1,16 @@
 package service
 
 import (
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"testing"
 
-	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
 )
 
 func TestProgress(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
 	// Addis Ababa to Adama, about 75 km east.
-	sh := db.Shipment{Status: model.StatusInTransit, OriginLat: f(9.03), OriginLng: f(38.74), DestinationLat: f(8.54), DestinationLng: f(39.27)}
+	sh := shipments.Shipment{Status: model.StatusInTransit, OriginLat: f(9.03), OriginLng: f(38.74), DestinationLat: f(8.54), DestinationLng: f(39.27)}
 	halfway := &DriverPin{Lat: 8.785, Lng: 39.005}
 	if p := Progress(sh, halfway); p == nil || *p < 45 || *p > 55 {
 		t.Fatalf("halfway: got %v", p)

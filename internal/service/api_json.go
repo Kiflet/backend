@@ -1,11 +1,11 @@
 package service
 
 import (
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/kiflet/backend/internal/db"
 )
 
 // What the public API sends, and webhooks with it: one shape for a
@@ -79,7 +79,7 @@ type EventJSON struct {
 
 // AsJSON is a shipment as the API sends it. baseURL is the public origin,
 // for the tracking page's address.
-func AsJSON(sh db.Shipment, baseURL string) ShipmentJSON {
+func AsJSON(sh shipments.Shipment, baseURL string) ShipmentJSON {
 	out := ShipmentJSON{
 		ID: sh.ID.String(), TrackingNumber: sh.TrackingNumber, Status: sh.Status, StatusReason: deref(sh.StatusReason), Priority: sh.Priority,
 		Origin:      PlaceJSON{City: deref(sh.OriginCity), Address: sh.OriginAddress, Lat: sh.OriginLat, Lng: sh.OriginLng},
