@@ -266,6 +266,24 @@ RabbitMQ keeps its queues in the `rabbitmq-data` volume. The backups
 leave it out: what is in it is either in the database already or on its
 way there.
 
+## Redis
+
+Redis (`docs/architecture.md`, section 7) runs beside the app with the
+`redis` profile. For now it holds the request limits (sign-in, codes,
+lookups, each API key), counted for all the instances together rather
+than by each one. In `.env`:
+
+1. Add `redis` to `COMPOSE_PROFILES` (`garage,rabbitmq,redis`).
+2. `REDIS_PASSWORD`, letters and digits only (`openssl rand -hex 24`), and
+   `REDIS_URL=redis://:<the password>@redis:6379/0`.
+3. `docker compose … up -d --wait`.
+
+Nothing in it needs keeping: lost, the limits start counting again. If
+Redis doesn't answer within 100 ms, each instance counts on its own until
+it does, which `kiflet_limits_local` shows. Redis logs a warning at start
+about the host's memory overcommit setting; its file is only a
+convenience here, so the warning can be left.
+
 ## Upgrading PostgreSQL
 
 The compose file runs PostgreSQL 17 (PostGIS 3.6), with its data in the

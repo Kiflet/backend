@@ -61,6 +61,7 @@ func TestMain(m *testing.M) {
 		defer pool.Close()
 		defer func() { stopObjectStore() }()
 		defer func() { stopRabbitMQ() }()
+		defer func() { stopRedis() }()
 		if err := migrate(ctx); err != nil {
 			fmt.Fprintln(os.Stderr, "migrate:", err)
 			return 1

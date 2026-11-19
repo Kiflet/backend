@@ -5,6 +5,7 @@ package web
 import (
 	"context"
 	"embed"
+	"github.com/redis/go-redis/v9"
 	"io/fs"
 	"math"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/httprate"
 	gorillaws "github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -50,10 +50,14 @@ type Server struct {
 	// the page standing in for the payer's phone.
 	mockPay bool
 	started time.Time
+	// redis, when set, keeps the request limits' counts, shared by every
+	// instance.
+	redis redis.UniversalClient
 }
 
 // New builds the server.
-func New(cfg *config.Config, svc *service.Services, pool *pgxpool.Pool, hub *websocket.Hub, log zerolog.Logger) (*Server, error) {
+// rdb, when not nil, shares the request limits between instances.
+func New(cfg *config.Config, svc *service.Services, pool *pgxpool.Pool, hub *websocket.Hub, rdb redis.UniversalClient, log zerolog.Logger) (*Server, error) {
 	var root fs.FS = embedded
 	if cfg.DevReload {
 		root = os.DirFS("internal/web")
@@ -67,7 +71,7 @@ func New(cfg *config.Config, svc *service.Services, pool *pgxpool.Pool, hub *web
 		return nil, err
 	}
 	s := &Server{
-		cfg: cfg, svc: svc, log: log, hub: hub, pool: pool, assets: assets, started: time.Now(),
+		cfg: cfg, svc: svc, log: log, hub: hub, pool: pool, assets: assets, started: time.Now(), redis: rdb,
 		mockSMS: svc.SMS.ProviderName() == "mock", mockMail: svc.Mail.ProviderName() == "mock",
 	}
 	for _, p := range svc.Billing.Providers() {
@@ -133,10 +137,10 @@ func (s *Server) Handler() http.Handler {
 	// its own: an account locks after five wrong passwords anyway, and a
 	// depot's drivers often reach the internet through one carrier address.
 	// strict is for what sends a code or checks one.
-	signIn := httprate.LimitBy(30, time.Minute, ipKey, httprate.WithLimitHandler(s.tooManyRequests))
-	strict := httprate.LimitBy(10, time.Minute, ipKey, httprate.WithLimitHandler(s.tooManyRequests))
-	lookup := httprate.LimitBy(60, time.Minute, ipKey, httprate.WithLimitHandler(s.tooManyRequests))
-	general := httprate.LimitBy(600, time.Minute, ipKey, httprate.WithLimitHandler(s.tooManyRequests))
+	signIn := s.limit("sign_in", 30, ipKey)
+	strict := s.limit("strict", 10, ipKey)
+	lookup := s.limit("lookup", 60, ipKey)
+	general := s.limit("general", 600, ipKey)
 
 	// Public pages.
 	r.Group(func(r chi.Router) {

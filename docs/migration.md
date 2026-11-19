@@ -279,7 +279,7 @@ Roll back: each module is one PR; revert it.
    staging and production; PgBouncer in front of Postgres. The exchanges
    and queues are declared by the app at start (`pkg/broker`'s
    `Topology`), so a new queue ships with the code that uses it. `make db`
-   starts Postgres and RabbitMQ (Redis to come). RabbitMQ: done.
+   starts Postgres, RabbitMQ and Redis. RabbitMQ and Redis: done.
 2. **Postgres 15 → 17** (PostGIS 3.6): a dump and restore, as
    `docs/deploy.md` ("Upgrading PostgreSQL") has it, while the database is
    small; a database too big to restore in a maintenance window would use
@@ -321,7 +321,9 @@ Roll back: each module is one PR; revert it.
 8. **Redis:** session, driver-token and API-key lookups cached; rate
    limits in Redis (Caddy's sticky routing becomes unnecessary); latest
    positions and presence for the fleet map; tenant data cache with
-   deletion on change.
+   deletion on change. Redis in the compose files and the rate limits:
+   done (`internal/web/limits.go`, falling back to each instance's own
+   count).
 9. **Separate processes:** `cmd/api` (HTTP), `cmd/realtime` (WebSocket),
    `cmd/worker --queues=tracking.*` and so on, `cmd/scheduler`,
    `cmd/relay`, `cmd/migrate`. `cmd/server` stays for one release as "all

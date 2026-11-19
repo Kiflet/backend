@@ -96,6 +96,13 @@ var (
 	// PositionsQueued counts GPS fixes handed to RabbitMQ for the tracking
 	// workers, and how many went to the database directly because it
 	// couldn't take them.
+	// LimitsLocal is 1 while a request limit is counted per instance,
+	// Redis not answering.
+	LimitsLocal = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "kiflet_limits_local",
+		Help: "1 while a request limit is counted by each instance alone, Redis not answering; by limit.",
+	}, []string{"limit"})
+
 	PositionsQueued = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "kiflet_positions_queued_total",
 		Help: "GPS fixes accepted from phones, by path: queue (RabbitMQ) or direct (the database, RabbitMQ being away).",
