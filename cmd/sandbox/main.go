@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/sandbox"
+	"github.com/kiflet/backend/internal/sandbox"
 )
 
 func main() {

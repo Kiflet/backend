@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
 )
 
 // The papers a driver and a truck need on the road: the driver's licence,

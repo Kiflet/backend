@@ -1,4 +1,4 @@
-module github.com/natnael-alemayehu/kiflet
+module github.com/kiflet/backend
 
 go 1.26.0
 

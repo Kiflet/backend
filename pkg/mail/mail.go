@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/pkg/console"
+	"github.com/kiflet/backend/pkg/console"
 )
 
 // Message is a plain-text email to one recipient.

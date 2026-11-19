@@ -11,10 +11,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/phone"
-	"github.com/natnael-alemayehu/kiflet/pkg/metrics"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/phone"
+	"github.com/kiflet/backend/pkg/metrics"
 )
 
 // SMSSender is an SMS provider. It receives numbers in local form and is

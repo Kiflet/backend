@@ -18,10 +18,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/pkg/payments"
-	"github.com/natnael-alemayehu/kiflet/pkg/storage"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/pkg/payments"
+	"github.com/kiflet/backend/pkg/storage"
 )
 
 // Settings are the deployment-wide values the business layer needs.

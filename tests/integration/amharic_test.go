@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // TestCustomersInAmharic: a company that writes to its customers in Amharic

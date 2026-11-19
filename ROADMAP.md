@@ -83,9 +83,10 @@ Still to check, before anything is registered under the name:
 
 Once those pass:
 
-- [ ] Take the names: the domains (`kiflet.et` and `kiflet.com` at least)
-      and the GitHub organization `kiflet`. Creating the organization holds
-      the name even while the repository stays where it is.
+- [ ] Take the names: the domains (`kiflet.et` and `kiflet.com` at least).
+      The GitHub organization [Kiflet](https://github.com/Kiflet) was
+      created on 2026-11-19, and this repository moved there as
+      `Kiflet/backend`.
 - [ ] Ask Ethio telecom for the sender ID `Kiflet`, give telebirr and CBE
       Birr the merchant name, and set up `support@` and `no-reply@` on the
       domain.
@@ -161,9 +162,11 @@ In order. The first two can run side by side.
    and run the drill in `docs/deploy.md` once. Decide whether to turn on
    `WAL_ARCHIVE` and add `ship-wal.sh` to cron. Everything after this point
    should be reordered by what the pilot shows.
-5. **Tracking with the screen off** (M1), if the pilot asks for it: wrap the
-   driver app in Capacitor with a background-location plugin. The web code
-   stays the app.
+5. **Tracking with the screen off** (M1), if the pilot asks for it: the
+   Expo driver app of `docs/migration.md` phase 5 does it with a
+   foreground location service. If the pilot needs it before that phase
+   is due, start phase 5 early against today's driver API rather than
+   wrapping the PWA in Capacitor, which would be thrown away.
 6. **Built ahead of need:** the public API and webhooks (FR-046, FR-047),
    two app instances (O4, `APP_REPLICAS`) and restoring to the minute
    (`WAL_ARCHIVE`, the rest of O1). Turn the last two on for the pilot if
@@ -180,18 +183,26 @@ In order. The first two can run side by side.
 - **The name Kiflet, for now** (2026-11-15). Revisit if one of the checks
   in [Finish the rename](#finish-the-rename) fails. That section has the
   fallbacks and what a second rename takes.
-- **No GitHub organization yet** (2026-11-15). The repository is `kiflet`
-  under the personal account. Revisit when someone joins, or before the
-  name is used in public: the organization name `kiflet` was free on
-  2026-11-14 and nothing holds it. Moving there changes the module path
-  once more, which is one `go mod edit` and one `sed` over the imports.
-- **One codebase** (2026-11-14). Splitting into separate backend, web and
-  mobile repositories was considered and set aside: about 96 routes render
-  pages and 8 return JSON, so a separate web app means rebuilding the
-  dashboard and an API for all of it. Revisit when dedicated web or mobile
-  developers join, or when the product needs screens that server-rendered
-  pages can't deliver. The public API (2026-11-17) didn't change this: it
-  calls the same services as the dashboard, from the same binary.
+- **The Kiflet organization** (2026-11-19, replacing "No GitHub
+  organization yet" of 2026-11-15). Three repositories: `Kiflet/backend`
+  (this one, moved with its history and tags from
+  `Natnael-Alemayehu/kiflet`; the module path is `github.com/kiflet/backend`),
+  `Kiflet/web` and `Kiflet/mobile`. Still to do in GitHub's settings:
+  branch protection on each `main`, two-factor authentication for members,
+  a second owner, private vulnerability reporting, and archiving the old
+  repository with a pointer here. If the name Kiflet fails its checks, the
+  organization is renamed with the product.
+- **Three codebases, migrated in phases** (2026-11-18, replacing "One
+  codebase" of 2026-11-14). This repository becomes the backend and
+  infrastructure (a Go modular monolith with RabbitMQ and Redis, run as
+  separate API, worker and scheduler processes); the web moves to Next.js
+  in `Kiflet/web` and the driver app to React Native with Expo and SQLite
+  in `Kiflet/mobile`, sized for 20,000 drivers on VMs with Docker Compose.
+  `docs/architecture.md` is the target and `docs/migration.md` the plan,
+  page by page with no big bang. The cost noted in 2026-11-14 still holds:
+  about 96 routes render pages, so the dashboard is rebuilt against a new
+  `/api/web`. The work runs under the pilot, not before it (migration.md,
+  "Against the roadmap").
 
 ## Considered and not planned
 

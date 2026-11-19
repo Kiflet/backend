@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
+	"github.com/kiflet/backend/internal/db"
 )
 
 // Booking many shipments from a spreadsheet (FR-013 AC-013.1). The file is

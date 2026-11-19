@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 func rulesForm(over map[string]string) url.Values {

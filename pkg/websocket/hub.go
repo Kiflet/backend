@@ -5,7 +5,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/natnael-alemayehu/kiflet/pkg/metrics"
+	"github.com/kiflet/backend/pkg/metrics"
 )
 
 // Hub sends each company's live updates to that company's open dashboards,

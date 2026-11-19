@@ -29,8 +29,8 @@ import (
 // Kiflet's adapter shows up as a refused call rather than being shared.
 func TestImportsOnlyTheStandardLibraryAndTheConsole(t *testing.T) {
 	allowed := map[string]bool{
-		"github.com/natnael-alemayehu/kiflet/pkg/console":      true,
-		"github.com/natnael-alemayehu/kiflet/internal/sandbox": true,
+		"github.com/kiflet/backend/pkg/console":      true,
+		"github.com/kiflet/backend/internal/sandbox": true,
 	}
 	for _, dir := range []string{".", "../../cmd/sandbox"} {
 		paths, err := filepath.Glob(filepath.Join(dir, "*.go"))

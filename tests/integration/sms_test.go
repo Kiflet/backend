@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // TestSMSTexts: what drivers and customers receive says what to do next.

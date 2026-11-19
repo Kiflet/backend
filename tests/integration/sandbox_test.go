@@ -27,11 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/config"
-	"github.com/natnael-alemayehu/kiflet/internal/sandbox"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/pkg/console"
-	"github.com/natnael-alemayehu/kiflet/pkg/payments"
+	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/sandbox"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/pkg/console"
+	"github.com/kiflet/backend/pkg/payments"
 )
 
 // What the app and the sandbox agree on, as both read it from sandbox.env.

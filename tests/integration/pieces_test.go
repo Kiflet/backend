@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // TestCargoPieces: a load can say how many pieces it is ("1,200 bags"). The

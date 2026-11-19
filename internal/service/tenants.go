@@ -11,12 +11,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/geo"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/phone"
-	"github.com/natnael-alemayehu/kiflet/internal/text"
-	"github.com/natnael-alemayehu/kiflet/pkg/hash"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/geo"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/phone"
+	"github.com/kiflet/backend/internal/text"
+	"github.com/kiflet/backend/pkg/hash"
 )
 
 // TrialLength is how long a new company may use the product before choosing

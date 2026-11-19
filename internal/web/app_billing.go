@@ -16,9 +16,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/pkg/payments"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/pkg/payments"
 )
 
 // ---------------------------------------------------------------------------

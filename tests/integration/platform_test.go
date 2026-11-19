@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // TestHistoryIsAppendOnly: the audit log and the shipment timeline can't be

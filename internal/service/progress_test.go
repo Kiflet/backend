@@ -3,8 +3,8 @@ package service
 import (
 	"testing"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
 )
 
 func TestProgress(t *testing.T) {

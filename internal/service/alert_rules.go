@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/geo"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/geo"
 )
 
 // AlertLongStop is a truck on the road standing still outside a town.

@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
 )
 
 func (s *Server) platform(w http.ResponseWriter, r *http.Request) {

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // TestDriverSettingsFollowTheDriver: what the driver sets on one phone is

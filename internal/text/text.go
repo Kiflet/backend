@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/model"
+	"github.com/kiflet/backend/internal/model"
 )
 
 // The languages a customer can be addressed in.

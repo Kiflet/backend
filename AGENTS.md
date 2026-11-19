@@ -5,6 +5,14 @@
 Kiflet: offline-first shipment tracking and proof of delivery for Ethiopian
 trucking companies. See `README.md` for what it does and how it fits together.
 
+This is **Kiflet/backend**, one of three repositories in the
+[Kiflet](https://github.com/Kiflet) organization, with
+[Kiflet/web](https://github.com/Kiflet/web) (Next.js) and
+[Kiflet/mobile](https://github.com/Kiflet/mobile) (the Expo driver app).
+Until `docs/migration.md` has moved them, this repository still renders
+the dashboard, the public pages and the driver PWA. The Go module is
+`github.com/kiflet/backend`.
+
 - `docs/functional_requirements.md`: the original requirements (FR numbers
   are referenced in code comments). Appendix D records where the product
   deliberately differs; add to it when you depart from a requirement.
@@ -12,6 +20,11 @@ trucking companies. See `README.md` for what it does and how it fits together.
 - `docs/E2E_TEST_GUIDE.md`: manual walkthrough of every flow
 - `docs/deploy.md`: production, backups, staging, connecting the providers
 - `docs/audit-2026-11.md`: the audit of November 2026 and its fix record
+- `docs/architecture.md`: the target architecture (backend modules,
+  RabbitMQ, Redis, the Next.js web and Expo driver apps, deployment)
+- `docs/migration.md`: the phased plan from this codebase to that one.
+  Until a phase is done, the Architecture section below describes what
+  is running.
 - `CONTRIBUTING.md`: these rules at full length
 - `ROADMAP.md`: what comes next, in order. Delete a section once it is done.
 - `CHANGELOG.md`: what changed in each release. It is the only file that
@@ -22,8 +35,11 @@ trucking companies. See `README.md` for what it does and how it fits together.
 One Go application. It serves the dispatcher dashboard
 (server-rendered `html/template`), the public tracking pages, the driver PWA
 (`internal/web/static/driver`) and its JSON API, and runs the background jobs.
-There is no separate frontend or mobile codebase. The Next.js and Expo apps
-were retired and live only in git history.
+Kiflet/web and Kiflet/mobile will take over the pages and the driver app
+one at a time (`docs/migration.md`, phases 4 and 5); until a page or the
+app has moved, it is built here. Earlier Next.js and Expo apps were retired
+before November 2026 and live only in git history; the new ones start from
+the plan, not from those.
 
 - `internal/app`: builds the app from its settings (providers, services, web
   server, background workers). `cmd/server` and the integration tests both

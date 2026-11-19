@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/service"
 )
 
 type codeLabel struct {

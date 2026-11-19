@@ -20,10 +20,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/internal/text"
-	"github.com/natnael-alemayehu/kiflet/pkg/metrics"
-	"github.com/natnael-alemayehu/kiflet/pkg/payments"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/internal/text"
+	"github.com/kiflet/backend/pkg/metrics"
+	"github.com/kiflet/backend/pkg/payments"
 )
 
 type ctxKey int

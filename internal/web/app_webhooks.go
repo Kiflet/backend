@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // Webhooks (FR-047), under Settings beside the API keys: a list of the

@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/pkg/payments"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/pkg/payments"
 )
 
 // TestTrialEndMakesTheAccountReadOnly: once the free trial is over nothing

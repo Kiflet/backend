@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
 )
 
 // Standing states.

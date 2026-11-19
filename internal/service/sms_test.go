@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
 )
 
 func TestParseSMSCommand(t *testing.T) {

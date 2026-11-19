@@ -94,7 +94,14 @@ sent back.
 
 ## Architecture
 
-One Go binary serves everything:
+Kiflet is three repositories in the [Kiflet](https://github.com/Kiflet)
+organization: this one, **Kiflet/backend**, with
+[Kiflet/web](https://github.com/Kiflet/web) (Next.js) and
+[Kiflet/mobile](https://github.com/Kiflet/mobile) (the Expo driver app).
+The two clients are being built from the plan in
+[`docs/architecture.md`](docs/architecture.md) and
+[`docs/migration.md`](docs/migration.md); until they take over, one Go
+binary in this repository serves everything:
 
 ```
           browsers (dashboard, tracking)        driver phones (PWA)        SMS provider
@@ -292,6 +299,8 @@ connecting telebirr, CBE Birr and Ethio telecom.
 
 ## Documents
 
+- [`docs/architecture.md`](docs/architecture.md): the target architecture: backend modules, RabbitMQ, Redis, the web and driver apps, deployment
+- [`docs/migration.md`](docs/migration.md): the phased plan from this codebase to that one, across the three repositories
 - [`docs/deploy.md`](docs/deploy.md): running it in production, backups, staging and connecting the providers
 - [`docs/functional_requirements.md`](docs/functional_requirements.md): the original requirements; Appendix D lists where the product deliberately differs
 - [`docs/logistics.md`](docs/logistics.md): background on the problem

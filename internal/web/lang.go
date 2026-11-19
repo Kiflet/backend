@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/internal/text"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/internal/text"
 )
 
 // The pages customers see (tracking, and confirming a delivery) are in

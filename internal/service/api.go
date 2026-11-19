@@ -11,7 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
+	"github.com/kiflet/backend/internal/db"
 )
 
 // APIService manages the keys of the public API (FR-046) and says whose a

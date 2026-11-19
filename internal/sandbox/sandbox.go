@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/pkg/console"
+	"github.com/kiflet/backend/pkg/console"
 )
 
 // Config is what the sandbox needs to know. The providers' credentials are
