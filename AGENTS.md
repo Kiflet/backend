@@ -62,7 +62,8 @@ the plan, not from those.
   platform packages, `pkg/`, its own packages and other modules' root
   packages, never `internal/service`, `db` or `model`. Errors a person
   can act on are `internal/platform/apperror`'s (`service.Error` is the
-  same type). Moved so far: audit, tenancy.
+  same type). Moved so far: audit, tenancy, and of identity its
+  sessions, roles and `Principal` (users, codes and sign-up next).
 - `internal/service`: the business rules not yet in a module. Handlers
   stay thin.
 - `internal/model`: statuses and the transition table, reasons, roles, plans

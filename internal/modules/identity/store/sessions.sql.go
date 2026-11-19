@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: sessions.sql
 
-package db
+package store
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 )
 
 const createSession = `-- name: CreateSession :one
+
 INSERT INTO sessions (
     user_id, tenant_id, refresh_token_hash, device_id, user_agent, ip_address,
     expires_at, kind, remember, last_seen_at
@@ -31,6 +32,10 @@ type CreateSessionParams struct {
 	Remember         bool               `db:"remember" json:"remember"`
 }
 
+// The identity module's sessions. GetSessionPrincipal also reads the
+// caller's company and its standing (tenants, invoices): every request
+// runs it, so it stays one query, a read across modules kept on purpose
+// until the session is cached (docs/migration.md, phase 1).
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
 	row := q.db.QueryRow(ctx, createSession,
 		arg.UserID,
@@ -70,65 +75,6 @@ DELETE FROM sessions WHERE expires_at < NOW() - INTERVAL '7 days'
 func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteExpiredSessions)
 	return err
-}
-
-const getActiveSessionByTokenHash = `-- name: GetActiveSessionByTokenHash :one
-SELECT id, user_id, tenant_id, refresh_token_hash, device_id, user_agent, ip_address, expires_at, created_at, revoked_at, kind, remember, last_seen_at FROM sessions
-WHERE refresh_token_hash = $1
-  AND kind = $2
-  AND revoked_at IS NULL
-  AND expires_at > NOW()
-`
-
-type GetActiveSessionByTokenHashParams struct {
-	RefreshTokenHash string `db:"refresh_token_hash" json:"refresh_token_hash"`
-	Kind             string `db:"kind" json:"kind"`
-}
-
-func (q *Queries) GetActiveSessionByTokenHash(ctx context.Context, arg GetActiveSessionByTokenHashParams) (Session, error) {
-	row := q.db.QueryRow(ctx, getActiveSessionByTokenHash, arg.RefreshTokenHash, arg.Kind)
-	var i Session
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.TenantID,
-		&i.RefreshTokenHash,
-		&i.DeviceID,
-		&i.UserAgent,
-		&i.IpAddress,
-		&i.ExpiresAt,
-		&i.CreatedAt,
-		&i.RevokedAt,
-		&i.Kind,
-		&i.Remember,
-		&i.LastSeenAt,
-	)
-	return i, err
-}
-
-const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, user_id, tenant_id, refresh_token_hash, device_id, user_agent, ip_address, expires_at, created_at, revoked_at, kind, remember, last_seen_at FROM sessions WHERE id = $1
-`
-
-func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error) {
-	row := q.db.QueryRow(ctx, getSessionByID, id)
-	var i Session
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.TenantID,
-		&i.RefreshTokenHash,
-		&i.DeviceID,
-		&i.UserAgent,
-		&i.IpAddress,
-		&i.ExpiresAt,
-		&i.CreatedAt,
-		&i.RevokedAt,
-		&i.Kind,
-		&i.Remember,
-		&i.LastSeenAt,
-	)
-	return i, err
 }
 
 const getSessionPrincipal = `-- name: GetSessionPrincipal :one

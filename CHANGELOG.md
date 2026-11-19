@@ -22,6 +22,12 @@ What changed in each release, newest first.
   tests. Every read of a company goes through it; a missing company is now
   "not found" rather than an internal error. The errors a person can act
   on moved to `internal/platform/apperror`, shared by the modules.
+- **The identity module, its sessions**: `internal/modules/identity` owns
+  `sessions`, and holds the roles, the `Principal` a request runs as and
+  the `Actor` recorded with a change. Signing in, the session lookup on
+  every request, signing out and ending sessions go through it; the old
+  names stay as aliases until their callers move. Users, codes and
+  sign-up follow.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

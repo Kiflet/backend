@@ -1,19 +1,14 @@
+-- The identity module's sessions. GetSessionPrincipal also reads the
+-- caller's company and its standing (tenants, invoices): every request
+-- runs it, so it stays one query, a read across modules kept on purpose
+-- until the session is cached (docs/migration.md, phase 1).
+
 -- name: CreateSession :one
 INSERT INTO sessions (
     user_id, tenant_id, refresh_token_hash, device_id, user_agent, ip_address,
     expires_at, kind, remember, last_seen_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
 RETURNING *;
-
--- name: GetActiveSessionByTokenHash :one
-SELECT * FROM sessions
-WHERE refresh_token_hash = $1
-  AND kind = $2
-  AND revoked_at IS NULL
-  AND expires_at > NOW();
-
--- name: GetSessionByID :one
-SELECT * FROM sessions WHERE id = $1;
 
 -- name: GetSessionPrincipal :one
 -- Everything a request needs to know about who is calling, in one lookup.

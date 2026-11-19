@@ -66,12 +66,12 @@ func TestDeviceNamesBrowsers(t *testing.T) {
 		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36":                              "Chrome on Linux",
 		"curl/8.4.0": "curl/8.4.0",
 	} {
-		if got := device(&ua); got != want {
+		if got := device(ua); got != want {
 			t.Errorf("device(%q) = %q, want %q", ua, got, want)
 		}
 	}
-	if got := device(nil); got != "" {
-		t.Errorf("device(nil) = %q, want nothing", got)
+	if got := device(""); got != "" {
+		t.Errorf("device(\"\") = %q, want nothing", got)
 	}
 }
 

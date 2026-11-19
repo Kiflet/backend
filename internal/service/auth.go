@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/identity"
+	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,29 +20,18 @@ import (
 // Session kinds: "api" sessions carry a bearer token (the driver app);
 // "web" sessions a cookie (the dashboard).
 const (
-	SessionAPI = "api"
-	SessionWeb = "web"
+	SessionAPI = identity.SessionAPI
+	SessionWeb = identity.SessionWeb
 )
 
 const (
 	maxFailedLogins = 5
 	lockoutDuration = 15 * time.Minute
-
-	// Drivers stay signed in while they use the app: a driver days into a
-	// trip without signal must not come back to a login screen.
-	apiSessionTTL = 30 * 24 * time.Hour
-	// Dashboard sessions end after eight idle hours, or last thirty days with
-	// "remember me" (NFR security).
-	webIdleTimeout = 8 * time.Hour
-	webRememberTTL = 30 * 24 * time.Hour
-
-	touchInterval = time.Minute
 )
 
 var (
-	errSessionIdle = &Error{Kind: KindUnauthorized, Message: "You were signed out after 8 hours without activity."}
-	errWeakPIN     = &Error{Kind: KindInvalid, Field: "new_pin", Message: "Choose a PIN of 4 to 6 digits that isn't a simple sequence like 1234 or 1111."}
-	errWeakPass    = &Error{Kind: KindInvalid, Field: "new_password", Message: "Use at least 8 characters."}
+	errWeakPIN  = &Error{Kind: KindInvalid, Field: "new_pin", Message: "Choose a PIN of 4 to 6 digits that isn't a simple sequence like 1234 or 1111."}
+	errWeakPass = &Error{Kind: KindInvalid, Field: "new_password", Message: "Use at least 8 characters."}
 )
 
 // Bcrypt hashes of nothing in particular, compared against when the account
@@ -76,23 +65,12 @@ var errOfficeAccount = &Error{Kind: KindUnauthorized, Message: "This number belo
 type AuthService struct{ *core }
 
 // ClientInfo describes where a request came from.
-type ClientInfo struct {
-	IP        string
-	UserAgent string
-	DeviceID  string
-}
+type (
+	ClientInfo  = identity.ClientInfo
+	LoginResult = identity.LoginResult
+)
 
-// LoginResult is a new session.
-type LoginResult struct {
-	Token     string
-	ExpiresAt time.Time
-	Principal *Principal
-}
-
-func hashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
-}
+func hashToken(token string) string { return identityapp.HashToken(token) }
 
 // DriverLogin signs a driver into the app with phone and PIN (FR-002). A
 // driver has one device: signing in elsewhere ends the other sessions.
@@ -128,7 +106,7 @@ func (s *AuthService) DriverLogin(ctx context.Context, rawPhone, pin string, ci 
 	if err != nil {
 		return nil, err
 	}
-	_ = s.q.RevokeOtherUserSessions(ctx, db.RevokeOtherUserSessionsParams{UserID: u.ID, ID: res.Principal.SessionID})
+	_ = s.sessions.EndOthers(ctx, s.q.Conn(), u.ID, res.Principal.SessionID)
 	return res, nil
 }
 
@@ -229,106 +207,25 @@ func (s *AuthService) admit(ctx context.Context, u db.User, ci ClientInfo) error
 }
 
 func (s *AuthService) startSession(ctx context.Context, u db.User, kind string, remember bool, ci ClientInfo) (*LoginResult, error) {
-	token := randomToken(32)
-	now := s.now()
-	var expires time.Time
-	switch {
-	case kind == SessionAPI:
-		expires = now.Add(apiSessionTTL)
-	case remember:
-		expires = now.Add(webRememberTTL)
-	default:
-		expires = now.Add(webIdleTimeout)
-	}
-	sess, err := s.q.CreateSession(ctx, db.CreateSessionParams{
-		UserID:           u.ID,
-		TenantID:         u.TenantID,
-		RefreshTokenHash: hashToken(token),
-		DeviceID:         toText(truncate(ci.DeviceID, 100)),
-		UserAgent:        toText(truncate(ci.UserAgent, 300)),
-		IpAddress:        toText(ci.IP),
-		ExpiresAt:        toTimestamp(expires),
-		Kind:             kind,
-		Remember:         remember,
-	})
-	if err != nil {
-		return nil, err
-	}
-	p, err := s.Authenticate(ctx, token, kind)
-	if err != nil {
-		return nil, err
-	}
-	return &LoginResult{Token: token, ExpiresAt: sess.ExpiresAt.Time, Principal: p}, nil
+	return s.sessions.Start(ctx, s.q.Conn(), u.ID, u.TenantID, kind, remember, ci)
 }
 
 // Authenticate resolves a session token to its principal, enforcing
 // revocation, deactivation, suspension and the idle timeout on every request.
 func (s *AuthService) Authenticate(ctx context.Context, token, kind string) (*Principal, error) {
-	if token == "" {
-		return nil, ErrSessionRevoked
-	}
-	row, err := s.q.GetSessionPrincipal(ctx, db.GetSessionPrincipalParams{RefreshTokenHash: hashToken(token), Kind: kind})
-	if isNoRows(err) {
-		return nil, ErrSessionRevoked
-	}
-	if err != nil {
-		return nil, err
-	}
-	if !row.UserActive {
-		_ = s.q.RevokeAllUserSessions(ctx, row.UserID)
-		return nil, ErrAccountInactive
-	}
-	if !row.TenantActive && row.Role != model.RolePlatformAdmin {
-		return nil, s.suspended()
-	}
-
-	now := s.now()
-	lastSeen := row.LastSeenAt.Time
-	if kind == SessionWeb && !row.Remember && row.LastSeenAt.Valid && now.Sub(lastSeen) > webIdleTimeout {
-		_ = s.q.RevokeSession(ctx, row.SessionID)
-		return nil, errSessionIdle
-	}
-	if !row.LastSeenAt.Valid || now.Sub(lastSeen) > touchInterval {
-		expires := row.ExpiresAt.Time
-		switch {
-		case kind == SessionAPI:
-			expires = now.Add(apiSessionTTL)
-		case !row.Remember:
-			expires = now.Add(webIdleTimeout)
-		}
-		_ = s.q.TouchSession(ctx, db.TouchSessionParams{ID: row.SessionID, ExpiresAt: toTimestamp(expires)})
-	}
-
-	return &Principal{
-		SessionID:            row.SessionID,
-		UserID:               row.UserID,
-		TenantID:             row.TenantID,
-		Role:                 row.Role,
-		Name:                 row.FullName,
-		Phone:                deref(row.Phone),
-		Email:                deref(row.Email),
-		TenantName:           row.TenantName,
-		TenantPlan:           row.TenantPlan,
-		TrialEnds:            timePtr(row.TrialEndsAt),
-		SubscriptionEnds:     timePtr(row.SubscriptionEndsAt),
-		DebtNumber:           row.DebtNumber,
-		DebtDue:              timePtr(row.DebtDueAt),
-		MustChangeCredential: row.PasswordResetRequired,
-		EmailVerified:        row.EmailVerified,
-	}, nil
+	return s.sessions.Authenticate(ctx, token, kind)
 }
 
-// Logout ends the current session.
 // SessionActive reports whether a session still lets its holder in: not
 // signed out or expired, the person active, and their company not
 // suspended. Connections that stay open, like the dashboard's live feed,
 // ask it now and then.
 func (s *AuthService) SessionActive(ctx context.Context, id pgtype.UUID) (bool, error) {
-	return s.q.SessionStillValid(ctx, id)
+	return s.sessions.Active(ctx, id)
 }
 
 func (s *AuthService) Logout(ctx context.Context, p *Principal, ci ClientInfo) error {
-	if err := s.q.RevokeSession(ctx, p.SessionID); err != nil {
+	if err := s.sessions.End(ctx, p.SessionID); err != nil {
 		return err
 	}
 	source := SourceDashboard
@@ -340,18 +237,18 @@ func (s *AuthService) Logout(ctx context.Context, p *Principal, ci ClientInfo) e
 }
 
 // Sessions lists the caller's active sessions.
-func (s *AuthService) Sessions(ctx context.Context, p *Principal) ([]db.Session, error) {
-	return s.q.ListActiveSessionsByUser(ctx, p.UserID)
+func (s *AuthService) Sessions(ctx context.Context, p *Principal) ([]identity.Session, error) {
+	return s.sessions.List(ctx, p.UserID)
 }
 
 // RevokeSession ends one of the caller's own sessions.
 func (s *AuthService) RevokeSession(ctx context.Context, p *Principal, id pgtype.UUID) error {
-	return s.q.RevokeSessionByUser(ctx, db.RevokeSessionByUserParams{ID: id, UserID: p.UserID})
+	return s.sessions.EndUsers(ctx, p.UserID, id)
 }
 
 // RevokeOtherSessions signs the caller out everywhere else.
 func (s *AuthService) RevokeOtherSessions(ctx context.Context, p *Principal) error {
-	return s.q.RevokeOtherUserSessions(ctx, db.RevokeOtherUserSessionsParams{UserID: p.UserID, ID: p.SessionID})
+	return s.sessions.EndOthers(ctx, s.q.Conn(), p.UserID, p.SessionID)
 }
 
 // ChangePassword sets a staff member's password. After an admin reset the
@@ -381,7 +278,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, p *Principal, current,
 	if err := s.q.UpdatePassword(ctx, db.UpdatePasswordParams{ID: u.ID, PasswordHash: &h, PasswordResetRequired: false}); err != nil {
 		return err
 	}
-	_ = s.q.RevokeOtherUserSessions(ctx, db.RevokeOtherUserSessionsParams{UserID: u.ID, ID: p.SessionID})
+	_ = s.sessions.EndOthers(ctx, s.q.Conn(), u.ID, p.SessionID)
 	s.audit(ctx, s.q, p.Actor(SourceDashboard, ci.IP, ci.UserAgent), "password_changed", "user", u.ID, nil, nil)
 	return nil
 }
@@ -460,7 +357,7 @@ func (s *AuthService) ConfirmPINReset(ctx context.Context, rawPhone, code, newPI
 	if err := s.q.UpdatePIN(ctx, db.UpdatePINParams{ID: u.ID, PinHash: &h, PasswordResetRequired: false}); err != nil {
 		return nil, err
 	}
-	_ = s.q.RevokeAllUserSessions(ctx, u.ID)
+	_ = s.sessions.EndAll(ctx, s.q.Conn(), u.ID)
 	s.audit(ctx, s.q, Actor{UserID: u.ID, TenantID: u.TenantID, Name: u.FullName, Role: u.Role, IP: ci.IP, UserAgent: ci.UserAgent},
 		"pin_reset", "user", u.ID, nil, nil)
 	u.LockedUntil = pgtype.Timestamptz{}
@@ -515,7 +412,7 @@ func (s *AuthService) ResetCredential(ctx context.Context, p *Principal, userID 
 			}
 			body = fmt.Sprintf("%s: your temporary dashboard password is %s. You'll choose a new one when you sign in.", p.TenantName, temp)
 		}
-		if err := q.RevokeAllUserSessions(ctx, u.ID); err != nil {
+		if err := s.sessions.EndAll(ctx, q.Conn(), u.ID); err != nil {
 			return err
 		}
 		if u.Phone != nil {

@@ -482,11 +482,7 @@ func (s *Server) funcs() template.FuncMap {
 
 // device names a browser the way people know it, "Chrome on Android", from
 // its user agent, or shortens the user agent when it is not recognised.
-func device(ua *string) string {
-	if ua == nil {
-		return ""
-	}
-	s := *ua
+func device(s string) string {
 	var browser, system string
 	switch {
 	case strings.Contains(s, "Edg/"), strings.Contains(s, "EdgA/"), strings.Contains(s, "EdgiOS/"):

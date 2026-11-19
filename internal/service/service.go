@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/kiflet/backend/internal/modules/audit"
+	"github.com/kiflet/backend/internal/modules/identity"
 	"github.com/kiflet/backend/internal/modules/tenancy"
 	"time"
 
@@ -22,7 +23,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/kiflet/backend/internal/db"
-	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/pkg/payments"
 	"github.com/kiflet/backend/pkg/storage"
 )
@@ -73,9 +73,10 @@ type PositionQueue interface {
 // Deps is everything the services share.
 type Deps struct {
 	Pool *pgxpool.Pool
-	// Audit and Tenancy are modules (internal/modules).
+	// Audit, Tenancy and Sessions are modules (internal/modules).
 	Audit     audit.Log
 	Tenancy   tenancy.Companies
+	Sessions  identity.Sessions
 	Log       zerolog.Logger
 	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
@@ -138,7 +139,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions,
 		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -184,6 +185,7 @@ type core struct {
 	webhooks *WebhookService
 	auditLog audit.Log
 	tenancy  tenancy.Companies
+	sessions identity.Sessions
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	outbox        bool
@@ -263,72 +265,24 @@ type nopPublisher struct{}
 
 func (nopPublisher) BroadcastToTenant(string, []byte) {}
 
-// Principal is the authenticated caller of a request.
-type Principal struct {
-	SessionID  pgtype.UUID
-	UserID     pgtype.UUID
-	TenantID   pgtype.UUID
-	Role       string
-	Name       string
-	Phone      string
-	Email      string
-	TenantName string
-	TenantPlan string
-	TrialEnds  *time.Time
-	// SubscriptionEnds is when the company's plan ends, if its renewal was
-	// turned off.
-	SubscriptionEnds *time.Time
-	// DebtNumber and DebtDue are the company's oldest unpaid renewal or
-	// usage invoice, if any: read-only mode follows from them.
-	DebtNumber string
-	DebtDue    *time.Time
-	// MustChangeCredential is set after an admin reset or on first login with
-	// an issued credential. The caller may do nothing else until it is changed.
-	MustChangeCredential bool
-	// EmailVerified reports whether Email has been confirmed by a link.
-	EmailVerified bool
-}
+// Principal, Actor and where an action came from are the identity
+// module's (internal/modules/identity).
+type (
+	Principal = identity.Principal
+	Actor     = identity.Actor
+)
 
-func (p *Principal) IsDriver() bool         { return p.Role == model.RoleDriver }
-func (p *Principal) CanManageFleet() bool   { return model.CanManageFleet(p.Role) }
-func (p *Principal) CanManageCompany() bool { return model.CanManageCompany(p.Role) }
-func (p *Principal) IsPlatformAdmin() bool  { return p.Role == model.RolePlatformAdmin }
-
-// Actor builds the record of who did something, for history and audit.
-func (p *Principal) Actor(source, ip, userAgent string) Actor {
-	return Actor{
-		UserID: p.UserID, TenantID: p.TenantID, Name: p.Name, Role: p.Role,
-		Source: source, IP: ip, UserAgent: userAgent,
-	}
-}
-
-// Actor is who performed an action and through what channel.
-type Actor struct {
-	UserID    pgtype.UUID
-	TenantID  pgtype.UUID
-	Name      string
-	Role      string
-	Source    string
-	IP        string
-	UserAgent string
-}
-
-// Event sources, matching the shipment_events check constraint.
 const (
-	SourceDashboard = "dashboard"
-	SourceApp       = "app"
-	SourceSMS       = "sms"
-	SourceSystem    = "system"
-	SourceCustomer  = "customer"
-	SourceAPI       = "api"
+	SourceDashboard = identity.SourceDashboard
+	SourceApp       = identity.SourceApp
+	SourceSMS       = identity.SourceSMS
+	SourceSystem    = identity.SourceSystem
+	SourceCustomer  = identity.SourceCustomer
+	SourceAPI       = identity.SourceAPI
 )
 
 // SystemActor is the platform acting on its own, such as a scheduled check.
-func SystemActor(tenantID pgtype.UUID) Actor {
-	return Actor{TenantID: tenantID, Name: "System", Source: SourceSystem}
-}
-
-func (a Actor) isDriver() bool { return a.Role == model.RoleDriver }
+var SystemActor = identity.SystemActor
 
 // randomToken returns n random bytes, URL-safe base64 encoded.
 func randomToken(n int) string {

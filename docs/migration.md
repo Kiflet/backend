@@ -258,7 +258,9 @@ throughout; only imports move.
       `http/` (still rendering templates for now).
    5. `make test test-integration`; one PR per module.
 
-   Done: audit, tenancy. How it went, for the rest:
+   Done: audit, tenancy; identity in part (sessions, roles, `Principal`
+   and `Actor`; users, verification codes, email links and pending sign-ups
+   are next). How it went, for the rest:
    - **The server-rendered handlers stay in `internal/web`.** Phase 4
      replaces those pages with Kiflet/web and phase 6 deletes them, so
      moving them would be work thrown away. A module's `http/` holds the
@@ -290,6 +292,15 @@ throughout; only imports move.
      - Signing up a company stays in `internal/service` until identity
        moves, since it creates the first user: it calls
        `tenancy.Create` within its transaction.
+   - **A module may move in more than one PR** when it is large: identity
+     moved its sessions first. Types other code names everywhere
+     (`Principal`, `Actor`, the roles) stay reachable under their old
+     names as aliases (`service.Principal`, `model.RoleAdmin`), so callers
+     change when their own code moves, not all at once.
+   - **Reads kept across modules on purpose:** the session lookup
+     (`GetSessionPrincipal`) joins `users`, `tenants` and `invoices`, as
+     every request runs it; it stays one query until the session is
+     cached in Redis.
    - `internal/service` keeps a thin service where the dashboard needs a
      check the module can't make yet (the platform admin's), until the
      module that owns it moves.

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/kiflet/backend/internal/modules/identity"
 	"github.com/kiflet/backend/internal/platform/apperror"
 )
 
@@ -35,8 +36,8 @@ var (
 var (
 	ErrAccountLocked      = &Error{Kind: KindForbidden, Message: "Too many failed attempts. The account is locked for 15 minutes."}
 	ErrInvalidCredentials = &Error{Kind: KindUnauthorized, Message: "Incorrect login details."}
-	ErrAccountInactive    = &Error{Kind: KindForbidden, Message: "This account has been deactivated. Contact your administrator."}
-	ErrSessionRevoked     = &Error{Kind: KindUnauthorized, Message: "Your session has ended. Please sign in again."}
+	ErrAccountInactive    = identity.ErrAccountInactive
+	ErrSessionRevoked     = identity.ErrSessionRevoked
 	ErrWrongApp           = &Error{Kind: KindForbidden, Message: "Drivers sign in through the driver app."}
 	ErrNotDriver          = &Error{Kind: KindForbidden, Message: "Only drivers can use the driver app."}
 	ErrSamePassword       = &Error{Kind: KindInvalid, Field: "new_password", Message: "Choose a password different from the current one."}
@@ -49,6 +50,4 @@ var (
 
 // suspended is the error for a suspended company's users: they can't sign in
 // to ask on the Help page, so it says where to write.
-func (c *core) suspended() error {
-	return &Error{Kind: KindForbidden, Message: "This company account is suspended. Write to " + c.cfg.SupportEmail + " to have it restored."}
-}
+func (c *core) suspended() error { return identity.Suspended(c.cfg.SupportEmail) }

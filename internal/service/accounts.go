@@ -135,7 +135,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string,
 		if err := q.ExpireEmailTokens(ctx, db.ExpireEmailTokensParams{TenantID: t.TenantID, UserID: t.UserID, Purpose: linkPasswordReset}); err != nil {
 			return err
 		}
-		if err := q.RevokeAllUserSessions(ctx, t.UserID); err != nil {
+		if err := s.sessions.EndAll(ctx, q.Conn(), t.UserID); err != nil {
 			return err
 		}
 		if u, err = q.GetUserByID(ctx, db.GetUserByIDParams{ID: t.UserID, TenantID: t.TenantID}); err != nil {
@@ -215,7 +215,7 @@ func (s *AuthService) ResetPasswordByCode(ctx context.Context, rawPhone, code, p
 		if err := q.UpdatePassword(ctx, db.UpdatePasswordParams{ID: u.ID, PasswordHash: &h, PasswordResetRequired: false}); err != nil {
 			return err
 		}
-		if err := q.RevokeAllUserSessions(ctx, u.ID); err != nil {
+		if err := s.sessions.EndAll(ctx, q.Conn(), u.ID); err != nil {
 			return err
 		}
 		s.audit(ctx, q, userActor(u, ci), "password_reset", "user", u.ID, nil, map[string]any{"by": "sms"})
