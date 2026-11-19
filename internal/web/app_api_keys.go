@@ -3,7 +3,7 @@ package web
 import (
 	"net/http"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
+	"github.com/kiflet/backend/internal/db"
 )
 
 // The keys of the public API (FR-046), on a page of their own under

@@ -8,9 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/geo"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/geo"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // paperView is a licence, insurance or inspection date as the lists show

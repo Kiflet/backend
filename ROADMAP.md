@@ -83,9 +83,10 @@ Still to check, before anything is registered under the name:
 
 Once those pass:
 
-- [ ] Take the names: the domains (`kiflet.et` and `kiflet.com` at least)
-      and the GitHub organization `kiflet`. Creating the organization holds
-      the name even while the repository stays where it is.
+- [ ] Take the names: the domains (`kiflet.et` and `kiflet.com` at least).
+      The GitHub organization [Kiflet](https://github.com/Kiflet) was
+      created on 2026-11-19, and this repository moved there as
+      `Kiflet/backend`.
 - [ ] Ask Ethio telecom for the sender ID `Kiflet`, give telebirr and CBE
       Birr the merchant name, and set up `support@` and `no-reply@` on the
       domain.
@@ -182,17 +183,21 @@ In order. The first two can run side by side.
 - **The name Kiflet, for now** (2026-11-15). Revisit if one of the checks
   in [Finish the rename](#finish-the-rename) fails. That section has the
   fallbacks and what a second rename takes.
-- **No GitHub organization yet** (2026-11-15). The repository is `kiflet`
-  under the personal account. Revisit when someone joins, or before the
-  name is used in public: the organization name `kiflet` was free on
-  2026-11-14 and nothing holds it. Moving there changes the module path
-  once more, which is one `go mod edit` and one `sed` over the imports.
+- **The Kiflet organization** (2026-11-19, replacing "No GitHub
+  organization yet" of 2026-11-15). Three repositories: `Kiflet/backend`
+  (this one, moved with its history and tags from
+  `Natnael-Alemayehu/kiflet`; the module path is `github.com/kiflet/backend`),
+  `Kiflet/web` and `Kiflet/mobile`. Still to do in GitHub's settings:
+  branch protection on each `main`, two-factor authentication for members,
+  a second owner, private vulnerability reporting, and archiving the old
+  repository with a pointer here. If the name Kiflet fails its checks, the
+  organization is renamed with the product.
 - **Three codebases, migrated in phases** (2026-11-18, replacing "One
   codebase" of 2026-11-14). This repository becomes the backend and
   infrastructure (a Go modular monolith with RabbitMQ and Redis, run as
   separate API, worker and scheduler processes); the web moves to Next.js
-  in `kiflet-web` and the driver app to React Native with Expo and SQLite
-  in `kiflet-mobile`, sized for 20,000 drivers on VMs with Docker Compose.
+  in `Kiflet/web` and the driver app to React Native with Expo and SQLite
+  in `Kiflet/mobile`, sized for 20,000 drivers on VMs with Docker Compose.
   `docs/architecture.md` is the target and `docs/migration.md` the plan,
   page by page with no big bang. The cost noted in 2026-11-14 still holds:
   about 96 routes render pages, so the dashboard is rebuilt against a new

@@ -17,15 +17,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"github.com/natnael-alemayehu/kiflet/internal/config"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/internal/web"
-	"github.com/natnael-alemayehu/kiflet/pkg/console"
-	"github.com/natnael-alemayehu/kiflet/pkg/mail"
-	"github.com/natnael-alemayehu/kiflet/pkg/payments"
-	"github.com/natnael-alemayehu/kiflet/pkg/sms"
-	"github.com/natnael-alemayehu/kiflet/pkg/storage"
-	"github.com/natnael-alemayehu/kiflet/pkg/websocket"
+	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/internal/web"
+	"github.com/kiflet/backend/pkg/console"
+	"github.com/kiflet/backend/pkg/mail"
+	"github.com/kiflet/backend/pkg/payments"
+	"github.com/kiflet/backend/pkg/sms"
+	"github.com/kiflet/backend/pkg/storage"
+	"github.com/kiflet/backend/pkg/websocket"
 )
 
 // Options change how the app is put together. The zero value is

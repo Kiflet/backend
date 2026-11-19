@@ -36,11 +36,11 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/natnael-alemayehu/kiflet/internal/app"
-	"github.com/natnael-alemayehu/kiflet/internal/config"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/migrations"
-	"github.com/natnael-alemayehu/kiflet/pkg/console"
+	"github.com/kiflet/backend/internal/app"
+	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/migrations"
+	"github.com/kiflet/backend/pkg/console"
 )
 
 var pool *pgxpool.Pool

@@ -4,11 +4,18 @@ This is the target architecture for Kiflet: what the platform needs, how
 it is split into parts, and how those parts scale. `docs/migration.md` is the
 plan for getting there from today's single Go application.
 
-The decisions it rests on, agreed on 2026-11-18:
+This repository, **Kiflet/backend**, holds the backend and the
+infrastructure, so this document covers the whole platform. The two
+clients have their own, in more detail:
+[Kiflet/web `docs/architecture.md`](https://github.com/Kiflet/web/blob/main/docs/architecture.md)
+and [Kiflet/mobile `docs/architecture.md`](https://github.com/Kiflet/mobile/blob/main/docs/architecture.md).
+
+The decisions it rests on, agreed on 2026-11-18 (the repositories were
+created in the Kiflet organization on 2026-11-19):
 
 | Decision | Choice |
 |---|---|
-| Codebases | Three: **this repository** (backend and infrastructure), **kiflet-web** (Next.js), **kiflet-mobile** (React Native with Expo) |
+| Codebases | Three, in the [Kiflet](https://github.com/Kiflet) organization: **Kiflet/backend** (this one: backend and infrastructure), **Kiflet/web** (Next.js), **Kiflet/mobile** (React Native with Expo) |
 | Backend shape | Go, a **modular monolith** deployed as several processes (API, workers, scheduler) fed by RabbitMQ; modules can become services later |
 | Driver app | React Native with Expo, its own **SQLite** database, works offline, GPS with the screen off |
 | Web | Next.js (App Router, TypeScript): the dashboard, the operator's pages and the public pages |
@@ -27,8 +34,8 @@ Contents:
 6. [RabbitMQ](#6-rabbitmq)
 7. [Redis](#7-redis)
 8. [The main flows](#8-the-main-flows)
-9. [The driver app (kiflet-mobile)](#9-the-driver-app-kiflet-mobile)
-10. [The web app (kiflet-web)](#10-the-web-app-kiflet-web)
+9. [The driver app](#9-the-driver-app)
+10. [The web app](#10-the-web-app)
 11. [APIs and contracts](#11-apis-and-contracts)
 12. [Security](#12-security)
 13. [Deployment](#13-deployment)
@@ -108,18 +115,18 @@ outside services runs on the company's VMs with Docker Compose (section 13).
 ```mermaid
 flowchart TB
   subgraph Clients
-    MOB["kiflet-mobile<br/>Expo app + SQLite"]
+    MOB["Kiflet/mobile<br/>Expo app + SQLite"]
     BRW["Browser"]
     FP["Feature phone"]
   end
 
   EDGE["Caddy<br/>TLS, routing, compression"]
 
-  subgraph WebTier["kiflet-web"]
+  subgraph WebTier["Kiflet/web"]
     NX["Next.js server<br/>(SSR, server actions)"]
   end
 
-  subgraph Backend["this repository: one Go codebase, several processes"]
+  subgraph Backend["Kiflet/backend: one Go codebase, several processes"]
     API["api<br/>REST: web, driver, public, callbacks"]
     RT["realtime<br/>WebSocket gateway"]
     WK1["worker: tracking<br/>positions in, trails, geofences"]
@@ -168,19 +175,19 @@ flowchart TB
 
 | Part | Repository | Language | Scales by | State |
 |---|---|---|---|---|
-| Caddy | this one (`deployments/`) | config | 1–2 instances behind DNS | none |
-| Next.js server | kiflet-web | TypeScript | replicas | none |
-| `api` | this one, `cmd/api` | Go | replicas | none (Postgres, Redis) |
-| `realtime` | this one, `cmd/realtime` | Go | replicas | connections only |
-| `worker` | this one, `cmd/worker --queues=…` | Go | replicas per queue group | none |
-| `scheduler` | this one, `cmd/scheduler` | Go | 2 instances, one leads (advisory lock) | none |
-| `relay` | this one, `cmd/relay` | Go | 2 instances, one leads | none |
+| Caddy | Kiflet/backend (`deployments/`) | config | 1–2 instances behind DNS | none |
+| Next.js server | Kiflet/web | TypeScript | replicas | none |
+| `api` | Kiflet/backend, `cmd/api` | Go | replicas | none (Postgres, Redis) |
+| `realtime` | Kiflet/backend, `cmd/realtime` | Go | replicas | connections only |
+| `worker` | Kiflet/backend, `cmd/worker --queues=…` | Go | replicas per queue group | none |
+| `scheduler` | Kiflet/backend, `cmd/scheduler` | Go | 2 instances, one leads (advisory lock) | none |
+| `relay` | Kiflet/backend, `cmd/relay` | Go | 2 instances, one leads | none |
 | PostgreSQL + PostGIS | image | | primary + replica; vertical first | source of truth |
 | PgBouncer | image | | 1 per database VM | none |
 | RabbitMQ | image | | 3-node cluster | durable queues |
 | Redis | image | | 1 primary + replica with Sentinel | can be lost |
 | Object storage | SeaweedFS or MinIO on VMs, or a hosted S3 | | volumes | files |
-| Driver app | kiflet-mobile | TypeScript | phones | SQLite on the phone |
+| Driver app | Kiflet/mobile | TypeScript | phones | SQLite on the phone |
 
 All the Go processes are the same binary with different commands, built
 from one codebase. They share modules, but each process only starts what it
@@ -596,7 +603,10 @@ long, because the page catches up on its next fetch.
 
 ---
 
-## 9. The driver app (kiflet-mobile)
+## 9. The driver app
+
+In detail, with its database tables, the sync protocol and the plan:
+[Kiflet/mobile `docs/architecture.md`](https://github.com/Kiflet/mobile/blob/main/docs/architecture.md).
 
 React Native with Expo, TypeScript, Android first (most drivers), iOS from
 the same code.
@@ -694,13 +704,16 @@ flowchart TB
 
 ---
 
-## 10. The web app (kiflet-web)
+## 10. The web app
+
+In detail, with its routes, the design tokens and the plan:
+[Kiflet/web `docs/architecture.md`](https://github.com/Kiflet/web/blob/main/docs/architecture.md).
 
 Next.js with the App Router, TypeScript, React Server Components.
 
 ```mermaid
 flowchart LR
-  subgraph Next["kiflet-web (Next.js)"]
+  subgraph Next["Kiflet/web (Next.js)"]
     subgraph Routes["app/"]
       PUB["(public)<br/>landing, sign-in, sign-up,<br/>track, confirm"]
       DSH["(dashboard)/app<br/>overview, shipments, drivers,<br/>vehicles, alerts, reports, settings…"]
@@ -749,20 +762,20 @@ flowchart LR
 
 | API | Path | Who | Auth | Contract |
 |---|---|---|---|---|
-| Web | `/api/web/*` | kiflet-web (server and browser) | session cookie + CSRF header | `api/openapi/web.yaml` |
-| Driver | `/api/driver/*` | kiflet-mobile | bearer token from PIN sign-in, per device | `api/openapi/driver.yaml` |
+| Web | `/api/web/*` | Kiflet/web (server and browser) | session cookie + CSRF header | `api/openapi/web.yaml` |
+| Driver | `/api/driver/*` | Kiflet/mobile | bearer token from PIN sign-in, per device | `api/openapi/driver.yaml` |
 | Public | `/api/v1/*` | companies' own systems | API key | `api/openapi/v1.yaml` (today's `openapi.json`) |
 | Callbacks | `/api/callbacks/*` | Ethio telecom, telebirr, CBE Birr | provider signatures | per provider |
-| Live | `/ws` | kiflet-web | session cookie | `api/asyncapi/live.yaml` |
+| Live | `/ws` | Kiflet/web | session cookie | `api/asyncapi/live.yaml` |
 | Webhooks | out | companies' systems | Standard Webhooks signature | `api/asyncapi/webhooks.yaml` |
 
 - **The OpenAPI files in this repository are the contract.** CI checks that
   the Go handlers match them (as `TestOpenAPIMatchesTheAPI` does today for
   the public API) and generates a TypeScript client, published as the
-  `@kiflet/api` package to GitHub Packages. kiflet-web and kiflet-mobile
+  `@kiflet/api` package to GitHub Packages. Kiflet/web and Kiflet/mobile
   depend on a version of it, so a breaking change shows up as a type error
   there, not at run time.
-- **Versioning:** `/api/web` changes with kiflet-web, deployed together;
+- **Versioning:** `/api/web` changes with Kiflet/web, deployed together;
   `/api/driver` must keep serving app versions still on phones (at least
   the last two releases, or 90 days); `/api/v1` follows today's rules:
   additions only.
@@ -847,7 +860,7 @@ flowchart TB
 - **Deploys:** CI builds images tagged with the commit; a deploy runs
   `migrate`, then replaces API and worker containers one VM at a time
   (Caddy's health checks take a VM out while it restarts). Next.js deploys
-  the same way from kiflet-web's CI.
+  the same way from Kiflet/web's CI.
 - **Backups:** continuous WAL archiving and nightly base backups to object
   storage with point-in-time restore (pgBackRest or WAL-G), a restore
   tested in CI as `tests/e2e`'s last test does today. RabbitMQ definitions

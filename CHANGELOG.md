@@ -4,6 +4,17 @@ What changed in each release, newest first.
 
 ## Unreleased
 
+### Moved
+
+- **To the Kiflet organization.** This repository is now
+  [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
+  history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside
+  [Kiflet/web](https://github.com/Kiflet/web) and
+  [Kiflet/mobile](https://github.com/Kiflet/mobile). The Go module is
+  `github.com/kiflet/backend` (it was `github.com/natnael-alemayehu/kiflet`):
+  code that imports it changes its imports. `LICENSE` points at this
+  repository's issues.
+
 ### Fixed
 
 - **The overview's numbers on a laptop.** At 1280 pixels wide, the five
@@ -12,6 +23,15 @@ What changed in each release, newest first.
   a row on narrower screens.
 
 ### Added
+
+- **The plan for three codebases.** `docs/architecture.md` (a Go modular
+  monolith run as API, realtime, worker, scheduler and relay processes
+  over RabbitMQ and Redis; the Next.js web app; the Expo driver app with
+  SQLite; deployment on VMs; capacity at 20,000 drivers) and
+  `docs/migration.md` (six phases from today's single application).
+  Kiflet/web and Kiflet/mobile each have their own architecture and
+  migration documents for their phases. `ROADMAP.md`'s "One codebase"
+  decision is replaced, and screen-off tracking points at the Expo app.
 
 - **Support by phone and Telegram.** `SUPPORT_PHONE`, `SUPPORT_TELEGRAM`
   (a username) and `SUPPORT_HOURS` add those ways to reach support to the

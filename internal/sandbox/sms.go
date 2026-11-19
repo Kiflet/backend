@@ -25,7 +25,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/natnael-alemayehu/kiflet/pkg/console"
+	"github.com/kiflet/backend/pkg/console"
 )
 
 // phone is a phone the sandbox plays: its texts and its two wallets.

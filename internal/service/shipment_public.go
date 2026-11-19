@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/geo"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/phone"
-	"github.com/natnael-alemayehu/kiflet/internal/text"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/geo"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/phone"
+	"github.com/kiflet/backend/internal/text"
 )
 
 // PublicTracking is what anyone holding a tracking number may see (FR-029).

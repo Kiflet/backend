@@ -3,8 +3,16 @@
 How to get from today's Kiflet (one Go binary that renders the dashboard,
 the public pages and the driver PWA) to the architecture in
 `docs/architecture.md`: a modular Go backend with RabbitMQ and Redis in
-this repository, a Next.js web app in **kiflet-web**, and a React Native
-(Expo) driver app in **kiflet-mobile**.
+this repository (**Kiflet/backend**), a Next.js web app in
+**[Kiflet/web](https://github.com/Kiflet/web)**, and a React Native (Expo)
+driver app in **[Kiflet/mobile](https://github.com/Kiflet/mobile)**.
+
+This document holds the whole plan and the backend's phases in full. The
+clients' phases are in their own repositories, step by step:
+[Kiflet/web `docs/migration.md`](https://github.com/Kiflet/web/blob/main/docs/migration.md)
+(phase 4: every page, in waves, with the API each needs) and
+[Kiflet/mobile `docs/migration.md`](https://github.com/Kiflet/mobile/blob/main/docs/migration.md)
+(phase 5: from the PWA to the app, the parity checklist, the pilot).
 
 It is written for whoever does the work, step by step, with what each step
 produces, how to check it, and how to undo it.
@@ -20,8 +28,8 @@ Contents:
    - [Phase 1: modules, in place](#phase-1-modules-in-place)
    - [Phase 2: infrastructure: RabbitMQ, Redis, separate processes](#phase-2-infrastructure-rabbitmq-redis-separate-processes)
    - [Phase 3: the web API and its contract](#phase-3-the-web-api-and-its-contract)
-   - [Phase 4: kiflet-web](#phase-4-kiflet-web)
-   - [Phase 5: kiflet-mobile](#phase-5-kiflet-mobile)
+   - [Phase 4: the web app](#phase-4-the-web-app)
+   - [Phase 5: the driver app](#phase-5-the-driver-app)
    - [Phase 6: removing the old](#phase-6-removing-the-old)
 6. [Database changes](#6-database-changes)
 7. [Testing through the migration](#7-testing-through-the-migration)
@@ -62,7 +70,7 @@ Contents:
 
 At `main` on 2026-11-18:
 
-- **One Go module** (`github.com/natnael-alemayehu/kiflet`), one binary
+- **One Go module** (`github.com/kiflet/backend`), one binary
   (`cmd/server`) that serves everything and runs the background workers in
   goroutines (`internal/app.Run`: live relay, SMS, mail, webhooks, jobs).
 - **`internal/service`**: all business rules, ~14,000 lines in 40 files,
@@ -103,9 +111,9 @@ What already fits the target and must be kept:
 
 | Repository | Contains | Deploys as |
 |---|---|---|
-| **kiflet** (this one) | Go backend: modules, `cmd/{api,realtime,worker,scheduler,relay,migrate,sandbox}`; migrations; OpenAPI and AsyncAPI contracts; the generated `@kiflet/api` TypeScript client package; `deployments/` for every environment (Caddy, Postgres, PgBouncer, RabbitMQ, Redis, storage, monitoring); integration tests; the docs | Docker images `kiflet`, `kiflet-sandbox`; the `@kiflet/api` npm package |
-| **kiflet-web** | Next.js: the public pages, the dashboard, the operator's pages; the design system; Playwright tests | Docker image `kiflet-web` |
-| **kiflet-mobile** | Expo app for drivers: SQLite, sync engine, background GPS, screens; Maestro tests | Play Store / App Store builds (EAS Build), over-the-air updates (EAS Update), an APK on the website |
+| **Kiflet/backend** (this one) | Go backend: modules, `cmd/{api,realtime,worker,scheduler,relay,migrate,sandbox}`; migrations; OpenAPI and AsyncAPI contracts; the generated `@kiflet/api` TypeScript client package; `deployments/` for every environment (Caddy, Postgres, PgBouncer, RabbitMQ, Redis, storage, monitoring); integration tests; the docs | Docker images `ghcr.io/kiflet/backend`, `ghcr.io/kiflet/sandbox`; the `@kiflet/api` npm package |
+| **Kiflet/web** | Next.js: the public pages, the dashboard, the operator's pages; the design system; Playwright tests | Docker image `ghcr.io/kiflet/web` |
+| **Kiflet/mobile** | Expo app for drivers: SQLite, sync engine, background GPS, screens; Maestro tests | Play Store / App Store builds (EAS Build), over-the-air updates (EAS Update), an APK on the website |
 
 This repository stops serving HTML. Its only HTTP surfaces are `/api/*`,
 `/ws`, `/healthz`, `/readyz` and `/metrics`.
@@ -126,14 +134,14 @@ This repository stops serving HTML. Its only HTTP surfaces are `/api/*`,
 | `internal/geo`, `internal/phone` | `internal/platform/geo`, `internal/platform/phone` | |
 | `internal/model` | each module's `domain/` | transitions to `shipments/domain`, roles to `identity/domain`, plans to `billing/domain` |
 | `internal/service/*.go` | `internal/modules/*/app` | file by file, table below |
-| `internal/text` | stays for SMS and email (`internal/platform/text`); page words copied into kiflet-web's message files | the parity test moves with them |
+| `internal/text` | stays for SMS and email (`internal/platform/text`); page words copied into Kiflet/web's message files | the parity test moves with them |
 | `internal/web/server.go`, middleware | `internal/http`: router, auth, CSRF, rate limits, request IDs | |
 | `internal/web/api_driver.go` | `internal/modules/*/http` under `/api/driver` | |
 | `internal/web/api_public.go` | `internal/modules/*/http` under `/api/v1` | unchanged contract |
-| `internal/web/app_*.go`, `public.go` | JSON handlers under `/api/web`; the pages go to kiflet-web | |
-| `internal/web/templates/**` | kiflet-web `app/**` | page table below; deleted here in phase 6 |
-| `internal/web/static/app.css`, `app.js`, `map.js`, fonts, icons | kiflet-web `styles/`, `components/` | tokens to Tailwind; `map.js` to a MapLibre component |
-| `internal/web/static/driver/**` | kiflet-mobile, rewritten | kept here until the app has replaced it (phase 5) |
+| `internal/web/app_*.go`, `public.go` | JSON handlers under `/api/web`; the pages go to Kiflet/web | |
+| `internal/web/templates/**` | Kiflet/web `app/**` | page table below; deleted here in phase 6 |
+| `internal/web/static/app.css`, `app.js`, `map.js`, fonts, icons | Kiflet/web `styles/`, `components/` | tokens to Tailwind; `map.js` to a MapLibre component |
+| `internal/web/static/driver/**` | Kiflet/mobile, rewritten | kept here until the app has replaced it (phase 5) |
 | `internal/web/static/openapi.json` | `api/openapi/v1.yaml` | |
 | `pkg/sms`, `pkg/payments`, `pkg/mail`, `pkg/storage` | `internal/platform/*` or stay in `pkg` | they are adapters, no rules |
 | `pkg/websocket` | `cmd/realtime` | |
@@ -141,7 +149,7 @@ This repository stops serving HTML. Its only HTTP surfaces are `/api/*`,
 | `migrations` | stay | new migrations for schemas, outbox, partitions, push tokens |
 | `deployments` | stay, grow | one compose file per VM role (section 13 of the architecture) |
 | `tests/integration` | stay | run against the new processes |
-| `tests/e2e` | split: API and infrastructure tests stay; browser tests to kiflet-web (Playwright); driver app tests to kiflet-mobile | |
+| `tests/e2e` | split: API and infrastructure tests stay; browser tests to Kiflet/web (Playwright); driver app tests to Kiflet/mobile | |
 | `docs` | stay | E2E guide updated per phase |
 
 ### Services to modules
@@ -168,48 +176,13 @@ This repository stops serving HTML. Its only HTTP surfaces are `/api/*`,
 | `health.go` | platform (operator) |
 | `jobs.go` | scheduler (the timer) and each module's job handlers |
 
-### Pages to kiflet-web
+### Pages and the driver app's modules
 
-| Today (route → template) | kiflet-web route |
-|---|---|
-| `/` → `public/landing.html` | `app/(public)/page.tsx` |
-| `/login`, `/signup`, `/signup/verify`, `/forgot`, `/reset/*`, `/verify-email/*` | `app/(public)/login`, `signup`, `signup/verify`, `forgot`, `reset/[token]`, `reset/phone`, `verify-email/[token]` |
-| `/track`, `/track/{number}`, `/track/phone`, `/track/mine` | `app/(public)/track`, `track/[number]`, `track/phone`, `track/mine` |
-| `/c/{token}` → `confirm.html` | `app/(public)/c/[token]` |
-| `/app` → `dashboard.html` | `app/(dashboard)/app/page.tsx` |
-| `/app/shipments`, `/new`, `/import`, `/{id}`, `/{id}/edit`, `/{id}/waybill` | `app/(dashboard)/app/shipments/…` (waybill as a print page) |
-| `/app/drivers`, `/new`, `/{id}`, `/{id}/edit`, `/message` | `app/(dashboard)/app/drivers/…` |
-| `/app/vehicles`, `/new`, `/{id}`, `/{id}/edit` | `app/(dashboard)/app/vehicles/…` |
-| `/app/alerts`, `/alerts/recipients` | `app/(dashboard)/app/alerts/…` |
-| `/app/reports` | `app/(dashboard)/app/reports` |
-| `/app/team`, `/new`, `/{id}/edit` | `app/(dashboard)/app/team/…` |
-| `/app/settings`, `/settings/api`, `/settings/webhooks/*`, `/settings/sms` | `app/(dashboard)/app/settings/…` |
-| `/app/billing`, `/billing/invoices/{id}`, `/billing/payments/{id}` | `app/(dashboard)/app/billing/…` |
-| `/app/help`, `/help/new`, `/help/{id}` | `app/(dashboard)/app/help/…` |
-| `/app/account`, `/account/password` | `app/(dashboard)/app/account/…` |
-| `/app/audit` | `app/(dashboard)/app/audit` |
-| `/app/platform/*` | `app/(operator)/platform/…` |
-| `/dev/payments/*`, `/dev/cbebirr` | `app/(dev)/…`, built only when `NEXT_PUBLIC_DEV_PAYMENTS=true` |
-
-### Driver PWA modules to kiflet-mobile
-
-| `static/driver/` | kiflet-mobile |
-|---|---|
-| `app.js`, `router.js` | `app/_layout.tsx`, expo-router routes |
-| `screens/login.js`, `pin.js` | `app/(auth)/login.tsx`, `pin.tsx` |
-| `screens/list.js` | `app/(app)/index.tsx` |
-| `screens/detail.js` | `app/(app)/shipments/[id].tsx` (react-native-maps or MapLibre) |
-| `screens/deliver.js`, `signature.js` | `app/(app)/shipments/[id]/deliver.tsx`, `react-native-signature-canvas`, `expo-camera` / `expo-image-picker` |
-| `screens/report.js` | `app/(app)/shipments/[id]/report.tsx` |
-| `screens/message.js` | `app/(app)/messages.tsx` |
-| `screens/menu.js`, `settings.js` | `app/(app)/menu.tsx`, `src/settings` |
-| `store.js` (IndexedDB) | `src/db` (expo-sqlite + Drizzle schema and migrations) |
-| `sync.js` | `src/sync` (outbox, cursor, conflict handling, backoff) |
-| `gps.js` | `src/location` (expo-location background task, foreground service) |
-| `api.js` | `src/api` (the generated `@kiflet/api` client) |
-| `text.js` | `src/i18n/en.json`, `am.json` (i18next) |
-| `state.js` | Zustand store |
-| `sw.js`, `build.json` | EAS Update (no service worker) |
+Where each page of the dashboard and the public site goes, with the API
+each needs, is the page inventory in
+[Kiflet/web `docs/migration.md`](https://github.com/Kiflet/web/blob/main/docs/migration.md#the-page-inventory).
+Where each module of the driver PWA goes is in
+[Kiflet/mobile `docs/migration.md`](https://github.com/Kiflet/mobile/blob/main/docs/migration.md#the-pwa-module-by-module).
 
 ---
 
@@ -221,12 +194,14 @@ Each phase lists its steps, what done looks like, and how to roll back.
 
 Decisions and accounts, before code moves.
 
-1. **Repositories.** Create `kiflet-web` and `kiflet-mobile` (private or
-   public, same licence as this one). Decide first whether to create the
-   GitHub organization `kiflet` (ROADMAP, "No GitHub organization yet"):
-   three repositories under one organization share secrets, packages and
-   permissions more easily, and moving all three later is more work than
-   moving one.
+1. **Repositories.** Done on 2026-11-19: the GitHub organization
+   [Kiflet](https://github.com/Kiflet) with `backend` (this repository,
+   moved there with its whole history and the `v0.9.0` tag; the Go module
+   is now `github.com/kiflet/backend`), `web` and `mobile`, all public under
+   the same licence. Still to do in the organization's settings: branch
+   protection on each `main` (CI must pass), two-factor authentication for
+   members, a second owner, private vulnerability reporting, and archiving
+   the old `Natnael-Alemayehu/kiflet` repository with a pointer here.
 2. **Accounts.** Expo (EAS Build and Update), Google Play Console, Apple
    Developer Program (when iOS is wanted), Firebase project for FCM (push
    on Android), GitHub Packages for `@kiflet/api`.
@@ -359,7 +334,7 @@ until it has run in production for two weeks; Redis can be turned off
 
 ### Phase 3: the web API and its contract
 
-The dashboard today renders HTML from handlers. kiflet-web needs the same
+The dashboard today renders HTML from handlers. Kiflet/web needs the same
 data and actions as JSON. Build `/api/web` module by module, in the order
 the pages will move (phase 4).
 
@@ -397,56 +372,47 @@ same use cases).
 
 Roll back: additive only; nothing uses the new endpoints until phase 4.
 
-### Phase 4: kiflet-web
+### Phase 4: the web app
 
-1. **Bootstrap:** Next.js (App Router), TypeScript strict, pnpm, ESLint,
-   Prettier, Vitest, Playwright, Tailwind, shadcn/ui, next-intl, MapLibre
-   GL, `@kiflet/api`. Dockerfile (standalone output) and CI (lint, types,
-   unit, build, Playwright against a backend in Docker Compose).
-2. **The design system:** port the Desk and Night tokens from
-   `internal/web/static/app.css` (colours, radius, shadows, type) to the
-   Tailwind theme with the same names; Geist fonts; lucide icons (the
-   names in `internal/web/icons.go`); the components the templates use
-   (shell with sidebar, cards, badges with the status colours, tables,
-   forms, segmented controls, switches, KPIs, toasts, empty states). Check
-   them side by side with today's pages in both themes.
-3. **Auth and the shell:** sign-in, sign-out, the session from `GET
-   /api/web/me` in a server component, the sidebar by role, the theme, the
-   language, the live socket (`/ws`) as a client provider that tells pages
-   what changed (as `data-live-region` does now).
-4. **Pages, in this order**, each one cut over in Caddy as soon as it
-   reaches parity (Caddy sends that path to Next.js, the rest stays on Go):
-   1. Public tracking (`/track/*`) and confirmation (`/c/*`): small,
-      read-only, the most visited, and they prove SSR, i18n and small pages
-      on phones.
-   2. Sign-in, sign-up, password reset.
-   3. Read-mostly dashboard pages: reports, audit, help, account.
-   4. Drivers, vehicles, team (forms and lists).
-   5. Shipments: list, booking, import, a shipment's page, waybill.
-   6. The overview: map, KPIs, needs attention, live updates.
-   7. Alerts and rules; settings, API keys, webhooks, SMS log; billing.
-   8. The operator's pages.
-5. **Parity for each page:** the E2E guide's steps for it pass on the new
-   page; Playwright tests written for them; both themes; English and (for
-   public pages) Amharic; a phone-width check; the CSP holds.
-6. **Links in old SMS** keep working: Caddy keeps `/track/{number}` and
-   `/c/{token}` on the same paths.
-7. **Remove each Go template** once its page has served production for a
-   week with no regressions, in a PR of its own.
+Built in [Kiflet/web](https://github.com/Kiflet/web); its
+`docs/migration.md` has the steps (the empty app, the design system, the
+shell and sessions), the nine waves of pages, the inventory of every page
+with the endpoints it needs, and the parity checks before a page moves.
+
+What this repository does in phase 4:
+
+1. **Endpoints first.** Build each wave's `/api/web` endpoints (phase 3)
+   before Kiflet/web needs them, in the waves' order.
+2. **Routing in Caddy.** `deployments/Caddyfile` sends each page's paths
+   to the Next.js service once the page passes its parity checks, and
+   everything else to the Go app. One PR per wave, so a wave can be moved
+   back by reverting it.
+3. **One session for both.** The backend sets the session cookie on the
+   shared host, so a user crosses between a Go page and a Next.js page
+   without signing in again; a test here checks it.
+4. **Feature freeze on the Go pages** from the first wave: fixes only;
+   new dashboard features are built in Kiflet/web.
+5. **Delete each Go template** a week after its page moved with no
+   regression, with its HTML handler and its page tests, one PR each.
 
 Done when: Caddy sends every non-API path to Next.js; the Go app serves no
 HTML.
 
-Roll back: per page, in Caddy: point the path back at the Go app (whose
-template is still there until step 7).
+Roll back: per wave, in Caddy, until the templates are deleted.
 
-### Phase 5: kiflet-mobile
+### Phase 5: the driver app
 
-Can start once phase 2's positions-through-the-queue and phase 3's
-contract tooling are done; the driver API changes are small.
+Built in [Kiflet/mobile](https://github.com/Kiflet/mobile); its
+`docs/migration.md` has the steps (accounts and the app's permanent
+identifiers, the empty app, the database and the sync engine, screens,
+background GPS, delivery and uploads, the pilot, moving every driver), the
+PWA module by module, and the parity checklist. The app can start against
+today's `/api/v1/driver/*` before any of the changes below.
 
-1. **Driver API changes** (this repository, `/api/driver`, keeping
-   `/api/v1/driver/*` working for the PWA):
+What this repository does in phase 5:
+
+1. **Driver API changes** (`/api/driver`, keeping `/api/v1/driver/*`
+   working for the PWA):
    - `POST /api/driver/uploads` returns presigned PUT URLs for photos and
      signatures; `SyncPOD` accepts storage keys instead of inline data
      (inline still accepted for the PWA).
@@ -457,43 +423,12 @@ contract tooling are done; the driver API changes are small.
      supported version, set in config.
    - The sync request and response stay the same shape, specified in
      `api/openapi/driver.yaml`.
-2. **Bootstrap:** Expo (managed workflow, development builds), TypeScript
-   strict, expo-router, expo-sqlite with Drizzle, TanStack Query, Zustand,
-   i18next, expo-location, expo-task-manager, expo-background-fetch,
-   expo-camera, expo-image-manipulator (compress photos), expo-secure-store,
-   expo-notifications, react-native-maps or MapLibre, Sentry. EAS Build
-   profiles: development, preview (internal testers), production.
-3. **The local database:** tables `shipments`, `shipment_stops`, `outbox`,
-   `positions`, `messages`, `files` (local path, upload state, storage
-   key), `settings`, `meta` (cursor, last sync, driver profile). Drizzle
-   migrations at start.
-4. **The sync engine:** reads the outbox and positions, uploads files
-   first, sends one sync, applies the response (shipments changed and
-   removed, messages, profile, cursor), deletes what the server confirmed,
-   backs off on errors, and runs on change, every 60 s in the foreground,
-   on reconnect (NetInfo), on a push, and in background fetch.
-5. **GPS:** the background location task as an Android foreground
-   service, the same intervals and battery saver as `gps.js`, writing
-   only to SQLite; started when the driver has an active load and sharing
-   is on, stopped after the last delivery. The permission flow explained in
-   both languages, as Play's policy for background location requires
-   (a prominent disclosure and a declaration in the Play Console).
-6. **Screens:** port each PWA screen (table above), at the same large tap
-   sizes, with the Desk and Night colours.
-7. **Tests:** unit tests for the sync engine and database (Jest);
-   end-to-end flows on an emulator with Maestro: sign in, depart, go
-   offline, deliver with photo and signature, come back online, see it on
-   the dashboard (against staging).
-8. **Pilot:** internal testing track with a few drivers on their own
-   phones (cheap Android, weak signal, screen locked; the ROADMAP's
-   "session on a cheap Android phone"), then a closed track for one
-   company, then production. The PWA stays available throughout.
-9. **Move drivers over:** the dashboard shows each driver's app (PWA or
-   Expo, and version); an SMS invites PWA drivers to install the app; the
-   PWA shows a banner. When no active driver has used the PWA for 30 days,
-   phase 6 removes it.
+2. **Which app each driver uses:** the device's app (PWA or the new app)
+   and version on the dashboard's driver page, from the sync request.
+3. **The PWA stays** served from `internal/web/static/driver` until no
+   active driver has used it for 30 days; then phase 6 removes it.
 
-Done when: every active driver uses kiflet-mobile, and positions keep
+Done when: every active driver uses the new app, and positions keep
 coming with the screen locked.
 
 Roll back: drivers can sign in to the PWA again at any time until it is
@@ -545,8 +480,8 @@ their tables and keep working; `purgeTx` stays in the data module.
 | Unit | each repository | Go modules keep theirs; TypeScript code gets Vitest (web) and Jest (mobile) |
 | Integration | this repository, `tests/integration` | grows with `/api/web` and `/api/driver` endpoints; runs the separate processes with RabbitMQ and Redis in Docker; adds failure tests: Redis stopped, a RabbitMQ node stopped, a consumer crashing mid-batch (no loss, no duplicates) |
 | Contract | this repository's CI | the OpenAPI specs match the handlers (as `TestOpenAPIMatchesTheAPI` now, for all three APIs); generated code has no diff |
-| Browser end-to-end | kiflet-web, Playwright | the E2E guide's web sections, against a backend started from this repository's compose files at a pinned image tag |
-| App end-to-end | kiflet-mobile, Maestro | the E2E guide's driver sections, on an Android emulator, against staging |
+| Browser end-to-end | Kiflet/web, Playwright | the E2E guide's web sections, against a backend started from this repository's compose files at a pinned image tag |
+| App end-to-end | Kiflet/mobile, Maestro | the E2E guide's driver sections, on an Android emulator, against staging |
 | Staging | all three | staging runs the backend images, the web image and a preview build of the app; this repository's `tests/e2e` keeps the backup restore and monitoring tests |
 | Load | staging, k6 | phase 2's load test, run again before each phase's cut-over |
 
@@ -564,8 +499,8 @@ flowchart LR
   P0["Phase 0<br/>groundwork"] --> P1["Phase 1<br/>modules in place"]
   P1 --> P2["Phase 2<br/>RabbitMQ, Redis,<br/>processes"]
   P1 --> P3["Phase 3<br/>/api/web"]
-  P0 --> W0["kiflet-web bootstrap,<br/>design system"]
-  P0 --> M0["kiflet-mobile bootstrap,<br/>SQLite, sync engine"]
+  P0 --> W0["Kiflet/web bootstrap,<br/>design system"]
+  P0 --> M0["Kiflet/mobile bootstrap,<br/>SQLite, sync engine"]
   P3 --> P4["Phase 4<br/>pages cut over"]
   W0 --> P4
   P2 --> P5["Phase 5<br/>driver API, app, pilot"]
@@ -583,8 +518,8 @@ shorten it by about a third, with web and mobile split between them):
 | 1: modules in place | 3–4 weeks |
 | 2: RabbitMQ, Redis, processes, partitions, load test | 4–5 weeks |
 | 3: `/api/web` for every page | 4–6 weeks (overlaps phase 4) |
-| 4: kiflet-web, ~45 pages | 8–10 weeks |
-| 5: kiflet-mobile and the pilot | 6–8 weeks, plus the pilot's length |
+| 4: Kiflet/web, ~45 pages | 8–10 weeks |
+| 5: Kiflet/mobile and the pilot | 6–8 weeks, plus the pilot's length |
 | 6: removal and docs | 1 week |
 
 About **6 to 8 months** for one developer. These are estimates from the
@@ -596,7 +531,7 @@ size of the code today, not commitments.
 The provider onboarding, the Amharic review and the pilot with one company
 can run on today's app while phases 0–2 happen underneath it; none of
 those phases changes what a user sees. The one roadmap item this replaces
-is **"Tracking with the screen off"** (a Capacitor wrapper): kiflet-mobile
+is **"Tracking with the screen off"** (a Capacitor wrapper): Kiflet/mobile
 does that natively. If a pilot needs screen-off tracking before phase 5,
 starting phase 5 early (with the current `/api/v1/driver` API) is better
 than a Capacitor wrapper that would be thrown away.
@@ -607,7 +542,7 @@ than a Capacitor wrapper that would be thrown away.
 
 | Risk | What it would cost | What reduces it |
 |---|---|---|
-| Two dashboards to maintain during phase 4 | features land twice or wait | freeze new dashboard features in Go once phase 4 starts; new features go only to kiflet-web |
+| Two dashboards to maintain during phase 4 | features land twice or wait | freeze new dashboard features in Go once phase 4 starts; new features go only to Kiflet/web |
 | Rules drift into TypeScript | a role or transition behaves differently on web | the API returns allowed actions; review checklist item; no status logic in clients |
 | Background GPS policies (Play, Android vendors killing services) | gaps in trails | foreground service with notification; tested on the cheap phones drivers use (Tecno, Itel, Samsung A); gaps drawn honestly on the maps (PR #46) |
 | RabbitMQ or Redis misconfigured in production | lost or duplicated messages, slow pages | quorum queues, confirms, idempotent consumers; failure tests in CI; staging identical to production |
@@ -622,14 +557,12 @@ than a Capacitor wrapper that would be thrown away.
 
 Questions this plan doesn't settle, for when they come up:
 
-1. **The GitHub organization** `kiflet` before creating the two new
-   repositories (phase 0, step 1)?
-2. **iOS:** at the same time as Android, or later? Android-only halves the
+1. **iOS:** at the same time as Android, or later? Android-only halves the
    store work and the testing; most drivers use Android.
-3. **Object storage in production:** SeaweedFS or MinIO on our VMs, or a
+2. **Object storage in production:** SeaweedFS or MinIO on our VMs, or a
    hosted S3 (which stores the backups off the machine, a ROADMAP
    requirement for the pilot)?
-4. **The public pages' address:** `track.kiflet.et` or `kiflet.et/track`
+3. **The public pages' address:** `track.kiflet.et` or `kiflet.et/track`
    (shorter in SMS)?
-5. **Who builds what:** if a web or mobile developer joins, phases 4 and 5
+4. **Who builds what:** if a web or mobile developer joins, phases 4 and 5
    can run in parallel with phase 2.

@@ -11,10 +11,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/phone"
-	"github.com/natnael-alemayehu/kiflet/pkg/hash"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/phone"
+	"github.com/kiflet/backend/pkg/hash"
 )
 
 // Session kinds: "api" sessions carry a bearer token (the driver app);

@@ -23,9 +23,9 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog"
 
-	"github.com/natnael-alemayehu/kiflet/internal/app"
-	"github.com/natnael-alemayehu/kiflet/internal/config"
-	"github.com/natnael-alemayehu/kiflet/migrations"
+	"github.com/kiflet/backend/internal/app"
+	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/migrations"
 )
 
 func main() {

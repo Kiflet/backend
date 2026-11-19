@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/model"
+	"github.com/kiflet/backend/internal/model"
 )
 
 var verb = regexp.MustCompile(`%(\[\d+\])?[sd]`)

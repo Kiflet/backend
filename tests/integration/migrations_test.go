@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"github.com/natnael-alemayehu/kiflet/migrations"
+	"github.com/kiflet/backend/migrations"
 )
 
 // TestMigrations: the migrations build the schema, each can run a second

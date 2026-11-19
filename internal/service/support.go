@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
+	"github.com/kiflet/backend/internal/db"
 )
 
 // SupportService carries questions from companies to the people running

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/geo"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/geo"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // chartBar is one column of the deliveries chart, in SVG plot units. The

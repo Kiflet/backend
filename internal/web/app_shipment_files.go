@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // A shipment's documents and charges: its Documents and Charges tabs.

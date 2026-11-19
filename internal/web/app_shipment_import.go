@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // Booking shipments from a CSV file (FR-013 AC-013.1): the file is chosen,

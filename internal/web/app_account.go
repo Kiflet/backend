@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // alertChoice is one alert type on the account page's email preferences.

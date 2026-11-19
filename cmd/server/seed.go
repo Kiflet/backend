@@ -17,13 +17,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"github.com/natnael-alemayehu/kiflet/internal/app"
-	"github.com/natnael-alemayehu/kiflet/internal/config"
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/geo"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/pkg/hash"
+	"github.com/kiflet/backend/internal/app"
+	"github.com/kiflet/backend/internal/config"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/geo"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/pkg/hash"
 )
 
 // Demo credentials printed at the end of seeding.

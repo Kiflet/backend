@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/pkg/console"
+	"github.com/kiflet/backend/pkg/console"
 )
 
 // fakeSMTP is just enough of a mail server to receive one message.

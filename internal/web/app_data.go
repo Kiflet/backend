@@ -18,10 +18,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/internal/service"
-	"github.com/natnael-alemayehu/kiflet/migrations"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/service"
+	"github.com/kiflet/backend/migrations"
 )
 
 // ---------------------------------------------------------------------------

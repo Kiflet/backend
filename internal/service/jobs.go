@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
-	"github.com/natnael-alemayehu/kiflet/internal/model"
-	"github.com/natnael-alemayehu/kiflet/pkg/metrics"
+	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/pkg/metrics"
 )
 
 // Jobs are the periodic checks: drivers gone quiet, shipments past their ETA,

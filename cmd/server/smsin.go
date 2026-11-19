@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/internal/config"
+	"github.com/kiflet/backend/internal/config"
 )
 
 // smsIn hands the running server a text message as if a phone had sent it

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/natnael-alemayehu/kiflet/pkg/console"
+	"github.com/kiflet/backend/pkg/console"
 )
 
 // MockProvider stands in for a gateway: messages are kept, and printed to

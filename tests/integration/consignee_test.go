@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/natnael-alemayehu/kiflet/internal/service"
+	"github.com/kiflet/backend/internal/service"
 )
 
 // TestConsignee: a shipment can name who takes delivery apart from the

@@ -15,7 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/natnael-alemayehu/kiflet/internal/db"
+	"github.com/kiflet/backend/internal/db"
 )
 
 // A shipment's documents and charges: the files the office keeps with a load
