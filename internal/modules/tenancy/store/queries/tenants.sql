@@ -1,6 +1,6 @@
 -- The tenancy module's own table, tenants: the companies. Billing's plan
 -- and standing columns are still written by internal/service until the
--- billing module moves (docs/migration.md, phase 1).
+-- billing module moves (docs/migration.md, phase 4).
 
 -- name: GetTenantByID :one
 SELECT * FROM tenants WHERE id = $1;

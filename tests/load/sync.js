@@ -1,4 +1,4 @@
-// The load test (docs/migration.md, phase 2, step 11; docs/deploy.md,
+// The load test (docs/migration.md, phase 5, step 8; docs/deploy.md,
 // "Load test"): phones syncing as the driver app does, against staging.
 //
 // live: every phone sends its newest position once a minute, the app's

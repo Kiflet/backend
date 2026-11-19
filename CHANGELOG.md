@@ -180,6 +180,17 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The plan, revised after an audit** (`docs/audit-2026-11-19.md`):
+  backend first. `docs/migration.md` is rewritten in new phases: the data
+  and the flow (a change feed for the driver sync, the tenant in every
+  reference, santim, delivery media, versions and idempotency keys, one
+  catalogue of words), then one versioned API, `/api/v1`, for every client
+  with one OpenAPI specification, then the driver's part of it with
+  Kiflet/mobile and the web's with Kiflet/web. `docs/architecture.md`
+  (section 11 rewritten: the API, its conventions and the driver sync)
+  and `ROADMAP.md` follow. The Go pages and the driver PWA are frozen:
+  fixes, and what the pilot needs. `main` is protected again, now in all
+  three repositories, and private vulnerability reporting is on.
 - **PostgreSQL 17** (PostGIS 3.6), from 15, in development, production,
   CI and the tests. Its data is in a new volume (`postgres17-data`; in
   development `postgres17_data`), so the old one is untouched:

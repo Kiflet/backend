@@ -85,7 +85,7 @@ type Config struct {
 	// WorkerTracking and WorkerLive say where GPS fixes and live updates
 	// go: "queue" (RabbitMQ, the default with it) or "inprocess" (the
 	// database, and Postgres's NOTIFY), to switch one back
-	// (docs/migration.md, phase 2).
+	// (docs/migration.md, phase 5).
 	WorkerTracking string
 	WorkerLive     string
 	// WorkerSMS, WorkerMail and WorkerWebhooks, the same for texts, email

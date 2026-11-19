@@ -17,7 +17,7 @@
 --
 -- The rows are copied inside this migration: before the first customer the
 -- table is small. A large table would be copied in the background instead
--- (docs/migration.md, section 6).
+-- (docs/migration.md, section 7).
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION tracking_events_ensure_partitions(first_day date, last_day date) RETURNS integer

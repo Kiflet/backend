@@ -20,11 +20,16 @@ the dashboard, the public pages and the driver PWA. The Go module is
 - `docs/E2E_TEST_GUIDE.md`: manual walkthrough of every flow
 - `docs/deploy.md`: production, backups, staging, connecting the providers
 - `docs/audit-2026-11.md`: the audit of November 2026 and its fix record
+- `docs/audit-2026-11-19.md`: the audit of 19 November 2026 (the data,
+  the flows, the API, the tests), which revised the plan, and its fix
+  record
 - `docs/architecture.md`: the target architecture (backend modules,
   RabbitMQ, Redis, the Next.js web and Expo driver apps, deployment)
-- `docs/migration.md`: the phased plan from this codebase to that one.
-  Until a phase is done, the Architecture section below describes what
-  is running.
+- `docs/migration.md`: the phased plan from this codebase to that one,
+  backend first: the data and the flows (phase 1), one API and its
+  contract (phase 2), the driver's part of it with Kiflet/mobile (phase 3),
+  the web's with Kiflet/web (phase 4). Until a phase is done, the
+  Architecture section below describes what is running.
 - `CONTRIBUTING.md`: these rules at full length
 - `ROADMAP.md`: what comes next, in order. Delete a section once it is done.
 - `CHANGELOG.md`: what changed in each release. It is the only file that
@@ -40,8 +45,10 @@ scheduler, relay; `internal/app` wires each), so background work must not
 assume it shares a process with the request that queued it: wake it
 through `core.wakeWorkers` or a queue.
 Kiflet/web and Kiflet/mobile will take over the pages and the driver app
-one at a time (`docs/migration.md`, phases 4 and 5); until a page or the
-app has moved, it is built here. Earlier Next.js and Expo apps were retired
+(`docs/migration.md`, phases 3 and 4). Until then the pages and the PWA
+are **frozen**: they get fixes, and only what the pilot needs. A new
+feature is an operation of the API (`/api/v1`, `docs/architecture.md`,
+section 11), not a page. Earlier Next.js and Expo apps were retired
 before November 2026 and live only in git history; the new ones start from
 the plan, not from those.
 
@@ -51,8 +58,8 @@ the plan, not from those.
 - `internal/web`: routes (`server.go`), middleware, handlers (`app_*.go`,
   `public.go`, `api_driver.go`, `api_public.go`), templates and static files
 - `internal/modules/<name>`: the modules of `docs/architecture.md`
-  (section 4), moving out of `internal/service` one at a time
-  (`docs/migration.md`, phase 1). A module owns its tables: `<name>.go`
+  (section 4), moving out of `internal/service` one at a time, each as its
+  part of the API is built (`docs/migration.md`, section 5). A module owns its tables: `<name>.go`
   is its interface, `app/` implements it, `store/` is its sqlc package
   (queries in `store/queries/`, an entry each in `sqlc/sqlc.yaml`).
   Others call it only through the interface, and a write within another
@@ -110,7 +117,13 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   parses every page.
 - The CSP is `script-src 'self'`, so no inline scripts. Pass data to JS through
   `<script type="application/json">` blocks or `data-` attributes.
-- Every query is scoped by tenant. Keep it that way in new queries.
+- Every query is scoped by tenant. Keep it that way in new queries; one
+  that is global on purpose says why in a comment above it
+  (`-- tenant: none, <reason>`).
+- A Go page, or the PWA, is deleted only once the flows its tests cover
+  are tested through the modules and the API (`docs/migration.md`,
+  section 8): a module's rules by unit tests, its queries by store tests
+  with another company's IDs, each operation by API tests.
 - What a customer reads (their texts, the tracking and confirmation pages)
   comes from `internal/platform/text`, in English and Amharic: add the words to
   `en.go` and `am.go`, and use `{{.T "key"}}` in the template. Tests check

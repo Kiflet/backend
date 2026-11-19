@@ -1,5 +1,5 @@
 // Package modules_test checks the modules' boundaries
-// (docs/architecture.md, section 4; docs/migration.md, phase 1, step 3).
+// (docs/architecture.md, section 4; docs/migration.md, section 5).
 package modules_test
 
 import (

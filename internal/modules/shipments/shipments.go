@@ -6,7 +6,7 @@
 // Other modules reach it only through Shipments, on their connection: a
 // write within another module's transaction takes that transaction as
 // conn. The argument types are the store's, named here, until booking,
-// assigning and status changes move in (docs/migration.md, phase 1).
+// assigning and status changes move in (docs/migration.md, phases 3 and 4).
 package shipments
 
 import (

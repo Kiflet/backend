@@ -1,18 +1,24 @@
 # Migration: from one Go application to three codebases
 
-How to get from today's Kiflet (one Go binary that renders the dashboard,
+How to get from today's Kiflet (one Go program that renders the dashboard,
 the public pages and the driver PWA) to the architecture in
 `docs/architecture.md`: a modular Go backend with RabbitMQ and Redis in
-this repository (**Kiflet/backend**), a Next.js web app in
-**[Kiflet/web](https://github.com/Kiflet/web)**, and a React Native (Expo)
-driver app in **[Kiflet/mobile](https://github.com/Kiflet/mobile)**.
+this repository (**Kiflet/backend**), serving one versioned API; a Next.js
+web app in **[Kiflet/web](https://github.com/Kiflet/web)**; and a React
+Native (Expo) driver app in **[Kiflet/mobile](https://github.com/Kiflet/mobile)**.
+
+The plan was revised on 2026-11-19 after the audit in
+`docs/audit-2026-11-19.md`: backend first, with the data and the flows
+right before anything is built on them; one API for every client instead
+of one per client; and the driver API before the web's, since the driver
+app goes first.
 
 This document holds the whole plan and the backend's phases in full. The
-clients' phases are in their own repositories, step by step:
-[Kiflet/web `docs/migration.md`](https://github.com/Kiflet/web/blob/main/docs/migration.md)
-(phase 4: every page, in waves, with the API each needs) and
+clients' steps are in their own repositories:
 [Kiflet/mobile `docs/migration.md`](https://github.com/Kiflet/mobile/blob/main/docs/migration.md)
-(phase 5: from the PWA to the app, the parity checklist, the pilot).
+(from the PWA to the app, milestones M0 to M7, alongside phase 3) and
+[Kiflet/web `docs/migration.md`](https://github.com/Kiflet/web/blob/main/docs/migration.md)
+(every page, in waves, with the operations each needs, alongside phase 4).
 
 It is written for whoever does the work, step by step, with what each step
 produces, how to check it, and how to undo it.
@@ -23,43 +29,53 @@ Contents:
 2. [Where things are today](#2-where-things-are-today)
 3. [The end state](#3-the-end-state)
 4. [Where everything goes](#4-where-everything-goes)
-5. [The phases](#5-the-phases)
+5. [How a module moves](#5-how-a-module-moves)
+6. [The phases](#6-the-phases)
    - [Phase 0: groundwork](#phase-0-groundwork)
-   - [Phase 1: modules, in place](#phase-1-modules-in-place)
-   - [Phase 2: infrastructure: RabbitMQ, Redis, separate processes](#phase-2-infrastructure-rabbitmq-redis-separate-processes)
-   - [Phase 3: the web API and its contract](#phase-3-the-web-api-and-its-contract)
-   - [Phase 4: the web app](#phase-4-the-web-app)
-   - [Phase 5: the driver app](#phase-5-the-driver-app)
+   - [Phase 1: the data and the flow](#phase-1-the-data-and-the-flow)
+   - [Phase 2: one API and its contract](#phase-2-one-api-and-its-contract)
+   - [Phase 3: the driver API, with Kiflet/mobile](#phase-3-the-driver-api-with-kifletmobile)
+   - [Phase 4: the web's API, with Kiflet/web](#phase-4-the-webs-api-with-kifletweb)
+   - [Phase 5: production readiness](#phase-5-production-readiness)
    - [Phase 6: removing the old](#phase-6-removing-the-old)
-6. [Database changes](#6-database-changes)
-7. [Testing through the migration](#7-testing-through-the-migration)
-8. [Order, overlap and size](#8-order-overlap-and-size)
-9. [Risks](#9-risks)
-10. [Still to decide](#10-still-to-decide)
+7. [Database changes](#7-database-changes)
+8. [Testing through the migration](#8-testing-through-the-migration)
+9. [Order, overlap and size](#9-order-overlap-and-size)
+10. [Risks](#10-risks)
+11. [Still to decide](#11-still-to-decide)
 
 ---
 
 ## 1. Principles
 
-1. **No big bang.** The current app keeps serving customers the whole
-   time. New parts replace old ones one route, one page, one worker at a
-   time behind Caddy (the "strangler fig" pattern). At every step `main`
-   can be deployed.
+1. **No big bang.** The current app keeps serving the whole time. New
+   parts replace old ones one route, one page, one worker at a time behind
+   Caddy (the "strangler fig" pattern). At every step `main` can be
+   deployed.
 2. **One database.** All three codebases use the same PostgreSQL through
    the Go API. There is no data migration between systems, only schema
    changes in place, each backwards-compatible with the version running.
-3. **The backend first.** The web and mobile apps need an API to talk to;
-   the API needs the modules. So the order is modules, then infrastructure,
-   then the API, then the clients. The clients' bootstrapping (repository,
-   design system, tooling) can start in parallel.
-4. **Parity before removal.** A page or feature is removed from the Go app
-   only when the new one does everything it did, checked against
-   `docs/E2E_TEST_GUIDE.md` and the tests.
-5. **The rules stay in Go.** Business rules (statuses and transitions,
+3. **Backend first.** The data and the flows come first: a schema that
+   refuses a wrong reference, a sync that can't miss a change, one contract
+   for every client. The clients are built against that contract and
+   adjusted to it, not the other way round. Their bootstrapping
+   (repository, design system, tooling) runs in parallel.
+4. **One API.** Every client uses the same versioned API, `/api/v1`:
+   Kiflet/web with its session, Kiflet/mobile with its driver token,
+   companies' systems with API keys. An operation is built once, with one
+   shape and one set of tests (`docs/architecture.md`, section 11).
+5. **The backend serves no pages in the end.** The Go pages and the driver
+   PWA are frozen from 2026-11-19: fixes, and only what the pilot needs.
+   New features are operations of the API, shown by the clients.
+6. **Parity before removal, tests before deletion.** A page or the PWA is
+   removed only when its replacement does everything it did (checked
+   against `docs/E2E_TEST_GUIDE.md`), and only once the flows its tests
+   covered are tested through the modules and the API (section 8).
+7. **The rules stay in Go.** Business rules (statuses and transitions,
    plan limits, alert conditions, what a role may do) are not rewritten in
-   TypeScript. The clients ask the API, as the driver PWA already does with
-   `/api/v1/driver/config`.
-6. **Same conventions as now.** Tenant scoping in every query; append-only
+   TypeScript. Each record comes with what its reader may do with it, and
+   each code with its words in the reader's language.
+8. **Same conventions as now.** Tenant scoping in every query; append-only
    events and audit log; words customers read in English and Amharic;
    metrics labels from short fixed lists; no secrets in the repositories;
    `CHANGELOG.md` for every change.
@@ -68,40 +84,47 @@ Contents:
 
 ## 2. Where things are today
 
-At `main` on 2026-11-18:
+At `main` on 2026-11-19 (`dcd7225`; the figures are the audit's):
 
-- **One Go module** (`github.com/kiflet/backend`), one binary
-  (`cmd/server`) that serves everything and runs the background workers in
-  goroutines (`internal/app.Run`: live relay, SMS, mail, webhooks, jobs).
-- **`internal/service`**: all business rules, ~14,000 lines in 40 files,
-  one `Services` struct; **`internal/db`**: sqlc over 34 tables in one
-  schema; **`internal/model`**: statuses, transitions, roles, plans.
-- **`internal/web`**: chi routes (`server.go`), ~96 routes rendering
-  `html/template` pages (53 templates), JSON for the driver app
-  (`/api/v1/driver/*`), the public API (`/api/v1/shipments`, `/drivers`),
-  provider callbacks (SMS, telebirr, CBE Birr), the WebSocket (`/app/live`).
-- **The driver app**: a PWA in `internal/web/static/driver`, 20 ES modules,
-  IndexedDB for its offline store, a service worker, `POST
-  /api/v1/driver/sync` as its only data call.
-- **Background work**: an outbox in tables (`sms_messages`, `emails`,
-  `webhook_deliveries`) polled by workers; `Jobs.Run` every minute under a
-  Postgres advisory lock (driver, ETA, pickup, route and stop checks,
-  billing, plan limits, papers, retention); live updates across instances
-  by `LISTEN`/`NOTIFY` (`internal/app/live.go`).
-- **Infrastructure**: Docker Compose (`deployments/`), Caddy, PostGIS 15,
-  Prometheus and Grafana, S3 storage (SeaweedFS in staging), backups with
-  point-in-time restore; staging over HTTPS with the provider sandbox.
-- **Tests**: 175 unit, ~100 integration (against PostGIS), 9 end-to-end
-  against staging (one drives the driver PWA in headless Chrome).
+- **One Go module** (`github.com/kiflet/backend`), 49,700 lines; one
+  program (`cmd/server`) run in roles (`serve --roles=web,worker,
+  scheduler,relay`), so the web server, the queue workers, the scheduler
+  and the outbox relay run in one container or several.
+- **Modules moved:** audit, tenancy, identity and fleet; shipments in part
+  (its tables, its history, which it records and publishes on the bus, the
+  status rules, documents and charges). 13,100 lines of rules are still in
+  `internal/service`, with `internal/db` (sqlc) and `internal/model`.
+  `internal/modules/boundaries_test.go` keeps the moved modules from
+  reaching back.
+- **The events bus** (`internal/platform/events`): subscribers run within a
+  change's transaction (webhooks, alerts, texts) or after it commits (live
+  updates); shipment events are written to `event_outbox`, and with
+  RabbitMQ published to `kiflet.events`.
+- **Infrastructure:** RabbitMQ and Redis in every compose file; webhooks,
+  e-mail, SMS, live updates, timed jobs and GPS positions through queues,
+  each with a setting to run in process instead (`WORKER_*`), and the app
+  still working without RabbitMQ; rate limits in Redis; Postgres 17 with
+  PostGIS 3.6; `tracking_events` partitioned by day; Garage for files, on
+  one node; a load test written and run at small scale.
+- **`internal/web`:** about 96 routes render pages (53 templates); JSON for
+  the driver PWA (`/api/v1/driver/*`); the public API (8 operations under
+  `/api/v1`); the providers' callbacks; the live socket (`/app/live`).
+- **The driver app:** a PWA in `internal/web/static/driver`, ES modules
+  with IndexedDB and a service worker; `POST /api/v1/driver/sync` is its
+  only data call.
+- **Tests:** 210 unit, 127 integration, 9 end to end on staging. Of the 484
+  request paths written in the integration tests, 427 are Go pages.
+- **Kiflet/web and Kiflet/mobile:** their plans (architecture, design,
+  migration); no code yet.
 
-What already fits the target and must be kept:
+What already fits the target and is kept:
 
-- The driver sync protocol: one request, many items, idempotent by
-  `client_id`, a cursor. The Expo app uses the same shape.
-- The outbox tables and retry schedules for SMS, email and webhooks; they
-  become the source for RabbitMQ messages rather than being replaced.
+- The sync's write side: one request with many items, idempotent by
+  `client_id`, the phone's clock corrected, the office's decision winning
+  over a stale update, a delivery never thrown away.
+- The outbox tables and retry schedules for SMS, e-mail and webhooks, now
+  fed to RabbitMQ.
 - The provider adapters (`pkg/sms`, `pkg/payments`) and the sandbox.
-- The public API, its OpenAPI file and `TestOpenAPIMatchesTheAPI`.
 - The design (Desk and Night tokens, Geist, lucide), the words in
   `internal/platform/text`, the E2E guide.
 
@@ -111,12 +134,13 @@ What already fits the target and must be kept:
 
 | Repository | Contains | Deploys as |
 |---|---|---|
-| **Kiflet/backend** (this one) | Go backend: modules, `cmd/{api,realtime,worker,scheduler,relay,migrate,sandbox}`; migrations; OpenAPI and AsyncAPI contracts; the generated `@kiflet/api` TypeScript client package; `deployments/` for every environment (Caddy, Postgres, PgBouncer, RabbitMQ, Redis, Garage, monitoring); integration tests; the docs | Docker images `ghcr.io/kiflet/backend`, `ghcr.io/kiflet/sandbox`; the `@kiflet/api` npm package |
-| **Kiflet/web** | Next.js: the public pages, the dashboard, the operator's pages; the design system; Playwright tests | Docker image `ghcr.io/kiflet/web` |
-| **Kiflet/mobile** | Expo app for drivers: SQLite, sync engine, background GPS, screens; Maestro tests | Play Store / App Store builds (EAS Build), over-the-air updates (EAS Update), an APK on the website |
+| **Kiflet/backend** (this one) | Go backend: the modules; one program with its roles (`api`, `realtime`, `worker`, `scheduler`, `relay`) and `migrate`; migrations; the contracts (`api/openapi/v1.yaml`, `api/asyncapi/*.yaml`) and the `@kiflet/api` package generated from them; `deployments/` for every environment; integration and end-to-end tests of the API; the docs | Docker images `ghcr.io/kiflet/backend` and `ghcr.io/kiflet/sandbox`; the `@kiflet/api` npm package |
+| **Kiflet/web** | Next.js: the public pages, the dashboard, the operator's pages; the design tokens (`@kiflet/tokens`); Playwright tests | Docker image `ghcr.io/kiflet/web` |
+| **Kiflet/mobile** | The Expo driver app: its own SQLite database holding the driver's work, the sync engine, background GPS, the screens; Maestro tests | Play Store and App Store builds (EAS Build), over-the-air updates (EAS Update), an APK on the website |
 
-This repository stops serving HTML. Its only HTTP surfaces are `/api/*`,
-`/ws`, `/healthz`, `/readyz` and `/metrics`.
+This repository stops serving HTML. Its only HTTP surfaces are `/api/v1/*`
+(the one API), `/api/callbacks/*` (the providers), `/ws` (live updates),
+`/healthz`, `/readyz` and `/metrics`.
 
 ---
 
@@ -126,618 +150,585 @@ This repository stops serving HTML. Its only HTTP surfaces are `/api/*`,
 
 | Today | Goes to | Notes |
 |---|---|---|
-| `cmd/server` | `cmd/api`, `cmd/worker`, `cmd/scheduler`, `cmd/relay`, `cmd/realtime`, `cmd/migrate` | `seed` and `sms-in` stay as subcommands of a `cmd/kiflet` tool |
+| `cmd/server` | stays, run in roles | the roles are done |
 | `cmd/sandbox`, `internal/sandbox` | stay | |
-| `internal/app` | `internal/app` | builds each process from its settings, as now |
-| `internal/config` | `internal/platform/config` | gains `RABBITMQ_URL`, `REDIS_URL`, `WEB_ORIGIN` |
-| `internal/db` | per module `internal/modules/*/store` | sqlc with one config per module |
-| `internal/geo`, `internal/phone` | `internal/platform/geo`, `internal/platform/phone` | |
-| `internal/model` | each module's `domain/` | transitions to `shipments/domain`, roles to `identity/domain`, plans to `billing/domain` |
-| `internal/service/*.go` | `internal/modules/*/app` | file by file, table below |
-| `internal/text` | stays for SMS and email (`internal/platform/text`); page words copied into Kiflet/web's message files | the parity test moves with them |
-| `internal/web/server.go`, middleware | `internal/http`: router, auth, CSRF, rate limits, request IDs | |
-| `internal/web/api_driver.go` | `internal/modules/*/http` under `/api/driver` | |
-| `internal/web/api_public.go` | `internal/modules/*/http` under `/api/v1` | unchanged contract |
-| `internal/web/app_*.go`, `public.go` | JSON handlers under `/api/web`; the pages go to Kiflet/web | |
-| `internal/web/templates/**` | Kiflet/web `app/**` | page table below; deleted here in phase 6 |
-| `internal/web/static/app.css`, `app.js`, `map.js`, fonts, icons | Kiflet/web `styles/`, `components/` | tokens to Tailwind; `map.js` to a MapLibre component |
-| `internal/web/static/driver/**` | Kiflet/mobile, rewritten | kept here until the app has replaced it (phase 5) |
-| `internal/web/static/openapi.json` | `api/openapi/v1.yaml` | |
-| `pkg/sms`, `pkg/payments`, `pkg/mail`, `pkg/storage` | `internal/platform/*` or stay in `pkg` | they are adapters, no rules |
-| `pkg/websocket` | `cmd/realtime` | |
+| `internal/app` | stays | builds each role from its settings, as now |
+| `internal/db` | each module's `internal/modules/*/store` | sqlc with an entry per module |
+| `internal/model` | each module's `domain/` | transitions to `shipments/domain` and roles to `identity/domain` (done), plans to `billing/domain` |
+| `internal/service/*.go` | `internal/modules/*/app` | file by file (table below), each when its part of the API is built |
+| `internal/web/server.go`, middleware | `internal/http`: router, who is calling, the cross-origin check, rate limits, request IDs, idempotency | |
+| `internal/web/api_driver.go` | `internal/modules/*/http`, under `/api/v1/driver` | |
+| `internal/web/api_public.go` | `internal/modules/*/http`, under `/api/v1` | its 8 operations take the API's conventions in phase 2 |
+| `internal/web/app_*.go`, `public.go` | the API's operations, in `internal/modules/*/http`; the pages go to Kiflet/web | the HTML handlers are deleted with their pages, not moved |
+| the providers' callbacks (`/api/v1/sms/*`, `/api/v1/payments/*`) | `/api/callbacks/*` | phase 2, before any provider is given an address |
+| `internal/web/templates/**` | Kiflet/web `app/**` | deleted here as pages move (phase 4) |
+| `internal/web/static/app.css`, `app.js`, `map.js`, fonts, icons | Kiflet/web (`@kiflet/tokens`, components) | the tokens' starting values |
+| `internal/web/static/driver/**` | Kiflet/mobile, rewritten | frozen; kept until no driver uses it (phase 6) |
+| `internal/web/static/openapi.json` | `api/openapi/v1.yaml` | the published document shows the operations API keys reach |
+| `pkg/sms`, `pkg/payments`, `pkg/mail`, `pkg/storage`, `pkg/broker` | stay in `pkg` | adapters, no rules (ROADMAP, "Considered and not planned") |
+| `pkg/websocket` | the `realtime` role | |
 | `pkg/metrics`, `pkg/hash`, `pkg/console` | stay | |
-| `migrations` | stay | new migrations for schemas, outbox, partitions, push tokens |
-| `deployments` | stay, grow | one compose file per VM role (section 13 of the architecture) |
-| `tests/integration` | stay | run against the new processes |
-| `tests/e2e` | split: API and infrastructure tests stay; browser tests to Kiflet/web (Playwright); driver app tests to Kiflet/mobile | |
-| `docs` | stay | E2E guide updated per phase |
+| `migrations` | stay | |
+| `deployments` | stay, grow | one compose file per VM role (architecture, section 13); a compose file for the clients' tests |
+| `tests/integration` | stay | tests of the API and the protocol; page tests go with their pages (section 8) |
+| `tests/e2e` | stay, through the API | browser tests go to Kiflet/web (Playwright), the driver app's to Kiflet/mobile (Maestro); the backup restore and monitoring tests stay |
+| `docs` | stay | the E2E guide updated as flows move |
 
 ### Services to modules
 
-| `internal/service` file(s) | Module |
-|---|---|
-| `auth.go`, `accounts.go`, `users.go`, `verification.go` | identity (staff and drivers' accounts), fleet (driver profile fields) |
-| `tenants.go`, settings parts of `notify.go` | tenancy |
-| `vehicles.go`, `papers.go` | fleet |
-| `shipment.go`, `shipment_status.go`, `shipment_files.go`, `shipment_import.go`, `dispatch.go`, `convert.go` | shipments |
-| `pod.go`, `media.go` | proof |
-| `tracking.go`, `sync.go` (positions part) | tracking |
-| `sync.go` (the rest) | a `driversync` façade that calls shipments, proof, messaging and tracking |
-| `alerts.go`, `alert_rules.go`, the checks in `jobs.go` | alerts |
-| `sms.go`, `mail.go`, `notify.go` | notify |
-| broadcasts and driver messages (in `dispatch.go` and `sync.go`; the messages are rows in `shipment_events`) | messaging, writing through shipments |
-| `shipment_public.go` | customer |
-| `billing*.go` | billing |
-| `api.go`, `api_json.go`, `webhooks.go` | integrations |
-| `reports.go` | reports |
-| `support.go` | support |
-| `audit.go` | audit |
-| `data.go`, retention in `jobs.go` | data |
-| `health.go` | platform (operator) |
-| `jobs.go` | scheduler (the timer) and each module's job handlers |
+| `internal/service` file(s) | Module | Moves in |
+|---|---|---|
+| `sync.go` (the protocol, the feed, the devices) | driversync: the driver app's sync, calling shipments, proof, messaging and tracking | phase 1 (the feed), phase 3 |
+| `pod.go`, `media.go` | proof | phase 3 |
+| `tracking.go`, `sync.go` (positions) | tracking | phase 3 |
+| broadcasts and driver messages (`dispatch.go`, `sync.go`; the messages are rows in `shipment_events`) | messaging, writing through shipments | phase 3 |
+| `sms.go`, `mail.go`, `notify.go`; push, which is new | notify | phase 3 (push), phase 4 (wave 7) |
+| `shipment.go`, `shipment_status.go`, `shipment_files.go`, `shipment_import.go`, `dispatch.go`, `convert.go` | shipments | phase 3 (moves from the driver), phase 4 (wave 5) |
+| `auth.go`, `accounts.go`, `users.go`, `verification.go` | identity (the rest), fleet (driver profile fields) | phase 3 (the driver's sign-in, devices), phase 4 (waves 2 to 4) |
+| `shipment_public.go` | customer | phase 4, wave 1 |
+| `reports.go`, and the read models in `sqlc/queries` | reports | phase 4, waves 3 and 6 |
+| `support.go` | support | phase 4, wave 3 |
+| `alerts.go`, `alert_rules.go`, the checks in `jobs.go` | alerts | phase 4, wave 7 |
+| `api.go`, `api_json.go`, `webhooks.go` | integrations | phase 4, wave 7 |
+| `billing*.go` | billing | phase 4, wave 7 |
+| `tenants.go`, the settings parts of `notify.go` | tenancy (the rest) | phase 4, wave 7 |
+| `data.go`, retention in `jobs.go` | data | phase 4, wave 7 |
+| `health.go` | platform (the operator's) | phase 4, wave 8 |
+| `jobs.go` | the scheduler and each module's job handlers | with each module |
+
+Moved already: audit, tenancy, identity, fleet, and shipments' tables,
+history, rules, documents and charges.
 
 ### Pages and the driver app's modules
 
-Where each page of the dashboard and the public site goes, with the API
-each needs, is the page inventory in
-[Kiflet/web `docs/migration.md`](https://github.com/Kiflet/web/blob/main/docs/migration.md#the-page-inventory).
+Where each page goes, with the operations it needs, is the page inventory
+in [Kiflet/web `docs/migration.md`](https://github.com/Kiflet/web/blob/main/docs/migration.md#8-the-page-inventory).
 Where each module of the driver PWA goes is in
 [Kiflet/mobile `docs/migration.md`](https://github.com/Kiflet/mobile/blob/main/docs/migration.md#the-pwa-module-by-module).
 
 ---
 
-## 5. The phases
+## 5. How a module moves
+
+1. Create `internal/modules/<name>/` with `<name>.go` (its interface),
+   `app/`, `domain/`, `store/`, and `http/` when it serves part of the API.
+2. Move its `service` code into `app/`, its rules from `model` into
+   `domain/`, its queries from `sqlc/queries` into `store/queries/`, with
+   an entry in `sqlc/sqlc.yaml`.
+3. Replace calls from other code into its internals with calls through its
+   interface. Where a module would call one that depends on it, publish an
+   event on the bus instead.
+4. Test it at each level of section 8: unit tests for `domain/` and
+   `app/` with other modules faked, store tests against Postgres with
+   another company's IDs.
+5. Build the part of the API it serves (phase 3 or 4), with its API tests.
+6. `make test test-integration`; one pull request per module, or per part
+   of a large one.
+
+What moving audit, tenancy, identity, fleet and part of shipments taught:
+
+- **The server-rendered handlers stay in `internal/web`** until their pages
+  are deleted; moving them would be work thrown away. A module's `http/`
+  holds its operations of the API.
+- **One transaction across modules.** A change and what it records in
+  another module (an audit row, an alert) commit together: the other
+  module's write takes the transaction as a `database.Conn`
+  (`internal/platform/database`), and `internal/service` hands it over with
+  `q.Conn()`.
+- **No joins into other modules' tables.** The platform's audit page read
+  company and user names by joining `tenants` and `users`; it now looks
+  them up through the tenancy and identity services.
+- **Empty layers are left out:** audit has no `domain/`.
+- **Errors** a person can act on are `internal/platform/apperror`'s;
+  `service.Error` is an alias of it, so the pages show a module's errors as
+  they did the service's.
+- **A module's row type is its store's** (`tenancy.Tenant` is
+  `store.Tenant`). Until the code still in `internal/service` moves, it
+  converts to the `db` type with `db.Tenant(t)`: both are generated from
+  the same table, so the conversion compiles as long as they agree.
+- **A module may move in more than one pull request** when it is large:
+  identity moved its sessions first. Types other code names everywhere
+  (`Principal`, `Actor`, the roles) stay reachable under their old names as
+  aliases (`service.Principal`, `model.RoleAdmin`), so callers change when
+  their own code moves, not all at once.
+- **Reads kept across modules on purpose:** the session look-up
+  (`GetSessionPrincipal`) joins `users`, `tenants` and `invoices`, as every
+  request runs it; it stays one query until the session is cached in Redis
+  (phase 5).
+- **A check that needs another module's data is passed in:**
+  `identity.Codes.Issue` takes the daily SMS budget, which counts
+  messaging's texts, as a function it runs where it ran before.
+- **A table may have columns of two modules:** `users` is identity's, but
+  its driver profile columns (`vehicle_id`, `licence_expires_on`, the app
+  settings) are fleet's, and fleet's store has their queries.
+- **Pages that gather from several modules are read models:** the
+  platform's companies (`tenants.sql`), the vehicles and drivers pages
+  (`vehicles.sql`, `drivers.sql`), the shipment lists, the map and the
+  overdue checks (`shipments.sql`) stay in `sqlc/queries` until reports
+  moves; the modules own the tables.
+- **A module's types replace the `db` ones** when no query outside it
+  returns them: `shipments.Shipment` and `shipments.Event` are used across
+  `internal/service` and `internal/web`, and a read model that embeds
+  `db.Shipment` converts with `shipments.Shipment(row.Shipment)`.
+- **What still reaches into moved modules' tables**, to go through their
+  interfaces when that code moves: `tenants` (billing's plan, trial and SMS
+  allowance updates, the company's deletion, and joins in the billing,
+  dashboard, shipments, platform, sessions, accounts and api queries);
+  `users` (joins for names and drivers in the alerts, billing, dashboard,
+  pod, reports, shipments, tracking, vehicles, platform and driver queries,
+  and anonymising people).
+- **The events bus** has two kinds of subscriber: `Within` runs in the
+  publisher's transaction, for what must commit with the change (a webhook
+  to deliver, a text to send, an alert), and `After` runs once it has
+  committed (live updates, waking workers). An event carries, for its
+  subscribers alone, the facts its history doesn't keep (a first
+  departure, who took delivery, how the proof's place compares with the
+  destination). Alerts that come from no shipment's event (billing, SMS
+  limits, the scheduled checks) are still raised directly.
+
+---
+
+## 6. The phases
 
 Each phase lists its steps, what done looks like, and how to roll back.
+Phases 0 to 2 are the backend alone. Phase 3 runs with Kiflet/mobile's
+milestones and phase 4 with Kiflet/web's waves, each a step ahead of the
+client. Phase 5 makes production ready for the pilot's growth, and phase 6
+removes what the clients replaced.
 
 ### Phase 0: groundwork
-
-Decisions and accounts, before code moves.
 
 1. **Repositories.** Done on 2026-11-19: the GitHub organization
    [Kiflet](https://github.com/Kiflet) with `backend` (this repository,
    moved there with its whole history and the `v0.9.0` tag; the Go module
-   is now `github.com/kiflet/backend`), `web` and `mobile`, all public under
-   the same licence. Still to do in the organization's settings: branch
-   protection on each `main` (CI must pass), two-factor authentication for
-   members, a second owner, private vulnerability reporting, and archiving
-   the old `Natnael-Alemayehu/kiflet` repository with a pointer here.
-2. **Accounts.** Expo (EAS Build and Update), Google Play Console, Apple
-   Developer Program (when iOS is wanted), Firebase project for FCM (push
-   on Android), GitHub Packages for `@kiflet/api`.
-3. **Domains.** `app.kiflet.et` (dashboard), `track.kiflet.et` or
-   `kiflet.et/track` (public pages; the short form matters in SMS),
-   `api.kiflet.et` (public API, same backend). Today everything is one
-   host; tracking links already sent by SMS must keep working (redirects).
-4. **Contracts tooling** (in this repository):
-   - OpenAPI 3.1 files under `api/openapi/` (`web.yaml`, `driver.yaml`,
-     `v1.yaml`).
-   - Go: `oapi-codegen` generating request and response types and a
-     strict server interface per API, which the module handlers implement.
-   - TypeScript: `openapi-typescript` for types and `openapi-fetch` for the
-     client, packaged as `@kiflet/api` with a version per release of this
-     repository.
-   - CI: lint the specs, regenerate and fail on a diff (as `sqlc diff`
-     does), publish the package on a tag.
-5. **Conventions written down** in each new repository's `AGENTS.md` and
-   `CONTRIBUTING.md`: the same rules (tenant first, text in both
-   languages, no inline scripts, CHANGELOG), plus their own (TypeScript
-   strict, ESLint, Prettier, no `any`).
+   is `github.com/kiflet/backend`), `web` and `mobile`, all public under the
+   same licence. Branch protection on each `main` (pull requests only, for
+   admins too, no force pushes; here, the four CI jobs must pass) and
+   private vulnerability reporting: done on 2026-11-19. Still to do in the
+   organization's settings: two-factor authentication for members, a second
+   owner, and archiving the old `Natnael-Alemayehu/kiflet` repository with a
+   pointer here.
+2. **Accounts.** Expo (EAS Build and Update); the Google Play Console as an
+   organization, whose D-U-N-S number can take weeks, so it starts first;
+   Firebase for FCM (push on Android); GitHub Packages for `@kiflet/api`
+   and `@kiflet/tokens`; Apple's Developer Program when iOS is wanted.
+3. **Domains.** `app.kiflet.et` (the web app, with `/api/*` and `/ws` on
+   the same host), `track.kiflet.et` or `kiflet.et/track` (the public pages;
+   the short form matters in SMS), `api.kiflet.et` (the same API, for
+   companies' systems), `files.kiflet.et` (Garage), `tiles.kiflet.et` (map
+   tiles). Tracking links already sent by SMS keep working (redirects).
+4. **Published for the clients:** images to `ghcr.io/kiflet/backend` and
+   `ghcr.io/kiflet/sandbox` on every merge to `main`, tagged with the
+   commit, and on release tags; a compose file that starts the backend at a
+   given tag with the demo data and the provider sandbox, which both
+   clients' CI runs against.
+5. **Checks:** gosec in golangci-lint (audit P2); `TestGatewayFaults` made
+   reliable (T5); the unit and integration suites' coverage reported
+   together in CI, per package, against a floor that only goes up; each
+   test names the requirement it covers, and a generated table lists the
+   requirements with none (T4).
 
-Done when: both repositories exist with CI that builds an empty app, and
-this repository's CI publishes a first `@kiflet/api` from the public API's
-spec.
+Done when: a client can start the backend from a published image with one
+command, and CI fails when coverage drops.
 
-Roll back: nothing to roll back; no code has moved.
+Roll back: nothing to roll back; no behaviour changes.
 
-### Phase 1: modules, in place
+### Phase 1: the data and the flow
 
-Reorganise this repository into the modules of the architecture without
-changing behaviour. The server-rendered dashboard and the PWA keep working
-throughout; only imports move.
+Fixes to the data model and the flows, cheap while no company's data is in
+it and expensive after the pilot; every later phase builds on them. The
+Go pages and the PWA keep working throughout. Each step is a pull request
+with its tests; the IDs are the audit's.
 
-1. **Platform packages first:** move `config`, `geo`, `phone`, `text`,
-   `storage`, `mail`, `sms`, `payments` under `internal/platform/` (or keep
-   `pkg/` where it is, see ROADMAP "Considered and not planned"). One
-   commit, `go build ./...` and all tests green. Done: `config`, `geo`,
-   `phone` and `text` are in `internal/platform/`; `pkg/` stays.
-2. **One module at a time**, in this order (fewest dependencies first):
-   audit → tenancy → identity → fleet → shipments → proof → tracking →
-   messaging → customer → notify → alerts → integrations → billing →
-   reports → support → data. For each:
-   1. Create `internal/modules/<name>/` with `<name>.go` (the interface),
-      `app/`, `domain/`, `store/`.
-   2. Move its `service` code into `app/`, its rules from `model` into
-      `domain/`, its queries from `sqlc/queries` into `store/queries/`, with
-      an sqlc config per module (`sqlc.yaml` gains one entry per module).
-   3. Replace calls from other modules into its internals with calls
-      through its interface. Where a module would call one that depends on
-      it, publish an event instead (in this phase, an in-process event bus
-      with the same interface the RabbitMQ one will have).
-   4. Move its handlers from `internal/web/app_*.go` next to it under
-      `http/` (still rendering templates for now).
-   5. `make test test-integration`; one PR per module.
+1. **The driver sync's change feed** (D1; the protocol is
+   `docs/architecture.md`, section 11, "The driver sync"):
+   - `driver_feed` (driver, sequence number, kind, the record's ID, upsert
+     or remove, a reason) and `driver_feed_heads` (each driver's last
+     number), in a new driversync module;
+   - a subscriber within the transaction on `shipment.*` writes the
+     entries for the load's driver, and a removal for the driver it was
+     taken from; office messages, broadcasts and the driver's settings
+     write theirs where they are made, until messaging moves (phase 3);
+   - the sync reads the entries after the cursor and sends each changed
+     load's current state once, the removals with their reasons, and the
+     new messages, with `more` when there are more; a full download
+     (`full`) when the cursor can't be honoured;
+   - the cursor becomes an opaque string. A timestamp cursor, from a PWA
+     loaded before the change, gets a full download, so nothing breaks; the
+     PWA, which stores and returns the cursor untouched, learns to honour
+     `full`;
+   - entries older than 30 days are deleted by a job, and a cursor older
+     than that gets a full download.
 
-   Done: audit, tenancy, identity, fleet; shipments in part (its tables,
-   its history, which it records and publishes, the status rules,
-   documents and charges; booking,
-   assigning, status changes and the driver sync still in
-   `internal/service`). How it went, for the rest:
-   - **The server-rendered handlers stay in `internal/web`.** Phase 4
-     replaces those pages with Kiflet/web and phase 6 deletes them, so
-     moving them would be work thrown away. A module's `http/` holds the
-     JSON handlers phase 3 writes for it.
-   - **One transaction across modules.** A change and what it records in
-     another module (an audit row, an alert) still commit together: the
-     other module's write takes the transaction as a `database.Conn`
-     (`internal/platform/database`), and `internal/service` hands it over
-     with `q.Conn()`.
-   - **No joins into other modules' tables.** The platform's audit page
-     read company and user names by joining `tenants` and `users`; it now
-     looks them up through the tenancy and identity services.
-   - **Empty layers are left out:** audit has no `domain/`.
-   - **Errors** a person can act on are `internal/platform/apperror`'s;
-     `service.Error` is an alias of it, so the web layer shows a module's
-     errors as it did the service's.
-   - **A module's row type is its store's** (`tenancy.Tenant` is
-     `store.Tenant`). Until the code still in `internal/service` moves,
-     it converts to the `db` type with `db.Tenant(t)`: both are generated
-     from the same table, so the conversion compiles as long as they
-     agree.
-   - **What still reaches into a moved module's tables**, to go through
-     its interface when that code moves:
-     - `tenants`: billing's plan, trial and SMS-allowance updates
-       (`sqlc/queries/billing.sql`), the company's deletion (`data.sql`),
-       and joins in `billing`, `dashboard`, `shipments`, `platform`,
-       `sessions`, `accounts` and `api` queries. The platform's company
-       list with its figures (`tenants.sql`) is a read model for reports.
-     - Signing up a company stays in `internal/service` until identity
-       moves, since it creates the first user: it calls
-       `tenancy.Create` within its transaction.
-   - **A module may move in more than one PR** when it is large: identity
-     moved its sessions first. Types other code names everywhere
-     (`Principal`, `Actor`, the roles) stay reachable under their old
-     names as aliases (`service.Principal`, `model.RoleAdmin`), so callers
-     change when their own code moves, not all at once.
-   - **Reads kept across modules on purpose:** the session lookup
-     (`GetSessionPrincipal`) joins `users`, `tenants` and `invoices`, as
-     every request runs it; it stays one query until the session is
-     cached in Redis.
-   - **A check that needs another module's data is passed in:**
-     `identity.Codes.Issue` takes the daily SMS budget, which counts
-     messaging's texts, as a function it runs where it ran before. An email
-     link no longer joins `tenants`: whether the company is active comes
-     from tenancy.
-   - **A table may have columns of two modules:** `users` is identity's,
-     but its driver profile columns (`vehicle_id`, `licence_expires_on`,
-     the app settings) are fleet's, as `docs/architecture.md` has it.
-     Fleet's store has their queries. The papers check reads a driver's
-     role and standing beside their licence, a read of identity's columns
-     kept on purpose: the two share the row.
-   - **Pages that gather from several modules are read models:** the
-     platform's companies (`tenants.sql`), the vehicles page
-     (`vehicles.sql`) and the drivers page (`drivers.sql`) stay in
-     `sqlc/queries` until reports moves; the modules own the tables. So
-     do the shipments lists, the map and the overdue checks
-     (`shipments.sql`), which read drivers, vehicles, positions and rules.
-   - **A module's types replace the `db` ones** when no query outside it
-     returns them: `shipments.Shipment` and `shipments.Event` are used
-     across `internal/service` and `internal/web`, and a read model that
-     embeds `db.Shipment` converts with `shipments.Shipment(row.Shipment)`.
-   - **What still reaches into identity's tables**, to go through
-     `identity.Users` when that code moves: joins on `users` for names
-     and drivers in `alerts`, `billing`, `dashboard`, `pod`, `reports`,
-     `shipments`, `tracking`, `vehicles`, `platform` and `driver` queries;
-     the company's deletion and anonymising people (`data.sql`).
-   - `internal/service` keeps a thin service where the dashboard needs a
-     check the module can't make yet (the platform admin's), until the
-     module that owns it moves.
-3. **A test that enforces the boundaries:** `go list -deps` per module;
-   a module may import only `internal/platform/*`, its own packages and
-   other modules' root packages (their interfaces), never their `app/` or
-   `store/`. Like the sandbox's import test today. Done
-   (`internal/modules/boundaries_test.go`): it parses each module's
-   imports, and also refuses `internal/service`, `db` and `model`.
-4. **Events, in process:** an `events.Bus` interface (`Publish(ctx, tx,
-   Event)`, `Subscribe(type, handler)`) with an in-memory implementation
-   that runs handlers after the transaction commits. Alerts, notify,
-   webhooks and live updates subscribe to it instead of being called
-   directly.
-   Done as `internal/platform/events`, with one change: subscribers are
-   of two kinds. `Within` runs in the publisher's transaction, for what
-   must commit with the change: a webhook to deliver, a text to send, an
-   alert. Those were written in the same transaction when they were
-   called directly, and running them after the commit would lose them
-   when a process stops in between. `After` runs once it has committed,
-   for live updates and waking workers. The bus also writes the outbox,
-   which `core.emit` did. Within the transaction, webhooks, alerts and
-   the customer's and driver's texts subscribe to `shipment.*`; live
-   updates subscribe after it. An event carries, for them alone, the
-   facts its history doesn't keep (a first departure, who took
-   delivery, how the proof's place compares with the destination).
-   Alerts that come from no shipment's event (billing, SMS limits, the
-   scheduled checks) are still raised directly. Next, booking and status
-   changes move into the shipments module, which publishes; it no longer
-   needs to know who reacts.
+   Tests: two transactions committing in the opposite order to their
+   numbers are both delivered; a reassigned load is removed from the first
+   driver's phone; a replayed request; an old cursor; a page of exactly the
+   limit.
+2. **The tenant in every reference** (D2): `UNIQUE (tenant_id, id)` on each
+   parent table, and each of the 46 references between company-owned
+   tables as `(tenant_id, x_id) REFERENCES x (tenant_id, id)`. A helper for
+   store tests runs a query with another company's IDs and expects nothing.
+3. **The load limit under a lock** (D3): the assigning transaction locks
+   the driver's row before counting; a test assigns two loads at once to a
+   driver with room for one.
+4. **Money in santim** (D4): `shipment_charges.amount` and
+   `shipments.cargo_value` become `bigint` santim, as billing is; the pages
+   and the public API change with them (no company uses it yet).
+5. **Tenancy checked** (D5): every query without `tenant_id` says why
+   (`-- tenant: none, <reason>`), and a test that reads every queries file
+   fails on one that doesn't.
+6. **Delivery media** (D6): `pod_media` (the delivery, kind, storage key,
+   size, MD5, when and where it was taken); signatures stored as files like
+   photos; `photo_urls` and `signature_data` replaced, and the PWA's inline
+   uploads stored the same way.
+7. **Versions** (D7): a `version` on shipments, users, vehicles, tenants,
+   webhook endpoints and alert rules, raised by every update.
+8. **Idempotency keys** (D7): `idempotency_keys` (company, caller, key, the
+   request's hash, the response, when), kept 24 hours, for phase 2's
+   middleware.
+9. **One catalogue of words for codes** (D8): `internal/platform/text`
+   gains the office's and the driver's words beside the customer's (the
+   driver's Amharic from the PWA's `text.js`) for statuses, reasons, moves,
+   refusals, alert types, roles, and invoice and payment states. A test
+   fails on a code without words for every audience in both languages.
+10. **Live updates by role** (P1): a live message names the roles that may
+    receive it; payments and invoices go to admins.
+11. **Events carry what their subscribers read** (D9): the company and the
+    facts a subscriber needs ride on the event, so a transaction runs no
+    look-ups for them.
 
-Done when: `internal/service`, `internal/model` and `internal/db` are gone;
-every module has the layout of the architecture's section 4; the boundary
-test passes; nothing a user sees has changed.
+Done when: every step is merged with its tests; the Go pages and the PWA
+behave as before; a PWA's sync sends only what changed.
 
-Roll back: each module is one PR; revert it.
+Roll back: each step is one pull request. Schema changes add first, and
+the old columns are dropped a release after the code stops reading them.
 
-### Phase 2: infrastructure: RabbitMQ, Redis, separate processes
+### Phase 2: one API and its contract
 
-1. **Compose files.** Add RabbitMQ (`rabbitmq:4-management`, quorum
-   queues) and Redis (`redis:8`, AOF) to `deployments/dev/compose.yml`,
-   staging and production; PgBouncer in front of Postgres. The exchanges
-   and queues are declared by the app at start (`pkg/broker`'s
-   `Topology`), so a new queue ships with the code that uses it. `make db`
-   starts Postgres, RabbitMQ and Redis. RabbitMQ and Redis: done.
-2. **Postgres 15 → 17** (PostGIS 3.6): a dump and restore, as
-   `docs/deploy.md` ("Upgrading PostgreSQL") has it, while the database is
-   small; a database too big to restore in a maintenance window would use
-   `pg_upgrade --link` or a logical replica and a switch. Tested by
-   staging's restore test.
-3. **The broker package** (`pkg/broker` until phase 1 moves the platform
-   packages; done): connection with
-   reconnects, channels per goroutine, publisher confirms, the envelope,
-   consumers with prefetch, ack after commit, retries through delayed
-   dead-letter queues, metrics per queue. The `events.Bus` from phase 1
-   gets a RabbitMQ implementation.
-4. **The outbox:** migration for `outbox` (id, type, version, tenant_id,
-   routing_key, payload jsonb, created_at, sent_at), written in the same
-   transaction as each change; `cmd/relay` publishes and marks sent
-   (`LISTEN outbox` to wake, `FOR UPDATE SKIP LOCKED`, leader by advisory
-   lock); `processed_messages` for consumers' idempotency. Done, with the
-   relay inside the app (`internal/app/relay.go`) until step 9 makes it a
-   process of its own; shipment events are written to it.
-5. **Move the workers to queues, one at a time,** each behind a setting
-   so it can be switched back:
-   1. Webhooks (`webhook.deliver`), keeping `webhook_deliveries` as the
-      record and its retry schedule.
-   2. Email (`notify.email`).
-   3. SMS (`notify.sms`), rate-limited by prefetch to the gateway's limit.
+The API every client uses, its conventions, and the tooling that keeps
+the code, the specification and the clients' types in step. The design is
+`docs/architecture.md`, section 11.
 
-   1 to 3 done, together, since they are the same pattern
-   (`internal/service/workqueue.go`; `WORKER_WEBHOOKS`, `WORKER_MAIL`,
-   `WORKER_SMS`): the tables stay the record, a message names rows due,
-   a worker claims them by ID, and a sweeper republishes what is due when
-   a queue is empty (retries, and messages lost). CI runs the integration
-   tests a second time with every worker on RabbitMQ (`TEST_RABBITMQ`).
-   4. Alerts evaluation from events (`alerts.evaluate`).
-   5. Audit writes (`audit.write`).
+1. **The specification:** `api/openapi/v1.yaml` (OpenAPI 3.1), one file for
+   the one API, each operation tagged with who may call it: `app`
+   (Kiflet/web's session), `public` (API keys as well), `driver`
+   (Kiflet/mobile's token). `api/asyncapi/live.yaml` describes the live
+   socket's messages, and `api/asyncapi/webhooks.yaml` the webhooks.
+2. **Generated code:** oapi-codegen generates the Go types and a strict
+   server interface into a platform package; each module's `http/`
+   implements its operations, and `internal/http` embeds them into the one
+   server, so an operation missing or misnamed fails to compile.
+   openapi-typescript and openapi-fetch make the TypeScript types and
+   client, published as `@kiflet/api` to GitHub Packages with every change
+   to the specification merged to `main`.
+   CI lints the specification, regenerates and fails on a difference (as
+   `sqlc diff` does), and compares it with `main` using oasdiff: a breaking
+   change to a `public` or `driver` operation fails, and one to an `app`
+   operation needs the `api-break` label on its pull request.
+3. **The contract test:** every response the API tests receive is
+   validated against the specification.
+4. **The conventions,** in `internal/http`, once for every operation:
+   - errors as `{ "error": { "code", "message", "fields", "request_id" } }`,
+     with every invalid field at once; codes in lowercase snake case
+     (`not_found`, `version_mismatch`; today's `VALIDATION_ERROR` and the
+     rest change with them while no company integrates);
+   - codes as `{ "code", "label" }`, the label from phase 1's catalogue in
+     the reader's language (`Accept-Language`, or `?lang=` on public pages)
+     and for the reader's audience;
+   - each record with the `actions` its reader may take, and each option
+     that can't be chosen with a `disabled_reason`;
+   - lists by `?page=&per_page=` (at most 100) with `total`, and a cursor
+     (`?after=`) only for endless feeds (activity, the audit log,
+     positions);
+   - times in RFC 3339, in UTC; money in whole santim; enums open (a client
+     shows a value it doesn't know);
+   - `Idempotency-Key` on every create (phase 1's table); an `ETag` with the
+     record's version, and `If-Match` checked when sent (`412` with the
+     current record);
+   - `X-Request-Id` on every answer, and `429` with `Retry-After`.
+5. **Who is calling:** a request with `Authorization: Bearer` carries an
+   API key (known by its prefix) or a driver token; otherwise the session
+   cookie is read. Every request the cookie authenticates goes through Go's
+   cross-origin check, and the exemption for all of `/api/` goes (A2). The
+   providers' callbacks move to `/api/callbacks/*`, checked by their
+   signatures, with the sandbox and `docs/deploy.md`.
+6. **The operations there are:** the public API's 8 take the conventions
+   (a shipment by its ID or its tracking number), and
+   `internal/web/static/openapi.json` gives way to the published `public`
+   part; the driver operations (sign-in, PIN and its reset, config, sync,
+   sign-out) are specified as they are.
 
-   4 and 5 wait for phase 1. Today a change, the alerts it raises and its
-   audit row are written in one transaction, so none is ever missing or
-   left over. As consumers, they would still be calls into the same
-   `internal/service` package until phase 1 makes alerts and audit
-   modules of their own, and the change would only add a way for them to
-   lag. They move once those modules exist, onto the `events.Bus` that
-   phase 1 adds, and from it to RabbitMQ.
-   6. Live updates: `kiflet.live` exchange replaces `LISTEN`/`NOTIFY`
-      (`internal/app/live.go`). Done (`WORKER_LIVE`).
-   7. Timed jobs: `cmd/scheduler` publishes to `jobs.scheduled` on the
-      schedule `Jobs.Run` keeps today; the jobs worker runs them.
-      Done (`WORKER_JOBS`), as the `scheduler` role rather than a command
-      of its own: the scheduler holding a Postgres lock publishes each job
-      as it falls due (`internal/service/jobs_queue.go`), and a worker
-      runs it under a lease of that job's own (`job_leases`), so
-      different jobs run on different workers and no job runs twice at
-      once.
-6. **Positions through the queue:** the sync handler publishes positions
-   to `tracking.ingest` (with confirms) instead of inserting them; the
-   tracking worker batch-inserts, updates `driver_positions` and Redis,
-   runs the stop, route and arrival checks, publishes events. The response
-   to the phone keeps its shape (`locations_stored` becomes "accepted").
-   Done for the inserts and `driver_positions` (`WORKER_TRACKING`); Redis
-   and the checks move into the worker with steps 8 and 5.4.
-7. **Partition `tracking_events`** by day (section 6 of this document).
-8. **Redis:** session, driver-token and API-key lookups cached; rate
-   limits in Redis (Caddy's sticky routing becomes unnecessary); latest
-   positions and presence for the fleet map; tenant data cache with
-   deletion on change. Redis in the compose files and the rate limits:
-   done (`internal/web/limits.go`, falling back to each instance's own
-   count).
-9. **Separate processes:** `cmd/api` (HTTP), `cmd/realtime` (WebSocket),
-   `cmd/worker --queues=tracking.*` and so on, `cmd/scheduler`,
-   `cmd/relay`, `cmd/migrate`. `cmd/server` stays for one release as "all
-   of them in one process" for development and small installs. Done as
-   roles of the one program rather than a program each (`kiflet serve
-   --roles=web,worker,scheduler,relay`; `migrate` was a command already):
-   one image, one build, and the same wiring tested in every
-   combination. Production's compose file has the `worker` service
-   (profile `workers`); staging runs it. Splitting `web` into HTTP and
-   WebSocket processes waits for the web app (phase 4), whose pages are
-   what would move.
-10. **Garage for files** (architecture, section 5). It depends on nothing
-    else in this phase and can go first:
-    1. `pkg/storage`: an `S3_FORCE_PATH_STYLE` setting (today path-style
-       is used only for `http://` endpoints), and the public endpoint
-       that presigned URLs are signed for, apart from the private one the
-       app uploads through.
-    2. Compose: Garage (`dxflrs/garage`, pinned) in `deployments/dev`,
-       staging (one node, replication factor 1, replacing SeaweedFS) and
-       production (three nodes, factor 3), with `garage.toml` in
-       `deployments/garage/` and `rpc_secret` and the admin token as
-       secret files (`GARAGE_RPC_SECRET_FILE`, `GARAGE_ADMIN_TOKEN_FILE`).
-       A `garage-init` job applies the layout and makes the buckets, keys,
-       CORS and lifecycle rules through the admin API, and is safe to run
-       again. The health check uses Garage's binary (the image has no
-       shell).
-    3. Caddy: `files.kiflet.et` (staging: `files.kiflet.localhost`) to
-       Garage's S3 port only, with phase 5's presigned uploads, the first
-       to need the store reachable from outside: until then the app
-       carries every file itself.
-    4. Tests: `tests/integration/storage_test.go` starts Garage instead of
-       SeaweedFS, and adds presigned PUT and GET, CORS and a lifecycle
-       rule; staging's end-to-end delivery test then runs against it.
-    5. The bucket in the nightly encrypted backup to the off-site bucket
-       (`scripts/backup.sh` with rclone, as for the database: the
-       `_objects` archive), restored by `scripts/restore.sh`, in
-       `tests/e2e`'s restore test.
-    6. Production: copy the files already stored (the `app-data` volume,
-       or the S3 bucket if `STORAGE_TYPE=s3`) into Garage with
-       `rclone copy --checksum`, switch the settings, keep the old copy a
-       month.
-11. **Load test** in staging (k6): 12,000 simulated phones syncing every
-    60 s, then 3,000 reconnecting with 2 hours of positions each; the
-    targets in the architecture's section 15 (oldest message in
-    `tracking.ingest` under 2 minutes, API p95 under 300 ms).
-    Written (`tests/load/`, `make load-seed`, `make test-load`; deploy.md,
-    "Load test"), and run at small scale. Running it on hardware the size
-    of production's is what remains. Writing it found that the driver API
-    was limited to 600 requests a minute per address, which drivers
-    sharing a carrier address would have hit; it is now per driver.
+Done when: `@kiflet/api` is published from the specification, with the
+public and driver operations in it; the conventions are tested in
+`tests/integration`; the callbacks have moved.
 
-Done when: production runs the separate processes on RabbitMQ and Redis;
-the load test passes; stopping Redis or one RabbitMQ node in staging loses
-nothing (tested); the old in-process workers are deleted; files are in
-Garage, with one node of production's three stopped for an hour losing
-nothing and refusing no upload, and a file restored from the off-site copy.
+Roll back: the specification and the generated code are additive; the
+public API's changes are one pull request, revertable while no company
+uses it.
 
-Roll back: each worker move has a setting (`WORKER_<NAME>=inprocess|queue`)
-until it has run in production for two weeks; Redis can be turned off
-(`REDIS_URL` empty falls back to Postgres and per-instance limits); the
-files stay where they were until Garage has run a month, so going back
-is the old settings and a copy of what was uploaded since.
+### Phase 3: the driver API, with Kiflet/mobile
 
-### Phase 3: the web API and its contract
+The driver app goes first: recording GPS with the screen off is the
+pilot's need, and Kiflet/mobile builds its sync engine against the real
+backend from its milestone M2. Each step is ready before the milestone
+that needs it (Kiflet/mobile's `docs/migration.md`), and moves the modules
+it touches out of `internal/service`, with their unit, store and API
+tests.
 
-The dashboard today renders HTML from handlers. Kiflet/web needs the same
-data and actions as JSON. Build `/api/web` module by module, in the order
-the pages will move (phase 4).
+| Kiflet/mobile needs it by | This repository delivers | Modules moved |
+|---|---|---|
+| M2: the database and the sync engine | the sync's new response (the feed, `full`, removals with their reasons) in the specification; stable refusal codes (`cancelled`, `reassigned`, `stale`, `held_for_review`, `invalid`; `tenant_suspended` for a paused company); `413` for a request too large | driversync |
+| M3: the screens | in config: the driver's words for every code in English and Amharic (`labels`); `transitions` in order, the first being the main button; an `ETag` | |
+| M4: GPS with the screen off | in config: the GPS numbers (`gps`), photo size and quality, the sync intervals, the SMS commands and when to offer them, the map's style | tracking |
+| M5: delivery, uploads, push | `POST /api/v1/driver/uploads`: presigned PUTs to Garage, bound to the company and the driver, checked by size and MD5 (`uploads`); deliveries sent with storage keys and each photo's time and place (into `pod_media`), inline data still accepted from the PWA; `POST /api/v1/driver/push-token` (`push_tokens`) and a notify worker sending Expo pushes for a new load, a change, a cancellation and a message, the outbox's first consumer (D9) | proof, messaging, notify (push) |
+| M6: the pilot | `X-App-Version`, `X-App-Build` and the platform on every request; `426` below the minimum version and a banner below the recommended one (config); the device block of each sync stored per device (`driver_devices`), with which app it is, and shown on the driver's page; an alert when recording has stopped on a load that is on the road; `POST /api/v1/driver/diagnostics`, kept 30 days | identity (devices) |
+| M7: every driver | the two-step sign-in: when the driver's other device last reported items waiting, sign-in says how many and keeps that device's session until the driver confirms; positions attributed by the server to every load the driver carries; mock locations recorded (`tracking_events.mocked`) and shown | tracking |
 
-1. **For each page in the page table**, list what it reads and what forms
-   it posts; that is its endpoints. For example the shipment page:
-   - `GET /api/web/shipments/{id}` (shipment, driver, vehicle, customer,
-     progress, POD summary)
-   - `GET /api/web/shipments/{id}/events` (the activity)
-   - `GET /api/web/shipments/{id}/trail` (exists as
-     `/app/shipments/{id}/trail` since PR #46)
-   - `GET|POST|DELETE /api/web/shipments/{id}/documents…`,
-     `…/charges…`
-   - `POST /api/web/shipments/{id}/status|assign|unassign|cancel|reopen|note`
-   - `POST /api/web/shipments/{id}/pods/{pod}/accept|dismiss`
-2. **Write the spec first** in `api/openapi/web.yaml`, generate, implement
-   the handler by calling the module's use case (the same one the HTML
-   handler calls), and test it in `tests/integration` (status codes,
-   tenant isolation, roles, validation errors).
-3. **Auth for the web:** the session cookie set by `POST /api/web/session`
-   (sign in), `DELETE /api/web/session` (sign out), `GET /api/web/me` (who,
-   tenant, role, what they may do, feature flags). CSRF: double-submit
-   token in a header (`X-CSRF-Token`) checked by the API.
-4. **What the server decides, the API says.** Each response carries what
-   the user may do with it (`"actions": ["assign", "cancel"]`) so the web
-   doesn't reimplement roles or transitions.
-5. **Lists:** cursor pagination, filters and sort as query parameters,
-   the same filters as today's shipment list and saved views.
-6. **Errors:** one shape, field errors keyed by field name, messages in
-   the user's language.
-7. **Publish** `@kiflet/api` with each tagged release.
+For the pilot, the Go dashboard's driver page shows the app's health from
+the device block: the freeze allows what the pilot needs.
 
-Done when: every page in the page table has its endpoints, specified,
-implemented and tested; the HTML handlers still work (they can call the
-same use cases).
+Done when: Kiflet/mobile's pilot build passes its gates against this API,
+and the PWA keeps working beside it.
 
-Roll back: additive only; nothing uses the new endpoints until phase 4.
+Roll back: each step is additive for the PWA, which sends what it sent and
+ignores what it doesn't know; a step can be reverted on its own.
 
-### Phase 4: the web app
+### Phase 4: the web's API, with Kiflet/web
 
-Built in [Kiflet/web](https://github.com/Kiflet/web); its
-`docs/migration.md` has the steps (the empty app, the design system, the
-shell and sessions), the nine waves of pages, the inventory of every page
-with the endpoints it needs, and the parity checks before a page moves.
+The operations every page needs, built a wave ahead of Kiflet/web's waves
+(its `docs/migration.md`, section 7), in its page inventory's order. Each
+wave moves its modules out of `internal/service` and tests the flows of
+the pages it serves through the API, so the pages' own tests can go when
+the pages do.
 
-What this repository does in phase 4:
+| Kiflet/web's wave | Operations | Modules moved |
+|---|---|---|
+| 1: tracking, confirmation | tracking by number, by phone and the customer's own shipments; confirmation and its media; the customer's words | customer |
+| W3 and 2: the shell, signing in | `POST` and `DELETE /api/v1/session` (setting and clearing the cookie the Go pages read too); sign-up and its code; password resets; e-mail confirmation; `GET /api/v1/me` (the person, company, role, navigation, standing, counts, time zone); the live socket at `/ws` as well as `/app/live`, its messages in `api/asyncapi/live.yaml` | identity (the rest) |
+| 3: account, help, audit log, reports | `me` and its sessions; questions to support; the audit log; reports and their CSVs | support, reports |
+| 4: drivers, vehicles, team, messages | drivers, vehicles and team, with their actions; broadcasts | fleet, messaging (broadcasts) |
+| 5: shipments | the list with tabs, counts and filters; CSV; saved views; booking with its options and estimate; editing with versions; import; a shipment and its parts (events, trail, positions, documents, charges, proof); every move | shipments (the rest), tracking (trails) |
+| 6: the overview | figures, set-up steps, what needs attention, the board, activity; the fleet map | reports (read models) |
+| 7: alerts, settings, billing | alerts, rules and recipients; settings with the texts' previews; the data export; API keys; webhooks and their deliveries; the SMS log; billing, invoices and payments | alerts, tenancy (the rest), data, integrations, notify, billing |
+| 8: the operator's pages | companies, billing, invoices, support, audit, health | platform |
+| 9: landing | plans | |
 
-1. **Endpoints first.** Build each wave's `/api/web` endpoints (phase 3)
-   before Kiflet/web needs them, in the waves' order.
-2. **Routing in Caddy.** `deployments/Caddyfile` sends each page's paths
-   to the Next.js service once the page passes its parity checks, and
-   everything else to the Go app. One PR per wave, so a wave can be moved
-   back by reverting it.
-3. **One session for both.** The backend sets the session cookie on the
-   shared host, so a user crosses between a Go page and a Next.js page
-   without signing in again; a test here checks it.
-4. **Feature freeze on the Go pages** from the first wave: fixes only;
-   new dashboard features are built in Kiflet/web.
-5. **Delete each Go template** a week after its page moved with no
-   regression, with its HTML handler and its page tests, one PR each.
+What else this repository does in phase 4:
 
-Done when: Caddy sends every non-API path to Next.js; the Go app serves no
-HTML.
+1. **Routing in Caddy.** `deployments/Caddyfile` sends each page's paths to
+   Kiflet/web once the page passes its parity checks, and everything else
+   to the Go app. One pull request per wave, so a wave can be moved back by
+   reverting it.
+2. **One session for both.** The cookie the backend sets works on the Go
+   pages and Kiflet/web's alike; a test here checks it.
+3. **Each Go page deleted** a week after Kiflet/web serves it with no
+   regression: its template, its handler and its page tests, once its flows
+   are tested through the API (section 8). One pull request each.
+
+Done when: Caddy sends every page to Kiflet/web; the Go app serves no HTML;
+`internal/service`, `internal/model` and `internal/db` are gone.
 
 Roll back: per wave, in Caddy, until the templates are deleted.
 
-### Phase 5: the driver app
+### Phase 5: production readiness
 
-Built in [Kiflet/mobile](https://github.com/Kiflet/mobile); its
-`docs/migration.md` has the steps (accounts and the app's permanent
-identifiers, the empty app, the database and the sync engine, screens,
-background GPS, delivery and uploads, the pilot, moving every driver), the
-PWA module by module, and the parity checklist. The app can start against
-today's `/api/v1/driver/*` before any of the changes below.
+What the pilot's growth needs, and what is left of the infrastructure
+work. Before the pilot starts, the off-site backups (ROADMAP).
 
-What this repository does in phase 5:
+1. **Files:** Garage on three nodes with replication factor 3 (G3;
+   architecture, section 5); `files.kiflet.et` through Caddy for the
+   presigned uploads; the nightly encrypted copy to the off-site bucket,
+   restored in the end-to-end restore test; the files already stored copied
+   in with `rclone copy --checksum`.
+2. **Row-level security** as a second wall behind the tenant scoping
+   (section 7).
+3. **Redis caches:** sessions, driver tokens and API keys; latest positions
+   and presence for the fleet map; tenant data, deleted on change. The rate
+   limits are there already.
+4. **PgBouncer** in front of Postgres in transaction mode, and a read
+   replica for reports and exports.
+5. **Processes:** the HTTP and WebSocket parts of the `web` role split, once
+   the pages that kept them together are gone; alerts and audit written by
+   consumers of the events, once their modules have moved.
+6. **Map tiles:** an extract of Ethiopia and the Djibouti corridor
+   (Protomaps) in Garage, served at `tiles.kiflet.et` with Desk and Night
+   styles from `@kiflet/tokens`, for both clients; OpenStreetMap's public
+   servers are not for production apps. Needed by Kiflet/web's wave 5.
+7. **Traces:** an OpenTelemetry collector on the monitoring server, for the
+   API, the workers and Kiflet/web's servers.
+8. **The load test at production's size** (`tests/load/`): 12,000 phones
+   syncing every 60 s, then 3,000 reconnecting with 2 hours of positions
+   each; the oldest message in `tracking.ingest` under 2 minutes and the
+   API's p95 under 300 ms.
+9. **Failure drills** in staging: Redis stopped, a RabbitMQ node stopped, a
+   consumer killed mid-batch, a Garage node stopped for an hour; nothing
+   lost, nothing sent twice, no upload refused.
 
-1. **Driver API changes** (`/api/driver`, keeping `/api/v1/driver/*`
-   working for the PWA):
-   - `POST /api/driver/uploads` returns presigned PUT URLs for photos and
-     signatures; `SyncPOD` accepts storage keys instead of inline data
-     (inline still accepted for the PWA).
-   - `POST /api/driver/push-token` (Expo push token, platform); a
-     `push_tokens` table; notify sends push for new loads, changes and
-     messages.
-   - `X-App-Version` header; `426 Upgrade Required` below the minimum
-     supported version, set in config.
-   - The sync request and response stay the same shape, specified in
-     `api/openapi/driver.yaml`.
-2. **Which app each driver uses:** the device's app (PWA or the new app)
-   and version on the dashboard's driver page, from the sync request.
-3. **The PWA stays** served from `internal/web/static/driver` until no
-   active driver has used it for 30 days; then phase 6 removes it.
+Done when: production runs on three Garage nodes with the off-site copy;
+the load test passes at size; every drill passes in staging.
 
-Done when: every active driver uses the new app, and positions keep
-coming with the screen locked.
-
-Roll back: drivers can sign in to the PWA again at any time until it is
-removed; the API serves both.
+Roll back: each worker keeps its setting (`WORKER_<NAME>=inprocess|queue`)
+until it has run in production for two weeks; Redis can be turned off
+(`REDIS_URL` empty); files stay where they were until Garage has run a
+month.
 
 ### Phase 6: removing the old
 
-1. Delete `internal/web/templates`, the HTML handlers, `static/` (the
-   dashboard's CSS and JS, the PWA), `internal/web/driver.go`, and the
-   tests that rendered pages (`go test ./internal/web/` parsing templates;
-   `TestDriverBuild`).
-2. Delete `cmd/server`'s all-in-one mode if no installation uses it, or
-   keep it documented for development.
-3. Drop what only the old code used: inline POD data in sync,
-   `/api/v1/driver/*` (after the last PWA driver), the `LISTEN`/`NOTIFY`
-   relay.
-4. Update `README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/deploy.md`,
-   `docs/E2E_TEST_GUIDE.md` (now spanning three repositories), and record
-   the change in `CHANGELOG.md`. Delete this document's finished phases,
-   as ROADMAP does.
+1. **The Go pages,** one by one through phase 4, then what is left of them:
+   `internal/web/templates`, the HTML handlers, the dashboard's CSS and
+   JavaScript in `static/`, and the tests that rendered pages.
+2. **The PWA,** once no active driver has used it for 30 days:
+   `static/driver`, `internal/web/driver.go`, `TestDriverBuild`, inline
+   delivery data in the sync, timestamp cursors.
+3. **What only the old code used:** `/app/live` and `/app/api/*`; the
+   `LISTEN`/`NOTIFY` relay if nothing else needs it; the columns of
+   `sync_metadata` that `driver_devices` replaced.
+4. **`internal/web` becomes `internal/http`:** the router and the
+   middleware, nothing else.
+5. **The documents:** `README.md`, `AGENTS.md`, `CONTRIBUTING.md`,
+   `docs/deploy.md`, `docs/E2E_TEST_GUIDE.md` (pointing to the clients'
+   walkthroughs for their screens), and `CHANGELOG.md`. Delete this
+   document's finished phases, as ROADMAP does.
 
 ---
 
-## 6. Database changes
+## 7. Database changes
 
 All migrations are goose files here, rerunnable, and backwards-compatible
 with the version deployed before them.
 
 | Change | Phase | How, without downtime |
 |---|---|---|
-| Module schemas (`shipments`, `tracking`…) | 1, at the end | `ALTER TABLE … SET SCHEMA` is instant; for one release set `search_path` to include every schema so old and new code both find the tables; then qualify names in queries and drop the `search_path` change |
-| `outbox`, `processed_messages` | 2 | new tables; nothing reads them until the relay starts |
-| `tracking_events` partitioned by day | 2 | create `tracking.tracking_events_p` partitioned, with partitions for the last 90 days and the next 7; write new positions to it (the tracking worker); copy older rows in batches by day in a background job; when the copy is done, swap names in one transaction and keep the old table for a week before dropping it. Retention then drops partitions. |
-| `driver_positions` GiST index, BRIN on `recorded_at` | 2 | `CREATE INDEX CONCURRENTLY` |
-| Row-level security policies | 2 or 3 | add policies with `FORCE ROW LEVEL SECURITY` off, set `app.tenant_id` in every transaction, check in staging that nothing is refused, then turn it on table by table |
-| `push_tokens`, app version per device | 5 | new table, new column with a default |
-| Drop inline POD columns or fields, the PWA's tables if any | 6 | after the last PWA driver |
-| Postgres 15 → 17 | 2 | staging first, then production (phase 2, step 2) |
+| `driver_feed`, `driver_feed_heads` | 1 | new tables; a driver's first sync after the change is a full download |
+| `UNIQUE (tenant_id, id)` and references with the tenant | 1 | the unique indexes built `CONCURRENTLY` and attached as constraints; each reference added `NOT VALID`, then validated |
+| Money in santim | 1 | a `bigint` column filled from the old one, the code switched, the old column dropped a release later |
+| `pod_media`; signatures as files | 1 | a new table filled from `photo_urls` and `signature_data`; the old columns dropped a release later |
+| `version` on editable tables | 1 | `ADD COLUMN … NOT NULL DEFAULT 1` is instant |
+| `idempotency_keys` | 1 | a new table |
+| `uploads`, `push_tokens`, `driver_devices`, `driver_diagnostics` | 3 | new tables |
+| `tracking_events.mocked` | 3 | a nullable column on the partitioned table |
+| Module schemas (`shipments`, `tracking`…) | 4, at the end | `ALTER TABLE … SET SCHEMA` is instant; for one release `search_path` includes every schema so old and new code both find the tables; then names are qualified and the `search_path` change dropped |
+| Row-level security policies | 5 | policies added with `FORCE ROW LEVEL SECURITY` off, `app.tenant_id` set in every transaction, checked in staging that nothing is refused, then turned on table by table |
+| Inline delivery data; `sync_metadata`'s replaced columns | 6 | after the last PWA driver |
+
+Done before the revision: `event_outbox` and `processed_messages`;
+`tracking_events` partitioned by day; Postgres 15 to 17.
 
 The append-only triggers on `shipment_events` and `audit_logs` move with
 their tables and keep working; `purgeTx` stays in the data module.
 
 ---
 
-## 7. Testing through the migration
+## 8. Testing through the migration
 
-| Level | Where | What changes |
-|---|---|---|
-| Unit | each repository | Go modules keep theirs; TypeScript code gets Vitest (web) and Jest (mobile) |
-| Integration | this repository, `tests/integration` | grows with `/api/web` and `/api/driver` endpoints; runs the separate processes with RabbitMQ and Redis in Docker; adds failure tests: Redis stopped, a RabbitMQ node stopped, a consumer crashing mid-batch (no loss, no duplicates) |
-| Contract | this repository's CI | the OpenAPI specs match the handlers (as `TestOpenAPIMatchesTheAPI` now, for all three APIs); generated code has no diff |
-| Browser end-to-end | Kiflet/web, Playwright | the E2E guide's web sections, against a backend started from this repository's compose files at a pinned image tag |
-| App end-to-end | Kiflet/mobile, Maestro | the E2E guide's driver sections, on an Android emulator, against staging |
-| Staging | all three | staging runs the backend images, the web image and a preview build of the app; this repository's `tests/e2e` keeps the backup restore and monitoring tests |
-| Load | staging, k6 | phase 2's load test, run again before each phase's cut-over |
+**The rule that carries the coverage through the move:** a Go page, and
+its tests, are deleted only once the flows those tests cover are tested
+through the modules and the API. Today 427 of the 484 request paths in
+`tests/integration` are pages (audit T1), so each wave of phase 4 writes
+its API tests first, and the pull request that deletes a page says which
+API tests now cover what its tests did.
 
-Each repository's CI runs its own tests on every PR. A change across
-repositories (a new endpoint and the page that uses it) lands in this
-repository first, releases `@kiflet/api`, then the web or mobile PR bumps
-the package.
+| Level | Where | What | Target |
+|---|---|---|---|
+| Unit | each module's `domain/` and `app/` | the rules, with other modules faked | 85% of each module's `domain` and `app` |
+| Store | each module's `store/`, against Postgres | every query, and every query again with another company's IDs, expecting nothing | every query |
+| API | `tests/integration` | every operation × role × company × invalid input; every response validated against `v1.yaml` | every operation |
+| The sync protocol | `tests/integration` | replays, reordering, duplicates, transactions committing out of order, old cursors, full downloads, every limit | the protocol |
+| Concurrency | `tests/integration` | two assignments at once, two edits at once (versions), an idempotency key used twice | every limit and check |
+| End to end, backend | `tests/e2e`, on staging, through the API only | each flow of the E2E guide the backend runs: book, assign, sync, deliver, confirm, a webhook, an invoice and its payment; the backup restore; monitoring | every flow |
+| End to end, clients | Kiflet/web (Playwright), Kiflet/mobile (Maestro) | their screens, against a published backend image with the demo data | in their repositories |
+| Load and failure | staging, k6 | phase 5's load test and drills | the architecture's targets |
+| Requirements | every test | names the requirement it covers; a generated table lists those with none | every requirement |
+
+- **Coverage** of the unit and integration suites together is reported in
+  CI for each package, against a floor that only goes up.
+- **The contract** is checked on both sides: here, by validating every
+  response the API tests receive; in the clients, by building against
+  `@kiflet/api` and testing against a published image.
+- **A change across repositories** (an operation and the screen that uses
+  it) lands here first and releases `@kiflet/api`; then the web or mobile
+  pull request takes the new version.
 
 ---
 
-## 8. Order, overlap and size
+## 9. Order, overlap and size
 
 ```mermaid
 flowchart LR
-  P0["Phase 0<br/>groundwork"] --> P1["Phase 1<br/>modules in place"]
-  P1 --> P2["Phase 2<br/>RabbitMQ, Redis,<br/>processes"]
-  P1 --> P3["Phase 3<br/>/api/web"]
-  P0 --> W0["Kiflet/web bootstrap,<br/>design system"]
-  P0 --> M0["Kiflet/mobile bootstrap,<br/>SQLite, sync engine"]
-  P3 --> P4["Phase 4<br/>pages cut over"]
-  W0 --> P4
-  P2 --> P5["Phase 5<br/>driver API, app, pilot"]
-  M0 --> P5
+  P0["Phase 0<br/>groundwork"] --> P1["Phase 1<br/>the data and the flow"]
+  P1 --> P2["Phase 2<br/>one API, its contract"]
+  P2 --> P3["Phase 3<br/>the driver API"]
+  P2 --> P4["Phase 4<br/>the web's API, by wave"]
+  M01["Kiflet/mobile<br/>M0–M1"] --> MOB["M2–M7<br/>sync engine to every driver"]
+  P2 --> MOB
+  P3 -. "a step ahead of each milestone" .-> MOB
+  W02["Kiflet/web<br/>W0–W2"] --> WEB["waves 1–9"]
+  P4 -. "a wave ahead" .-> WEB
+  P3 --> P5["Phase 5<br/>production readiness"]
   P4 --> P6["Phase 6<br/>remove the old"]
   P5 --> P6
+  MOB --> P6
 ```
 
-Rough sizes for one experienced full-time developer (two in parallel
-shorten it by about a third, with web and mobile split between them):
+Rough sizes for one experienced backend developer:
 
-| Phase | Size |
-|---|---|
-| 0: groundwork | 1 week |
-| 1: modules in place | 3–4 weeks |
-| 2: RabbitMQ, Redis, Garage, processes, partitions, load test | 5–6 weeks |
-| 3: `/api/web` for every page | 4–6 weeks (overlaps phase 4) |
-| 4: Kiflet/web, ~45 pages | 8–10 weeks |
-| 5: Kiflet/mobile and the pilot | 6–8 weeks, plus the pilot's length |
-| 6: removal and docs | 1 week |
+| Phase | Size | Alongside |
+|---|---|---|
+| 0: groundwork | 3–4 days | |
+| 1: the data and the flow | 2 weeks | Kiflet/mobile M0–M1, Kiflet/web W0–W2 |
+| 2: one API and its contract | 1.5 weeks | |
+| 3: the driver API | 4 weeks | Kiflet/mobile M2–M6 |
+| 4: the web's API | 6–8 weeks | Kiflet/web's waves, from wave 1 |
+| 5: production readiness | 2–3 weeks | before the pilot grows |
+| 6: removal | 1 week, plus a pull request per page as pages move | |
 
-About **6 to 8 months** for one developer. These are estimates from the
-size of the code today, not commitments.
+About **4 to 5 months** of backend work, with phases 3 and 4 overlapping
+the clients'. These are estimates from the size of the code today, not
+commitments.
 
 ### Against the roadmap
 
-`ROADMAP.md`'s "Toward the first paying customer" does not wait for this.
-The provider onboarding, the Amharic review and the pilot with one company
-can run on today's app while phases 0–2 happen underneath it; none of
-those phases changes what a user sees. The one roadmap item this replaces
-is **"Tracking with the screen off"** (a Capacitor wrapper): Kiflet/mobile
-does that natively. If a pilot needs screen-off tracking before phase 5,
-starting phase 5 early (with the current `/api/v1/driver` API) is better
-than a Capacitor wrapper that would be thrown away.
+`ROADMAP.md`'s "Toward the first paying customer" does not wait for this:
+provider onboarding, the Amharic review and finding the pilot company
+start on today's app. The pilot itself runs with Kiflet/mobile's app,
+which records with the screen off, and today's Go dashboard, frozen but
+working, with the driver's page showing the app's health.
 
 ---
 
-## 9. Risks
+## 10. Risks
 
 | Risk | What it would cost | What reduces it |
 |---|---|---|
-| Two dashboards to maintain during phase 4 | features land twice or wait | freeze new dashboard features in Go once phase 4 starts; new features go only to Kiflet/web |
-| Rules drift into TypeScript | a role or transition behaves differently on web | the API returns allowed actions; review checklist item; no status logic in clients |
-| Background GPS policies (Play, Android vendors killing services) | gaps in trails | foreground service with notification; tested on the cheap phones drivers use (Tecno, Itel, Samsung A); gaps drawn honestly on the maps (PR #46) |
-| RabbitMQ or Redis misconfigured in production | lost or duplicated messages, slow pages | quorum queues, confirms, idempotent consumers; failure tests in CI; staging identical to production |
-| The partition migration of `tracking_events` | a slow or failed copy on a big table | copy by day in the background, swap in one transaction, keep the old table a week |
+| Tests deleted with the pages | flows untested while they move | the rule in section 8: a page goes only once its flows are tested through the API |
+| The new sync breaking phones | a driver's work not reaching the office | the write side unchanged; an old cursor gets a full download; the protocol tests; the PWA's end-to-end test on staging |
+| An `app` operation reached by an API key, then relied on by an integration | the web can't change it | operations tagged by audience; API keys reach only `public` ones; oasdiff in CI |
+| The API late for a wave or a milestone | a client waits | phases 1 and 2 before the clients need anything; the API a step ahead after that |
+| Two dashboards to maintain | features land twice or wait | the Go pages frozen; new features only through the API and Kiflet/web |
+| Rules drift into TypeScript | a role or transition behaves differently in a client | the API returns allowed actions and the words for codes; a review checklist item |
+| Background GPS policies (Play, Android makers killing services) | gaps in trails | a foreground service; tests on the cheap phones drivers use; gaps drawn honestly; the device block says why |
+| RabbitMQ or Redis misconfigured in production | lost or duplicated messages, slow pages | quorum queues, confirms, idempotent consumers; the failure drills; staging identical to production |
 | Garage has no versioning or object lock | a POD photo deleted by a bug or a stolen key can't be brought back from Garage | one key per process with the fewest rights; the nightly encrypted copy to an off-site bucket that keeps versions; an alert when that copy is late |
-| Garage is younger and smaller than S3 | a bug or a breaking upgrade (v1 → v2 reworked its admin API) | pin the image; upgrade in staging first with a metadata snapshot; only the S3 API is used by the app, so another S3-compatible store can replace it with settings and a copy |
-| Operating more moving parts on VMs | more to monitor and back up | the alerts in the architecture's section 14; runbooks in `docs/deploy.md` for each part |
-| Breaking changes to `/api/driver` | old apps on phones fail | version header, `426`, support two releases, tests against the previous app version |
-| Cost of accounts and services | Apple's yearly fee, EAS plans, more VMs | start Android-only; EAS's free tier until builds are frequent; three VMs until load needs more |
+| Garage is younger and smaller than S3 | a bug or a breaking upgrade (v1 to v2 reworked its admin API) | the image pinned; upgrades in staging first with a metadata snapshot; only the S3 API used, so another store can replace it with settings and a copy |
+| Breaking changes to the driver operations | old apps on phones fail | `426` and the minimum version; the last two releases served; oasdiff; tests against the previous app version |
+| Operating more moving parts on VMs | more to monitor and back up | the alerts in the architecture's section 14; runbooks in `docs/deploy.md` |
+| Cost of accounts and services | Apple's yearly fee, EAS plans, more VMs | Android first; EAS's free tier until builds are frequent; three VMs until load needs more |
 
 ---
 
-## 10. Still to decide
+## 11. Still to decide
 
 Questions this plan doesn't settle, for when they come up:
 
 1. **iOS:** at the same time as Android, or later? Android-only halves the
    store work and the testing; most drivers use Android.
-2. **The off-site bucket's provider.** The app's files are in Garage on
-   our VMs (decided 2026-11-19), but the backups and the copy of the files
-   must leave our VMs (a ROADMAP requirement for the pilot): which
-   provider, with versioning or object lock?
+2. **The off-site bucket's provider.** The app's files are in Garage on our
+   VMs (decided 2026-11-19), but the backups and the copy of the files must
+   leave our VMs before the pilot: which provider, with versioning or
+   object lock?
 3. **The public pages' address:** `track.kiflet.et` or `kiflet.et/track`
    (shorter in SMS)?
-4. **Who builds what:** if a web or mobile developer joins, phases 4 and 5
-   can run in parallel with phase 2.
+4. **Who builds what:** if a web or mobile developer joins, phases 3 and 4
+   run side by side sooner.
 5. **How long POD photos are kept,** which decides the storage VMs' disks
    (architecture, section 15).

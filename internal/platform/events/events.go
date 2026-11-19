@@ -1,7 +1,7 @@
 // Package events is how a module tells others of a change without calling
-// them (docs/architecture.md, section 4; docs/migration.md, phase 1, step
-// 4). A module publishes an Event in the transaction of the change; the
-// modules that react subscribe to its type.
+// them (docs/architecture.md, section 4; docs/migration.md, section 5). A
+// module publishes an Event in the transaction of the change; the modules
+// that react subscribe to its type.
 //
 // Subscribers are of two kinds. Within runs in the publisher's
 // transaction, so what it writes (a webhook to deliver, a text to send, an
