@@ -349,10 +349,15 @@ throughout; only imports move.
    called directly, and running them after the commit would lose them
    when a process stops in between. `After` runs once it has committed,
    for live updates and waking workers. The bus also writes the outbox,
-   which `core.emit` did. Webhooks subscribe to `shipment.*` within the
-   transaction, then the customer's and driver's texts; live updates
-   after it. Alerts follow, then booking and status changes move
-   into the shipments module, publishing instead of calling them.
+   which `core.emit` did. Within the transaction, webhooks, alerts and
+   the customer's and driver's texts subscribe to `shipment.*`; live
+   updates subscribe after it. An event carries, for them alone, the
+   facts its history doesn't keep (a first departure, who took
+   delivery, how the proof's place compares with the destination).
+   Alerts that come from no shipment's event (billing, SMS limits, the
+   scheduled checks) are still raised directly. Next, booking and status
+   changes move into the shipments module, which publishes; it no longer
+   needs to know who reacts.
 
 Done when: `internal/service`, `internal/model` and `internal/db` are gone;
 every module has the layout of the architecture's section 4; the boundary

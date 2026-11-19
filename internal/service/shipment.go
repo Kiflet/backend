@@ -978,9 +978,21 @@ type shipmentEvent struct {
 	OccurredAt       time.Time
 
 	// Not kept in the history; for the subscribers that text people.
-	newDriver      bool   // assigned: the driver is new to the load
-	firstDeparture bool   // status_changed: the load's first move to in transit
-	recipient      string // status_changed: who took delivery, from the proof
+	newDriver      bool        // assigned: the driver is new to the load
+	firstDeparture bool        // status_changed: the load's first move to in transit
+	recipient      string      // status_changed: who took delivery, from the proof
+	by             model.Actor // status_changed: how it was made
+	// pod_recorded: how the proof's place compares with the destination.
+	pod *podCheck
+}
+
+// podCheck is what the alerts make of where a proof of delivery was
+// recorded.
+type podCheck struct {
+	driver            pgtype.UUID // who recorded it
+	haveFix, verified bool
+	distance          float64 // metres from the destination
+	reason            string  // the driver's, for being elsewhere
 }
 
 // event appends to a shipment's timeline. It reports false when the event is

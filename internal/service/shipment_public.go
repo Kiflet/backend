@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"crypto/hmac"
-	"fmt"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"math"
 	"strconv"
@@ -295,10 +294,6 @@ func (s *ShipmentService) CustomerRespond(ctx context.Context, token string, ok 
 			return err
 		}
 		s.event(ctx, q, after, a, sh, shipmentEvent{Type: "customer_issue", Note: feedback})
-		s.raise(ctx, q, after, newAlert{
-			TenantID: sh.TenantID, ShipmentID: sh.ID, DriverID: sh.DriverID, Type: AlertCustomerIssue, Severity: SeverityCritical,
-			Message: fmt.Sprintf("%s reported a problem with %s: %s", who, sh.TrackingNumber, truncate(feedback, 200)),
-		})
 		return nil
 	})
 }

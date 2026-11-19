@@ -222,3 +222,49 @@ func TestResolveAndRecipients(t *testing.T) {
 		t.Errorf("a dispatcher opening who gets alerts: status %d, want 403", p.Status)
 	}
 }
+
+// TestAlertsFromTheRoad: what a driver sends the office raises an alert: a
+// message, a report that arrived after the office had moved the load on,
+// and a delivery texted in without proof, which the proof then clears.
+func TestAlertsFromTheRoad(t *testing.T) {
+	e := newEnv(t)
+	office := e.company("Road Alerts")
+	driverID, phone, pin := office.addDriver("Tsegaye Mamo")
+	first, _ := office.book("Addis Ababa", "Adama", driverID)
+	second, tracking := office.book("Addis Ababa", "Bishoftu", driverID)
+	d := e.signIn(phone, pin)
+	alert := func(id, typ string) string {
+		t.Helper()
+		return scalar[string](t, `SELECT coalesce(max(message), '') FROM alerts WHERE shipment_id = $1 AND alert_type = $2 AND acknowledged_at IS NULL`, id, typ)
+	}
+
+	resp, _ := d.sync(service.SyncRequest{Messages: []service.SyncMessage{{ClientID: clientID(), ShipmentID: first, Text: "Loading bay closed until noon"}}})
+	if len(resp.Results) != 1 || !resp.Results[0].OK {
+		t.Fatalf("message: %+v", resp.Results)
+	}
+	if got := alert(first, "driver_message"); !strings.Contains(got, "Tsegaye Mamo") || !strings.Contains(got, "Loading bay closed") {
+		t.Errorf("driver message alert %q", got)
+	}
+
+	if r := d.status(clientID(), first, "in_transit"); !r.OK {
+		t.Fatalf("depart: %+v", r)
+	}
+	d.statusAt(clientID(), first, "delayed", time.Now().Add(-time.Hour))
+	if got := alert(first, "sync_conflict"); !strings.Contains(got, "while offline") {
+		t.Errorf("an offline report the office had overtaken: alert %q", got)
+	}
+
+	if r := d.status(clientID(), second, "in_transit"); !r.OK {
+		t.Fatalf("depart: %+v", r)
+	}
+	office.mustPost("/app/settings/sms/simulate", url.Values{"from": {phone}, "body": {"ET " + service.ShortRef(tracking) + " 4"}})
+	if got := alert(second, "delivered_without_pod"); !strings.Contains(got, "without a signature") {
+		t.Fatalf("delivered by SMS: alert %q", got)
+	}
+	if r := d.pod(service.SyncPOD{ShipmentID: second, RecipientName: "Store keeper"}); !r.OK {
+		t.Fatalf("proof after the text: %+v", r)
+	}
+	if got := alert(second, "delivered_without_pod"); got != "" {
+		t.Errorf("the proof should clear the alert, still open: %q", got)
+	}
+}
