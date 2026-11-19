@@ -49,7 +49,9 @@ What changed in each release, newest first.
   change publishes an event in its transaction, and the modules that
   react subscribe to its type, within the transaction (what must commit
   with the change) or after it commits. The bus writes the outbox, and
-  webhooks are its first subscriber.
+  webhooks are its first subscriber. Live updates followed: dashboards
+  hear of every event in a shipment's history once it has committed,
+  notes and the customer's answers included.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

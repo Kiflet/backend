@@ -253,7 +253,6 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 				Message: fmt.Sprintf("%s recorded delivery of %s to %s at %s. %s Accept or dismiss it on the shipment page.",
 					who, cur.TrackingNumber, in.RecipientName, recorded.In(s.cfg.Location).Format("2 Jan 15:04"), HeldReasonLabel(held)),
 			})
-			after.do(func() { s.publishShipment(cur, "pod") })
 			result = conflict(heldMessage(held))
 			return nil
 		}
@@ -283,7 +282,6 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 			// The office confirmed it first, by phone or from the driver's
 			// SMS; this is the proof it lacked.
 			_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{TenantID: a.TenantID, ShipmentID: id, AlertTypes: []string{AlertDeliveredNoPOD}})
-			after.do(func() { s.publishShipment(cur, "pod") })
 			return nil
 		}
 		out, err = s.applyStatus(ctx, q, after, a, cur, StatusChange{
@@ -368,7 +366,6 @@ func (s *ShipmentService) AcceptHeldPOD(ctx context.Context, a Actor, id, podID 
 		})
 		if errors.Is(err, model.ErrSameStatus) {
 			out = cur
-			after.do(func() { s.publishShipment(out, "pod") })
 			return nil
 		}
 		return err
@@ -405,7 +402,6 @@ func (s *ShipmentService) DismissHeldPOD(ctx context.Context, a Actor, id, podID
 				TenantID: a.TenantID, ShipmentID: id, AlertTypes: []string{AlertDeliveryHeld, AlertDeliveryOnCanceled},
 			})
 		}
-		after.do(func() { s.publishShipment(cur, "pod") })
 		return nil
 	})
 	return err

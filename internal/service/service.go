@@ -168,6 +168,7 @@ func New(d Deps) *Services {
 	s.Webhooks = newWebhookService(c)
 	c.webhooks = s.Webhooks
 	c.bus.Within("shipment.*", c.webhooksFor)
+	c.bus.After("shipment.*", c.liveShipment)
 	s.Alerts = &AlertService{core: c}
 	c.alerts = s.Alerts
 	s.Media = &MediaService{core: c, store: d.Storage, pod: podStorage(d.Storage)}

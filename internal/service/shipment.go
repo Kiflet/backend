@@ -396,7 +396,6 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 		if driver != nil && tenant.SmsDriverOnAssign {
 			s.notifyDriverAssigned(ctx, q, after, tenant, out, *driver)
 		}
-		after.do(func() { s.publishShipment(out, "created") })
 		return nil
 	})
 	return out, err
@@ -491,7 +490,6 @@ func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, i
 				return err
 			}
 		}
-		after.do(func() { s.publishShipment(out, "edited") })
 		return nil
 	})
 	return out, err
@@ -623,7 +621,6 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 				})
 			}
 		}
-		after.do(func() { s.publishShipment(out, "assigned") })
 		return nil
 	})
 	return out, err
@@ -653,7 +650,6 @@ func (s *ShipmentService) Unassign(ctx context.Context, a Actor, id pgtype.UUID)
 		s.event(ctx, q, after, a, out, shipmentEvent{
 			Type: "unassigned", From: cur.Status, To: model.StatusPending, PreviousDriverID: cur.DriverID,
 		})
-		after.do(func() { s.publishShipment(out, "unassigned") })
 		return nil
 	})
 	return out, err
@@ -1112,13 +1108,21 @@ type ShipmentEventMessage struct {
 	event    shipmentEvent
 }
 
-func (s *ShipmentService) publishShipment(sh shipments.Shipment, change string) {
-	s.publish(sh.TenantID, "shipment", map[string]any{
-		"id":              sh.ID.String(),
-		"tracking_number": sh.TrackingNumber,
-		"status":          sh.Status,
-		"status_label":    model.StatusLabel(sh.Status),
-		"change":          change,
+// liveShipment tells the company's dashboards that a shipment changed,
+// once the change has committed: it subscribes to shipment.* on the bus.
+// change is what happened (the event's type); the dashboard fetches what
+// it shows again.
+func (c *core) liveShipment(_ context.Context, ev events.Event) {
+	m, ok := ev.Payload.(ShipmentEventMessage)
+	if !ok {
+		return
+	}
+	c.publish(ev.TenantID, "shipment", map[string]any{
+		"id":              m.ShipmentID,
+		"tracking_number": m.TrackingNumber,
+		"status":          m.Status,
+		"status_label":    model.StatusLabel(m.Status),
+		"change":          m.Type,
 	})
 }
 
