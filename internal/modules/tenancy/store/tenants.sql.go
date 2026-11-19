@@ -92,7 +92,7 @@ SELECT id, name, slug, plan, max_drivers, is_active, created_at, updated_at, con
 
 // The tenancy module's own table, tenants: the companies. Billing's plan
 // and standing columns are still written by internal/service until the
-// billing module moves (docs/migration.md, phase 1).
+// billing module moves (docs/migration.md, phase 4).
 func (q *Queries) GetTenantByID(ctx context.Context, id pgtype.UUID) (Tenant, error) {
 	row := q.db.QueryRow(ctx, getTenantByID, id)
 	var i Tenant

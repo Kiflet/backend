@@ -308,6 +308,7 @@ connecting telebirr, CBE Birr and Ethio telecom.
 - [`docs/logistics.md`](docs/logistics.md): background on the problem
 - [`docs/E2E_TEST_GUIDE.md`](docs/E2E_TEST_GUIDE.md): a manual walkthrough of every flow
 - [`docs/audit-2026-11.md`](docs/audit-2026-11.md): the audit of November 2026, with what was fixed and what is still open
+- [`docs/audit-2026-11-19.md`](docs/audit-2026-11-19.md): the audit of 19 November 2026 (data, flows, the API, the tests), which revised the plan
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to work on it, and the rules the code follows
 - [`SECURITY.md`](SECURITY.md): how to report a vulnerability
 - [`ROADMAP.md`](ROADMAP.md): what comes next, in order

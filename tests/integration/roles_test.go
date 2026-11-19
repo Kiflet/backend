@@ -2,7 +2,7 @@
 
 package integration
 
-// Kiflet as separate processes (docs/migration.md, phase 2, step 9): a web
+// Kiflet as separate processes (docs/architecture.md, section 3): a web
 // process queues the work, a worker process does it.
 
 import (

@@ -35,7 +35,7 @@ type CreateSessionParams struct {
 // The identity module's sessions. GetSessionPrincipal also reads the
 // caller's company and its standing (tenants, invoices): every request
 // runs it, so it stays one query, a read across modules kept on purpose
-// until the session is cached (docs/migration.md, phase 1).
+// until the session is cached (docs/migration.md, phase 5).
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
 	row := q.db.QueryRow(ctx, createSession,
 		arg.UserID,

@@ -10,7 +10,8 @@ clients have their own, in more detail:
 [Kiflet/web `docs/architecture.md`](https://github.com/Kiflet/web/blob/main/docs/architecture.md)
 and [Kiflet/mobile `docs/architecture.md`](https://github.com/Kiflet/mobile/blob/main/docs/architecture.md).
 
-The decisions it rests on, agreed on 2026-11-18 (the repositories were
+The decisions it rests on, agreed on 2026-11-18 and revised on 2026-11-19
+after the audit in `docs/audit-2026-11-19.md` (the repositories were
 created in the Kiflet organization on 2026-11-19):
 
 | Decision | Choice |
@@ -19,8 +20,10 @@ created in the Kiflet organization on 2026-11-19):
 | Backend shape | Go, a **modular monolith** deployed as several processes (API, workers, scheduler) fed by RabbitMQ; modules can become services later |
 | Driver app | React Native with Expo, its own **SQLite** database, works offline, GPS with the screen off |
 | Web | Next.js (App Router, TypeScript): the dashboard, the operator's pages and the public pages |
+| API | **One versioned API**, `/api/v1`, for every client: Kiflet/web with its session, Kiflet/mobile with its driver token, companies' systems with API keys; one OpenAPI specification, `api/openapi/v1.yaml` (decided 2026-11-19). The backend serves no pages |
+| Driver sync | The phone holds the driver's work; each sync sends what the phone recorded and brings back only what changed, from a **change feed per driver** (decided 2026-11-19) |
 | Broker | **RabbitMQ**: GPS positions, notifications, webhooks, domain events, live updates, scheduled jobs |
-| Cache | **Redis**: sessions, rate limits, latest positions, hot tenant data, idempotency |
+| Cache | **Redis**: sessions, rate limits, latest positions, hot tenant data |
 | Files | **[Garage](https://garagehq.deuxfleurs.fr/)** (`dxflrs/garage`), S3-compatible, three nodes on our VMs: signatures, photos, documents, exports. Database backups still go to a bucket with another provider (decided 2026-11-19) |
 | Scale | Up to **20,000 drivers** in the next 2–3 years, hundreds of companies |
 | Hosting | **VMs with Docker Compose**, each part scaled by replicas |
@@ -37,7 +40,7 @@ Contents:
 8. [The main flows](#8-the-main-flows)
 9. [The driver app](#9-the-driver-app)
 10. [The web app](#10-the-web-app)
-11. [APIs and contracts](#11-apis-and-contracts)
+11. [The API and its contracts](#11-the-api-and-its-contracts)
 12. [Security](#12-security)
 13. [Deployment](#13-deployment)
 14. [Observability](#14-observability)
@@ -53,7 +56,7 @@ of delivery. What that asks of the system:
 
 | Need | What it means for the architecture |
 |---|---|
-| Drivers lose signal for hours | The driver app keeps everything on the phone (SQLite) and sends it later. Every write from the phone is idempotent, so sending twice is harmless. |
+| Drivers lose signal for hours | The driver app keeps everything on the phone (SQLite) and sends it later. Every write from the phone is idempotent, so sending twice is harmless, and each sync brings back only what changed. |
 | Many phones reconnect at once | When a convoy comes back into coverage, or after a network outage, thousands of phones send hours of positions together. Ingest must absorb bursts without slowing the dashboard: positions go through RabbitMQ to workers. |
 | Some drivers have feature phones | SMS in (`ET <ref> <code>`) and out, through Ethio telecom. SMS is a first-class input channel, not an add-on. |
 | Dispatchers watch live | Positions and status changes reach the dashboard within seconds, across every API instance. |
@@ -88,7 +91,7 @@ flowchart LR
     CB[CBE Birr]
     SM[Email<br/>SMTP]
     FCM[Firebase Cloud Messaging<br/>and APNs, via Expo push]
-    OSM[Map tiles]
+    OSM[OpenStreetMap<br/>map data]
     CS[A company's<br/>own systems]
   end
 
@@ -101,7 +104,7 @@ flowchart LR
   K -- "payments" --> TB & CB
   K -- "email" --> SM
   K -- "push notifications" --> FCM --> D
-  O & C & D -. tiles .-> OSM
+  OSM -. "a map extract, monthly" .-> K
   CS -- "REST API" --> K
   K -- "webhooks" --> CS
 ```
@@ -128,7 +131,7 @@ flowchart TB
   end
 
   subgraph Backend["Kiflet/backend: one Go codebase, several processes"]
-    API["api<br/>REST: web, driver, public, callbacks"]
+    API["api<br/>REST: /api/v1 for every client,<br/>/api/callbacks for providers"]
     RT["realtime<br/>WebSocket gateway"]
     WK1["worker: tracking<br/>positions in, trails, geofences"]
     WK2["worker: notify<br/>SMS, email, push"]
@@ -157,6 +160,8 @@ flowchart TB
   EDGE -- "/api/*" --> API
   EDGE -- "/ws" --> RT
   EDGE -- "files.kiflet.et: presigned PUT and GET" --> S3
+  EDGE -- "tiles.kiflet.et" --> TIL["tiles<br/>go-pmtiles"]
+  TIL -- "the map extract" --> S3
   NX -- "server-side REST" --> API
 
   API --> PGB --> PG
@@ -183,11 +188,12 @@ flowchart TB
 |---|---|---|---|---|
 | Caddy | Kiflet/backend (`deployments/`) | config | 1–2 instances behind DNS | none |
 | Next.js server | Kiflet/web | TypeScript | replicas | none |
-| `api` | Kiflet/backend, `cmd/api` | Go | replicas | none (Postgres, Redis) |
-| `realtime` | Kiflet/backend, `cmd/realtime` | Go | replicas | connections only |
-| `worker` | Kiflet/backend, `cmd/worker --queues=…` | Go | replicas per queue group | none |
-| `scheduler` | Kiflet/backend, `cmd/scheduler` | Go | 2 instances, one leads (advisory lock) | none |
-| `relay` | Kiflet/backend, `cmd/relay` | Go | 2 instances, one leads | none |
+| `api` | Kiflet/backend, `cmd/server`, role `api` | Go | replicas | none (Postgres, Redis) |
+| `realtime` | Kiflet/backend, `cmd/server`, role `realtime` | Go | replicas | connections only |
+| `worker` | Kiflet/backend, `cmd/server`, role `worker` with its queues | Go | replicas per queue group | none |
+| `scheduler` | Kiflet/backend, `cmd/server`, role `scheduler` | Go | 2 instances, one leads (advisory lock) | none |
+| `relay` | Kiflet/backend, `cmd/server`, role `relay` | Go | 2 instances, one leads | none |
+| `tiles` | image `protomaps/go-pmtiles`, pinned | Go | 1–2 replicas | none (the extract is in Garage) |
 | PostgreSQL + PostGIS | image | | primary + replica; vertical first | source of truth |
 | PgBouncer | image | | 1 per database VM | none |
 | RabbitMQ | image | | 3-node cluster | durable queues |
@@ -196,9 +202,11 @@ flowchart TB
 | Off-site bucket | another provider (still to choose) | | | encrypted backups, a copy of the files |
 | Driver app | Kiflet/mobile | TypeScript | phones | SQLite on the phone |
 
-All the Go processes are the same binary with different commands, built
-from one codebase. They share modules, but each process only starts what it
-needs. This keeps the business rules in one place while letting the parts
+All the Go processes are one program, `cmd/server`, started with
+different roles (`serve --roles=…`). Today's roles are `web`, `worker`,
+`scheduler` and `relay`; `web` splits into `api` and `realtime` once the
+Go pages are gone (`docs/migration.md`, phase 5). They share modules, but
+each process only starts what it needs. This keeps the business rules in one place while letting the parts
 under load (positions, notifications) scale on their own.
 
 ---
@@ -213,9 +221,7 @@ by querying its tables.
 ```mermaid
 flowchart LR
   subgraph Edge["Delivery: HTTP and consumers"]
-    HW["web API<br/>/api/web"]
-    HD["driver API<br/>/api/driver"]
-    HP["public API<br/>/api/v1"]
+    HA["the API, /api/v1<br/>session, driver token or API key"]
     HC["provider callbacks<br/>/api/callbacks"]
     CQ["queue consumers"]
   end
@@ -230,6 +236,7 @@ flowchart LR
     AL["alerts<br/>rules, evaluation, recipients"]
     NT["notify<br/>SMS, email, push, templates"]
     MS["messaging<br/>driver ⇄ office, broadcasts"]
+    DS["driversync<br/>the driver app's sync: change feed, devices"]
     CU["customer<br/>public tracking, confirmation"]
     BL["billing<br/>invoices, payments, limits"]
     IN["integrations<br/>API keys, webhooks"]
@@ -243,7 +250,7 @@ flowchart LR
     CFG[config] --- DB[db, sqlc] --- BRK[broker] --- CCH[cache] --- STO[storage] --- OBS[observability] --- GEO[geo] --- TXT[text en/am]
   end
 
-  HW & HD & HP & HC & CQ --> Modules
+  HA & HC & CQ --> Modules
   Modules --> Platform
 ```
 
@@ -266,6 +273,11 @@ flowchart TD
   FL --> TN
   FL --> ID
   MS[messaging] --> FL
+  MS --> SH
+  DS[driversync] --> SH
+  DS --> PD
+  DS --> TR
+  DS --> MS
 
   SH -. "shipment.* events" .-> AL[alerts]
   TR -. "tracking.* events" .-> AL
@@ -273,6 +285,7 @@ flowchart TD
   SH -. "shipment.* events" .-> NT[notify]
   AL -. "alert.raised" .-> NT
   SH -. "shipment.* events" .-> IN[integrations]
+  SH & MS & FL -. "what a phone must hear of" .-> DS
   SH & TR & AL & MS -. "live.*" .-> RTG[realtime]
   SH & FL & BL & ID -. "audit events" .-> AU[audit]
 ```
@@ -285,11 +298,12 @@ flowchart TD
 | tenancy | `tenants`, `saved_filters` | `tenant.created`, `tenant.suspended`, `tenant.deleted` | `billing.standing_changed` |
 | fleet | `vehicles`, fleet papers, driver profile fields | `fleet.papers_due` | `tracking.driver_seen` |
 | shipments | `shipments`, `shipment_events` (append-only), `shipment_documents`, `shipment_charges` | `shipment.booked`, `.assigned`, `.status_changed`, `.delivered`, `.cancelled` | `proof.recorded`, `sms.status_reported` |
-| proof | `proof_of_deliveries` | `proof.recorded`, `proof.reviewed` | |
-| tracking | `tracking_events` (partitioned), `driver_positions`, `sync_metadata` | `tracking.position_stored`, `.stop_started`, `.off_route`, `.arrived_near`, `.driver_seen` | `tracking.positions` (commands) |
+| proof | `proof_of_deliveries`, `pod_media` (each file, with when and where it was taken), `uploads` (presigned uploads not yet used) | `proof.recorded`, `proof.reviewed` | |
+| tracking | `tracking_events` (partitioned; `mocked` marks a position from a mock location), `driver_positions` | `tracking.position_stored`, `.stop_started`, `.off_route`, `.arrived_near`, `.driver_seen` | `tracking.positions` (commands) |
 | alerts | `alerts`, `alert_rules` | `alert.raised`, `alert.resolved` | shipment, tracking and fleet events; `jobs.alerts.*` |
-| notify | `sms_messages`, `sms_opt_outs`, `emails`, push tokens | `sms.status_reported`, `sms.inbound` | `notify.sms`, `notify.email`, `notify.push` |
+| notify | `sms_messages`, `sms_opt_outs`, `emails`, `push_tokens` | `sms.status_reported`, `sms.inbound` | `notify.sms`, `notify.email`, `notify.push` |
 | messaging | `broadcasts`, `broadcast_recipients`; messages between a driver and the office are shipment events (`shipment_events`), written through shipments | `message.sent` | |
+| driversync | `driver_feed`, `driver_feed_heads`, `driver_devices`, `driver_diagnostics`, `sync_metadata` | | shipment events, `message.sent` and changes to a driver's profile, within their transactions (section 11, "The driver sync") |
 | customer | confirmation links | `customer.confirmed` | |
 | billing | `invoices`, `invoice_counters`, `payments`, `billing_notices` | `billing.invoice_issued`, `.paid`, `.standing_changed` | `jobs.billing.*` |
 | integrations | `api_keys`, `webhook_endpoints`, `webhook_deliveries` | | shipment events (delivered as webhooks) |
@@ -309,7 +323,7 @@ internal/modules/shipments/
   domain/            types and rules, no I/O (statuses, transitions, validation)
   app/               use cases: Book, Assign, ChangeStatus... (transactions, events)
   store/             sqlc queries for its own tables (queries/*.sql → generated)
-  http/              handlers for /api/web, /api/driver, /api/v1 routes it serves
+  http/              its operations of the API (/api/v1), from the generated interface
   events/            event types it publishes, with versions; consumers it runs
   shipments_test.go  module tests against a real Postgres
 ```
@@ -317,17 +331,22 @@ internal/modules/shipments/
 Rules that hold in every module:
 
 - **Tenant first.** Every query takes the tenant ID, and every table has
-  `tenant_id`. A test runs each query with another tenant's ID and expects
-  nothing back.
+  `tenant_id`. A reference from one company-owned table to another
+  carries it too (`(tenant_id, x_id) REFERENCES x (tenant_id, id)`), so the
+  database refuses a row that points into another company. A test runs
+  each query with another tenant's IDs and expects nothing back. A query
+  that is global on purpose says why (`-- tenant: none, <reason>`), and CI
+  fails on one that doesn't.
 - **One transaction, one outbox write.** A use case that changes data and
   must tell others writes its event to `outbox` in the same transaction
   (section 6). No event is lost and none is sent for a change that was
   rolled back.
 - **Handlers stay thin.** They parse, call one use case and render JSON.
   The rules are in `app/` and `domain/`.
-- **Status rules stay in one place.** `model.AllowedTransitions` becomes
-  `shipments/domain`, and the driver app and the web read it from the API
-  (`/api/driver/config`), never from their own copy.
+- **Rules stay in one place.** The status transitions are in
+  `shipments/domain`; the driver app reads them from the API
+  (`/api/v1/driver/config`), and the web from each record's `actions`,
+  never from a copy of their own.
 
 ---
 
@@ -349,10 +368,24 @@ its own database without untangling joins.
 - **Append-only tables:** `shipment_events` and `audit_logs` keep their
   triggers that reject UPDATE, DELETE and TRUNCATE. Purges run in
   `purgeTx`, as today.
-- **Migrations:** goose, run by `cmd/migrate` as a one-off container before
+- **Migrations:** goose, run by `server migrate` as a one-off container before
   a deploy, not at API start (several replicas must not race). Each
   migration is rerunnable and backwards-compatible with the version
   running, so deploys need no downtime ("expand, then contract").
+- **References carry the tenant** (section 4), and row-level security is
+  a second wall (section 12).
+- **Versions:** every record people edit (shipments, users, vehicles,
+  companies, webhook endpoints, alert rules) has a `version`, raised by
+  each update. The API sends it as the `ETag` and checks `If-Match`
+  (section 11).
+- **Money** is whole santim (`bigint`) everywhere: charges, cargo values,
+  invoices and payments.
+- **Idempotency keys** are kept in `idempotency_keys` for 24 hours, with
+  the request's hash and the first response (section 11): in Postgres, not
+  Redis, so a replay is recognised even after Redis is lost.
+- **The driver feed** (`driver_feed`) gains an entry for every change a
+  driver's phone must hear of, and keeps 30 days (section 11, "The driver
+  sync").
 
 ### GPS positions
 
@@ -380,10 +413,11 @@ Signatures, photos, shipment documents and data exports live in
 [Garage](https://garagehq.deuxfleurs.fr/), an S3-compatible store we run
 on our own VMs (image `dxflrs/garage`, pinned to a release; v2.5.0 on
 2026-11-19). The app talks to it through `pkg/storage`'s S3 adapter
-(aws-sdk-go-v2), as it talks to SeaweedFS today, so no module knows which
-store it is. The API hands out **presigned URLs**: phones upload photos
-straight to storage and the API never carries the bytes. Every object key
-starts with the tenant ID.
+(aws-sdk-go-v2), so no module knows which store it is. The API hands out
+**presigned URLs**: phones upload photos straight to storage and the API
+never carries the bytes. Every object key starts with the tenant ID. Each
+file of a delivery is a row of `pod_media`: its key, size and MD5, and
+when and where it was taken.
 
 How it is set up:
 
@@ -592,14 +626,15 @@ sequenceDiagram
   participant Web as Dashboard
 
   Note over App: Offline: statuses, POD, positions,<br/>messages wait in SQLite with client IDs
-  App->>API: POST /api/driver/uploads (POD photo, signature)
+  App->>API: POST /api/v1/driver/uploads (POD photo, signature)
   API-->>App: presigned PUT URLs
   App->>S3: PUT photo, signature (resumable, retried)
-  App->>API: POST /api/driver/sync {statuses, pods (keys), messages, positions, since}
+  App->>API: POST /api/v1/driver/sync {statuses, pods (keys), messages, positions, since}
   API->>R: token, tenant, rate limit
-  API->>PG: one transaction: statuses, POD, messages (idempotent by client_id) and outbox events
+  API->>PG: one transaction: statuses, POD, messages (idempotent by client_id), outbox events, feed entries
   API->>MQ: publish positions → tracking.ingest (confirm)
-  API-->>App: results per item, positions accepted, changed shipments, cursor
+  API->>PG: read the feed after the cursor (one snapshot)
+  API-->>App: results per item, positions accepted, what changed since the cursor, the new cursor
   App->>App: delete confirmed items from the outbox
   MQ->>TW: batch of positions
   TW->>PG: COPY into tracking_events, update driver_positions
@@ -612,7 +647,8 @@ sequenceDiagram
 
 The sync stays one request with many items, as today: one round trip on a
 weak connection is worth more than tidy endpoints. Each item succeeds or
-fails on its own, and the response says which.
+fails on its own, and the response says which. What comes back is only
+what changed since the phone's cursor (section 11, "The driver sync").
 
 ### A dispatcher books a load
 
@@ -630,8 +666,8 @@ sequenceDiagram
   participant PU as push (FCM)
 
   B->>NX: submit the booking form (server action)
-  NX->>API: POST /api/web/shipments (session cookie, CSRF token)
-  API->>PG: one transaction: shipment, event "created", assignment, outbox rows (shipment.booked, notify.sms, notify.push)
+  NX->>API: POST /api/v1/shipments (session cookie, Idempotency-Key)
+  API->>PG: one transaction: shipment, event "created", assignment, the driver's feed entry, outbox rows (shipment.booked, notify.sms, notify.push)
   API-->>NX: 201 the shipment
   NX-->>B: redirect to the shipment's page
   REL->>PG: read new outbox rows
@@ -690,8 +726,8 @@ flowchart TB
   end
 
   subgraph State
-    Q[TanStack Query<br/>reads from SQLite]
-    Z[Zustand: session, sync status]
+    Q[Drizzle live queries<br/>read SQLite]
+    Z[Zustand: connectivity,<br/>a sync in flight]
   end
 
   subgraph Local["On the phone"]
@@ -707,7 +743,7 @@ flowchart TB
   end
 
   subgraph Server
-    API["/api/driver/*"]
+    API["/api/v1/driver/*"]
     S3["Object storage"]
     PUSH["Expo push"]
   end
@@ -726,6 +762,11 @@ flowchart TB
 
 ### Offline first
 
+- **The phone holds the driver's work:** the active loads with all a
+  screen shows, those finished in the last 7 days, the messages, the
+  settings, the server's config with the words for every code, and
+  everything not yet sent. The sync keeps it up to date with what changed
+  (section 11, "The driver sync").
 - **The screen reads only SQLite.** Nothing waits on the network. A
   driver's action (depart, arrive, deliver, report) writes the new state
   and an outbox row in one SQLite transaction and shows at once.
@@ -734,9 +775,9 @@ flowchart TB
   everything waiting, oldest first, and deletes an item only when the
   server confirms it. Duplicates are harmless because the server is
   idempotent by `client_id`.
-- **Positions** go into their own table and are sent in batches of up to
-  500, compressed (gzip). A phone that has been out of signal for a day
-  sends them over several syncs.
+- **Positions** go into their own table and are sent oldest first, 2,000 a
+  request (500 on a weak signal), compressed (gzip). A phone that has been
+  out of signal for a day sends them over several syncs.
 - **Conflicts:** the server is the judge. When the office changed a load
   while the phone was offline, the sync result says so and the app takes
   the server's version, telling the driver what changed (as the PWA does
@@ -793,7 +834,7 @@ flowchart LR
 
   B[Browser] --> Routes
   Routes --> SC & SA & CC
-  SC & SA -- "REST, server side" --> API["api /api/web"]
+  SC & SA -- "REST, server side" --> API["api /api/v1"]
   CC -- "WSS /ws" --> RT[realtime]
   CC -- "REST, browser side, same origin" --> API
 ```
@@ -802,7 +843,8 @@ flowchart LR
   `/api/*` and `/ws` on the same host to the Go services. The session
   cookie is `HttpOnly`, `Secure`, `SameSite=Lax`, set by the Go API, and
   works for both, so there is no token in the browser's JavaScript and no
-  CORS.
+  CORS. Every request the cookie authenticates passes the backend's
+  cross-origin check (section 12).
 - **Rendering:** pages render on the server with the user's session
   (server components call the API with the cookie forwarded). Interactive
   parts (map, live updates, filters, the signature pad) are client
@@ -814,8 +856,9 @@ flowchart LR
 - **Text:** next-intl with `en` and `am` message files. Public pages and
   everything a customer reads are in both languages from the first
   release, as now; the dashboard's Amharic waits for review (W1).
-- **Maps:** MapLibre GL with the same OpenStreetMap tiles, the trails and
-  gaps drawn as on today's maps.
+- **Maps:** MapLibre GL with the platform's own vector tiles
+  (`tiles.kiflet.et`, section 13), in the Desk and Night styles; the
+  trails and gaps drawn as on today's maps.
 - **Public pages are small:** tracking and confirmation pages are rendered
   on the server with almost no JavaScript, because customers open them on
   cheap phones over mobile data.
@@ -824,29 +867,179 @@ flowchart LR
 
 ---
 
-## 11. APIs and contracts
+## 11. The API and its contracts
 
-| API | Path | Who | Auth | Contract |
+One API, `/api/v1`, for every client (decided 2026-11-19). Kiflet/web,
+Kiflet/mobile and companies' own systems call the same operations; what
+differs is how the caller shows who it is, and which operations it may
+call. An operation is built once, with one shape, one set of rules and one
+set of tests.
+
+| Surface | Path | Who | Auth | Contract |
 |---|---|---|---|---|
-| Web | `/api/web/*` | Kiflet/web (server and browser) | session cookie + CSRF header | `api/openapi/web.yaml` |
-| Driver | `/api/driver/*` | Kiflet/mobile | bearer token from PIN sign-in, per device | `api/openapi/driver.yaml` |
-| Public | `/api/v1/*` | companies' own systems | API key | `api/openapi/v1.yaml` (today's `openapi.json`) |
-| Callbacks | `/api/callbacks/*` | Ethio telecom, telebirr, CBE Birr | provider signatures | per provider |
-| Live | `/ws` | Kiflet/web | session cookie | `api/asyncapi/live.yaml` |
+| The API | `/api/v1/*` | Kiflet/web (its server and the browser), companies' systems | the session cookie, or an API key (`Authorization: Bearer`) | `api/openapi/v1.yaml` |
+| The driver's operations | `/api/v1/driver/*` | Kiflet/mobile, and the PWA until it goes | a driver token from the PIN sign-in, one per device | the same file |
+| Callbacks | `/api/callbacks/*` | Ethio telecom, telebirr, CBE Birr | each provider's signature | the adapters (`pkg/sms`, `pkg/payments`) and the sandbox |
+| Live | `/ws` | Kiflet/web | the session cookie | `api/asyncapi/live.yaml` |
 | Webhooks | out | companies' systems | Standard Webhooks signature | `api/asyncapi/webhooks.yaml` |
 
-- **The OpenAPI files in this repository are the contract.** CI checks that
-  the Go handlers match them (as `TestOpenAPIMatchesTheAPI` does today for
-  the public API) and generates a TypeScript client, published as the
-  `@kiflet/api` package to GitHub Packages. Kiflet/web and Kiflet/mobile
-  depend on a version of it, so a breaking change shows up as a type error
-  there, not at run time.
-- **Versioning:** `/api/web` changes with Kiflet/web, deployed together;
-  `/api/driver` must keep serving app versions still on phones (at least
-  the last two releases, or 90 days); `/api/v1` follows today's rules:
-  additions only.
-- **Errors** are one shape everywhere: `{ "error": { "code", "message",
-  "fields" } }`, codes stable, messages translatable.
+Everything under `/api/v1` is in the specification. The providers'
+callbacks, today under `/api/v1/sms` and `/api/v1/payments`, move to
+`/api/callbacks` before a provider is given an address.
+
+### Who may call what
+
+Each operation is tagged with its audience, and the tag decides who may
+call it and how it may change:
+
+| Tag | Called with | How it changes |
+|---|---|---|
+| `app` | the session cookie only | with Kiflet/web, by expand and contract: the new shape is added, the web moves to it, the old one goes a release later |
+| `public` | the session or an API key | additions only; a breaking change would be `/api/v2`, with `/api/v1` kept for a year. The published documentation shows only these |
+| `driver` | a driver token only | serves the app versions still on phones: the last two releases, or 90 days, whichever is longer. Below the minimum version, `426` |
+
+An operation starts as `app` and becomes `public` when it is ready to be
+promised to integrations. A request with `Authorization: Bearer` carries
+an API key (known by its prefix) or a driver token, and is authenticated
+by it alone; without the header, the session cookie is read. An API key
+calling an `app` operation gets `403`, so no integration comes to rely on
+what the web may change.
+
+### Conventions
+
+One set, applied by `internal/http` to every operation, which both
+clients and integrations rely on:
+
+| Convention | Shape |
+|---|---|
+| Errors | `{ "error": { "code", "message", "fields", "request_id" } }`: `code` stable, in lowercase snake case (`not_found`, `version_mismatch`, `plan_limit`); `message` in the reader's language; `fields` lists every invalid field at once, `{ "stops.1.phone": "message" }` |
+| What the caller may do | `actions` on each record (`["assign", "cancel"]`), and a `disabled_reason` (a code and its words) on each option that can't be chosen. The clients show what `actions` allows and work out nothing themselves |
+| Codes and their words | `{ "code", "label" }`, the label in the reader's language (`Accept-Language`, or `?lang=` on public pages) and for the reader's audience (office, customer, driver), from the catalogue in `internal/platform/text` |
+| Lists | `?page=&per_page=` (at most 100) with `total`; a cursor (`?after=`) only for endless feeds: activity, the audit log, positions |
+| IDs | UUIDs; a shipment can also be named by its tracking number |
+| Times and money | RFC 3339 in UTC, with the company's time zone in `me`; money in whole santim, as integers |
+| Enums | open: a client shows a value it doesn't know with its label, and never fails on it |
+| Creating | `Idempotency-Key` on every create, kept 24 hours per company and caller: a replay gets the first response; the same key with another body gets `422` `idempotency_key_reused` |
+| Editing | the record's `version` as its `ETag`; `If-Match` is checked when sent, and a mismatch is `412` `version_mismatch` with the current record |
+| Every answer | `X-Request-Id`; `429` with `Retry-After` when a limit is reached |
+
+### The specification and the code generated from it
+
+- **`api/openapi/v1.yaml` is the contract** (OpenAPI 3.1), written by hand
+  and reviewed like code. oapi-codegen generates the Go types and a strict
+  server interface from it; each module's `http/` implements its
+  operations, and the server is built from them, so an operation missing
+  or misnamed fails to compile. A test checks that the router and the
+  specification have the same routes, as `TestOpenAPIMatchesTheAPI` does
+  today for the public API.
+- **Every response the API tests receive is validated** against the
+  specification (kin-openapi), so a field the code sends but the
+  specification doesn't name, or the other way round, fails a test.
+- **`@kiflet/api`:** openapi-typescript and openapi-fetch generate the
+  TypeScript types and client, published to GitHub Packages with every
+  change to the specification merged to `main`. Kiflet/web and
+  Kiflet/mobile depend on a version of it, so a change shows up there as a
+  type error, not at run time.
+- **CI** lints the specification, regenerates and fails on a difference
+  (as `sqlc diff` does), and compares it with `main` using oasdiff: a
+  breaking change to a `public` or `driver` operation fails, and one to an
+  `app` operation needs the `api-break` label on its pull request.
+- **A change across repositories** lands here first, with a new version
+  of the package; then the web or mobile pull request takes it.
+
+### The driver sync
+
+The driver app keeps the driver's work in SQLite on the phone, so it works
+for hours without signal; the sync keeps that copy right. One operation,
+`POST /api/v1/driver/sync`, sends what the phone recorded and brings back
+what changed since the phone's last sync.
+
+**What the phone sends:** the device block (app version and build,
+battery, storage, what is waiting, whether recording runs, permissions),
+the settings changed on the phone, `since` (the cursor of its last sync),
+and the items: status moves, deliveries (with the storage keys of their
+files), messages and positions, each with its `client_id`. At most 200
+status moves, 20 deliveries, 100 messages and 5,000 positions a request;
+what is beyond gets no answer and is sent again next time.
+
+**What comes back:**
+
+| Field | |
+|---|---|
+| `results` | one per item: applied (`ok`), or refused, with `retry` when it should be sent again, a stable `code` and the driver's words |
+| `locations_stored` | how many positions were taken |
+| `shipments` | each load that changed since the cursor, whole, as it is now |
+| `removed` | each load taken off the phone, with its reason: `reassigned`, `unassigned` or `cancelled` (and `removed_shipment_ids`, the IDs alone, for the PWA) |
+| `messages` | new messages from the office, and broadcasts |
+| `driver` | the profile and settings, when they changed |
+| `config_etag` | the config's current `ETag`: the app fetches config again when it differs from its own |
+| `cursor` | an opaque string, sent back as `since` next time |
+| `full` | this is a full download: the loads in it are all the driver should hold |
+| `more` | there is more: sync again at once |
+| `server_time` | to correct the phone's clock |
+
+**How the server knows what changed.** Every change a driver's phone must
+hear of writes an entry in `driver_feed`, in the same transaction as the
+change: the driver, a number in that driver's own sequence, what changed
+(a load, a message, the profile), and, for a load taken away, why. A
+change to a load writes an entry for its driver and, when the load was
+taken from another driver, one for them too. The number comes from the
+driver's row in `driver_feed_heads`, raised with `UPDATE … RETURNING`: the
+row stays locked until the transaction commits, so a driver's entries
+become visible in the order of their numbers, and a reader that sees
+entry *n* sees every entry before it. Entries are written at the end of
+the transaction, the heads locked in order of driver ID, so they add no
+deadlock.
+
+A sync reads, in one snapshot, the entries after its cursor, groups them
+by load, and sends each load once, as it is now: a load still the
+driver's in `shipments`, one no longer theirs in `removed`, with the
+reason its latest entry gave. The new cursor is the last entry read. A
+change seen twice is harmless, since the phone replaces its copy, and
+none can be missed. Today's cursor, the clock less 5 seconds, can miss a
+change whose transaction began before a sync and committed after it
+(`docs/audit-2026-11-19.md`, D1).
+
+**A full download** answers a cursor that is missing, can't be read,
+belongs to another driver, or is older than the 30 days the feed keeps.
+The server reads, in one snapshot, the driver's last number and then all
+the driver should hold: active loads, those finished in the last 7 days,
+the recent messages and the profile, with `full: true`. The phone
+replaces its loads with them, keeping any with items not yet sent or a
+delivery draft. A timestamp cursor, from a PWA loaded before the change,
+gets a full download too, which also lists in `removed_shipment_ids` the
+loads taken off the driver since that time, as today's sync does, so the
+PWA keeps working while it learns to honour `full`.
+
+**Refused items,** with stable codes the app chooses its words by:
+
+| Code | Meaning | Retry |
+|---|---|---|
+| `cancelled` | the office cancelled the load | no |
+| `reassigned` | the load is another driver's now | no |
+| `stale` | the office changed the load after the move was made, and its decision stands | no |
+| `held_for_review` | the delivery is kept, for the office to review; nothing more to send | no |
+| `not_found` | no such load for this driver | no |
+| `invalid` | the item can't be read; the message says why | no |
+| `server_error` | the server failed | yes |
+
+The whole request can be answered `401` (signed out: sign in again),
+`403` `tenant_suspended` (the company is paused: keep everything, try
+later), `413` (too large: halve the batches), `426` `app_too_old` (update
+the app; nothing is lost) or `429` with `Retry-After`.
+
+**The version gate and config:** every request from the app carries
+`X-App-Version`, `X-App-Build` and `X-App-Platform`.
+`GET /api/v1/driver/config` gives the minimum and recommended versions for
+each platform, the GPS, photo and sync settings, the SMS commands, the map
+style, the status moves in order, and the driver's words for every code in
+English and Amharic (`labels`), so a reason added on the server reads
+right on phones that haven't updated.
+
+**What stays from today's protocol:** one request with many items; each
+item idempotent by its `client_id`; the phone's clock corrected by
+`device_time`; the office's decision winning over a move made offline; a
+delivery never thrown away, but held for review.
 
 ---
 
@@ -861,7 +1054,14 @@ flowchart LR
   operator, as today.
 - **Drivers:** phone and PIN, one token per device, revocable from the
   dashboard; the token lives in the phone's SecureStore.
-- **API keys** hashed, scoped, revocable; **webhooks** signed.
+- **API keys** hashed, scoped, revocable, and limited to the API's
+  `public` operations; **webhooks** signed.
+- **Cross-site requests:** every request the session cookie authenticates
+  goes through Go's cross-origin check (`http.CrossOriginProtection`, on
+  `Sec-Fetch-Site` and `Origin`), and the cookie is `SameSite=Lax`; there
+  are no CSRF tokens. A request with an `Authorization` header is
+  authenticated by it alone, never by the cookie, so it needs no check,
+  and the providers' callbacks are checked by their signatures.
 - **Rate limits** shared across replicas in Redis, per IP and per account,
   strict on sign-in, codes and tracking look-ups.
 - **Files:** presigned URLs valid for minutes, keys prefixed by tenant, file
@@ -883,7 +1083,7 @@ VMs with Docker Compose. Each VM runs a compose file from this repository's
 
 ```mermaid
 flowchart TB
-  DNS["DNS: app.kiflet.et, track.kiflet.et,<br/>api.kiflet.et → edge VMs"]
+  DNS["DNS: app, track, api, files and tiles<br/>.kiflet.et → edge VMs"]
 
   subgraph E["edge-1, edge-2 (2 vCPU, 4 GB)"]
     CAD["Caddy: TLS, routing,<br/>health-checked upstreams"]
@@ -891,6 +1091,7 @@ flowchart TB
 
   subgraph A["app-1, app-2, app-3 (8 vCPU, 16 GB)"]
     NXA["next ×2"]
+    TLA["tiles ×1"]
     APIA["api ×3"]
     RTA["realtime ×1"]
     WKA["worker: tracking ×2, notify ×1,<br/>integrations ×1, jobs ×1"]
@@ -954,6 +1155,12 @@ flowchart TB
   `deployments/staging` is now. Garage is not a stand-in: staging runs the
   same image as production, as one node with replication factor 1 (the
   one place that is allowed).
+- **Map tiles:** an extract of Ethiopia and the Djibouti corridor in
+  Protomaps' PMTiles format, rebuilt monthly from OpenStreetMap, kept in
+  Garage and served at `tiles.kiflet.et` by go-pmtiles as `z/x/y` vector
+  tiles, cached a day by browsers and phones. The styles, Desk and Night,
+  are built from `@kiflet/tokens`. Both clients use them, since
+  OpenStreetMap's own tile servers are not for production apps.
 - **Smaller to start:** below 2,000 drivers everything fits on three VMs
   (edge+app, queue+db, monitor) with the same compose files, with one
   Garage node on each of the three, so replication factor 3 holds from the
@@ -996,7 +1203,7 @@ drivers on the road at once.
 | Drivers on the road at peak | 12,000 |
 | Positions a second, steady | 12,000 ÷ 60 s = **200/s** (one a minute while moving; less when slow or parked) |
 | Positions a second, burst | 3,000 phones reconnecting with 2 hours each (120 positions) inside 5 minutes = **1,200/s** for 5 minutes, absorbed by the queue |
-| Sync requests a second | 12,000 phones every 60 s = **200/s**; each small (gzip) |
+| Sync requests a second | 12,000 phones every 60 s = **200/s**; each small (gzip, and only what changed) |
 | Positions a day | ~6 million (10 hours of driving each) |
 | `tracking_events` size | ~150 bytes a row with indexes → ~0.9 GB a day, **~80 GB** over 90 days before simplification, ~25 GB after |
 | Dashboard users online | ~2,000 dispatchers, one WebSocket each |
@@ -1047,5 +1254,8 @@ module boundary already allows.
   chosen (2026-11-19): self-hosted, small, made for a few nodes on ordinary
   machines. MinIO no longer publishes images; SeaweedFS, which staging and
   the tests ran before, is gone.
+- **An API per client** (`/api/web`, `/api/driver`). One API, each
+  operation tagged with who may call it, gives each operation one shape and
+  one set of tests, whichever client calls it (decided 2026-11-19).
 - **GraphQL.** REST with generated types covers both clients; the driver
-  sync is a single purpose-built endpoint.
+  sync is a single purpose-built operation.
