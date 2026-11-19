@@ -1066,7 +1066,32 @@ func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *after
 		return false
 	}
 	s.enqueueWebhooks(ctx, q, after, a, sh, e, occurred)
+	s.emit(ctx, q, sh.TenantID, "shipment."+e.Type, ShipmentEventMessage{
+		ShipmentID: sh.ID.String(), TrackingNumber: sh.TrackingNumber, Status: sh.Status,
+		Type: e.Type, FromStatus: e.From, ToStatus: e.To, Reason: e.Reason,
+		DriverID: uuidString(e.DriverID), ActorID: uuidString(a.UserID), Source: a.Source,
+		Lat: e.Lat, Lng: e.Lng, OccurredAt: occurred,
+	})
 	return true
+}
+
+// ShipmentEventMessage is what kiflet.events carries for each event in a
+// shipment's history (shipment.<type>, version 1). Consumers fetch more if
+// they need it; customers' details stay out of the broker.
+type ShipmentEventMessage struct {
+	ShipmentID     string    `json:"shipment_id"`
+	TrackingNumber string    `json:"tracking_number"`
+	Status         string    `json:"status"`
+	Type           string    `json:"type"`
+	FromStatus     string    `json:"from_status,omitempty"`
+	ToStatus       string    `json:"to_status,omitempty"`
+	Reason         string    `json:"reason,omitempty"`
+	DriverID       string    `json:"driver_id,omitempty"`
+	ActorID        string    `json:"actor_id,omitempty"`
+	Source         string    `json:"source"`
+	Lat            *float64  `json:"lat,omitempty"`
+	Lng            *float64  `json:"lng,omitempty"`
+	OccurredAt     time.Time `json:"occurred_at"`
 }
 
 func (s *ShipmentService) publishShipment(sh db.Shipment, change string) {

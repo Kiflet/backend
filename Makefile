@@ -7,6 +7,10 @@ DATABASE_URL ?= postgres://logistics:logistics@localhost:$(DB_PORT)/logistics?ss
 # Integration tests create (and drop) a scratch database on this server.
 TEST_DATABASE_URL ?= postgres://logistics:logistics@localhost:$(DB_PORT)/postgres?sslmode=disable
 export DATABASE_URL
+# make db starts RabbitMQ too; RABBITMQ_URL= runs without it.
+RABBITMQ_PORT ?= 5673
+RABBITMQ_URL ?= amqp://kiflet:kiflet@localhost:$(RABBITMQ_PORT)/
+export RABBITMQ_URL
 # Development: the database, and the sandbox in a container if wanted.
 DEV = docker compose -f deployments/dev/compose.yml
 # Runs a command with sandbox.env's settings, for the app and the sandbox.
@@ -22,7 +26,7 @@ GITLEAKS_VERSION = v8.30.1
 
 help:
 	@echo "Kiflet"
-	@echo "  make db                 start the development database (port $(DB_PORT))"
+	@echo "  make db                 start the development database (port $(DB_PORT)) and RabbitMQ ($(RABBITMQ_PORT))"
 	@echo "  make seed               migrate and load the demo company"
 	@echo "  make run                run the app on :8080, templates reloaded from disk"
 	@echo "  make dev                run with rebuild on Go changes (air)"
@@ -42,7 +46,7 @@ help:
 	@echo "  make docker-build       build the production image and the sandbox's"
 
 db:
-	DB_PORT=$(DB_PORT) $(DEV) up -d --wait postgres
+	DB_PORT=$(DB_PORT) RABBITMQ_PORT=$(RABBITMQ_PORT) $(DEV) up -d --wait postgres rabbitmq
 
 db-stop:
 	$(DEV) down

@@ -188,6 +188,7 @@ func serve(ctx context.Context, cfg *config.Config, log zerolog.Logger) error {
 	if err != nil {
 		return err
 	}
+	defer a.Close()
 	svc := a.Services
 	bg, stopBG := context.WithCancel(context.Background())
 	defer stopBG()

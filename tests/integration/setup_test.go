@@ -60,6 +60,7 @@ func TestMain(m *testing.M) {
 		}
 		defer pool.Close()
 		defer func() { stopObjectStore() }()
+		defer func() { stopRabbitMQ() }()
 		if err := migrate(ctx); err != nil {
 			fmt.Fprintln(os.Stderr, "migrate:", err)
 			return 1
@@ -185,6 +186,7 @@ func newEnv(t *testing.T, options ...func(*setup)) *env {
 	// Cleanups run last first: the server stops, then the workers finish
 	// what they hold, before the next test starts.
 	e.work()
+	t.Cleanup(a.Close)
 	t.Cleanup(func() { e.stop() })
 	ts.Config.Handler = a.Handler()
 	ts.Start()

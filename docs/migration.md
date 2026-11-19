@@ -276,16 +276,17 @@ Roll back: each module is one PR; revert it.
 
 1. **Compose files.** Add RabbitMQ (`rabbitmq:4-management`, quorum
    queues) and Redis (`redis:8`, AOF) to `deployments/dev/compose.yml`,
-   staging and production; PgBouncer in front of Postgres. Definitions
-   (exchanges, queues, policies) in `deployments/rabbitmq/definitions.json`,
-   loaded at start. `make db` becomes `make deps` (Postgres, RabbitMQ,
-   Redis).
+   staging and production; PgBouncer in front of Postgres. The exchanges
+   and queues are declared by the app at start (`pkg/broker`'s
+   `Topology`), so a new queue ships with the code that uses it. `make db`
+   starts Postgres and RabbitMQ (Redis to come). RabbitMQ: done.
 2. **Postgres 15 → 17** (PostGIS 3.6): a dump and restore, as
    `docs/deploy.md` ("Upgrading PostgreSQL") has it, while the database is
    small; a database too big to restore in a maintenance window would use
    `pg_upgrade --link` or a logical replica and a switch. Tested by
    staging's restore test.
-3. **The broker package** (`internal/platform/broker`): connection with
+3. **The broker package** (`pkg/broker` until phase 1 moves the platform
+   packages; done): connection with
    reconnects, channels per goroutine, publisher confirms, the envelope,
    consumers with prefetch, ack after commit, retries through delayed
    dead-letter queues, metrics per queue. The `events.Bus` from phase 1
@@ -294,7 +295,9 @@ Roll back: each module is one PR; revert it.
    routing_key, payload jsonb, created_at, sent_at), written in the same
    transaction as each change; `cmd/relay` publishes and marks sent
    (`LISTEN outbox` to wake, `FOR UPDATE SKIP LOCKED`, leader by advisory
-   lock); `processed_messages` for consumers' idempotency.
+   lock); `processed_messages` for consumers' idempotency. Done, with the
+   relay inside the app (`internal/app/relay.go`) until step 9 makes it a
+   process of its own; shipment events are written to it.
 5. **Move the workers to queues, one at a time,** each behind a setting
    so it can be switched back:
    1. Webhooks (`webhook.deliver`), keeping `webhook_deliveries` as the
@@ -304,7 +307,7 @@ Roll back: each module is one PR; revert it.
    4. Alerts evaluation from events (`alerts.evaluate`).
    5. Audit writes (`audit.write`).
    6. Live updates: `kiflet.live` exchange replaces `LISTEN`/`NOTIFY`
-      (`internal/app/live.go`).
+      (`internal/app/live.go`). Done (`WORKER_LIVE`).
    7. Timed jobs: `cmd/scheduler` publishes to `jobs.scheduled` on the
       schedule `Jobs.Run` keeps today; the jobs worker runs them.
 6. **Positions through the queue:** the sync handler publishes positions
@@ -312,6 +315,8 @@ Roll back: each module is one PR; revert it.
    tracking worker batch-inserts, updates `driver_positions` and Redis,
    runs the stop, route and arrival checks, publishes events. The response
    to the phone keeps its shape (`locations_stored` becomes "accepted").
+   Done for the inserts and `driver_positions` (`WORKER_TRACKING`); Redis
+   and the checks move into the worker with steps 8 and 5.4.
 7. **Partition `tracking_events`** by day (section 6 of this document).
 8. **Redis:** session, driver-token and API-key lookups cached; rate
    limits in Redis (Caddy's sticky routing becomes unnecessary); latest

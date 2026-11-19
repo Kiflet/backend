@@ -11,6 +11,7 @@ import (
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/geo"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/pkg/metrics"
 )
 
 // TrackingService records driver positions and serves the live map
@@ -145,34 +146,39 @@ func regionAt(lat, lng float64) string {
 
 // Ping is one GPS fix from a driver's device.
 type Ping struct {
-	ClientID   string
-	ShipmentID pgtype.UUID
-	Lat, Lng   float64
-	Accuracy   *float64
-	Speed      *float64
-	Heading    *float64
-	Battery    *int
-	RecordedAt time.Time
+	ClientID   string      `json:"client_id"`
+	ShipmentID pgtype.UUID `json:"shipment_id"`
+	Lat        float64     `json:"lat"`
+	Lng        float64     `json:"lng"`
+	Accuracy   *float64    `json:"accuracy,omitempty"`
+	Speed      *float64    `json:"speed,omitempty"`
+	Heading    *float64    `json:"heading,omitempty"`
+	Battery    *int        `json:"battery,omitempty"`
+	RecordedAt time.Time   `json:"recorded_at"`
+}
+
+// PositionBatch is a driver's checked GPS fixes from one sync, as the
+// tracking workers take them from RabbitMQ (tracking.positions).
+type PositionBatch struct {
+	TenantID   pgtype.UUID `json:"tenant_id"`
+	DriverID   pgtype.UUID `json:"driver_id"`
+	DriverName string      `json:"driver_name"`
+	DeviceID   string      `json:"device_id"`
+	Pings      []Ping      `json:"pings"`
 }
 
 // trackingBatch is how many fixes go to the database in one statement.
 const trackingBatch = 1000
 
-// record stores a batch of fixes for a driver, discarding ones that cannot be
-// real, keeps the newest as the driver's position, and pushes it to the map.
-// allowed is the set of shipments the driver may attribute positions to.
+// record takes a batch of fixes from a driver, discarding ones that cannot
+// be real. With RabbitMQ the rest go to the tracking workers, and are
+// counted as stored once RabbitMQ holds them; without it, or when it can't
+// take them, they are stored at once. allowed is the set of shipments the
+// driver may attribute positions to.
 func (s *TrackingService) record(ctx context.Context, a Actor, deviceID string, pings []Ping, allowed map[pgtype.UUID]bool) (stored int, rejected []string) {
 	now := s.now()
-	// or is a number for the batch insert, which reads -1 as "none".
-	or := func(v *float64, ok bool) float64 {
-		if v == nil || !ok {
-			return -1
-		}
-		return *v
-	}
-	valid := make([]*Ping, 0, len(pings))
-	for i := range pings {
-		p := &pings[i]
+	valid := make([]Ping, 0, len(pings))
+	for _, p := range pings {
 		switch {
 		case !allowed[p.ShipmentID],
 			math.IsNaN(p.Lat) || math.IsNaN(p.Lng) || !geo.InServiceArea(p.Lat, p.Lng),
@@ -188,12 +194,51 @@ func (s *TrackingService) record(ctx context.Context, a Actor, deviceID string, 
 		if p.Speed != nil && (*p.Speed < 0 || *p.Speed >= 200) {
 			p.Speed = nil
 		}
+		if p.Heading != nil && (*p.Heading < 0 || *p.Heading >= 360) {
+			p.Heading = nil
+		}
 		valid = append(valid, p)
 	}
+	if len(valid) == 0 {
+		return 0, rejected
+	}
+	b := PositionBatch{TenantID: a.TenantID, DriverID: a.UserID, DriverName: a.Name, DeviceID: deviceID, Pings: valid}
+	if s.positions != nil {
+		err := s.positions.Enqueue(ctx, b)
+		if err == nil {
+			metrics.PositionsQueued.WithLabelValues("queue").Add(float64(len(valid)))
+			return len(valid), rejected
+		}
+		// Stored here instead: slower, but nothing waits on RabbitMQ.
+		s.log.Warn().Err(err).Int("fixes", len(valid)).Msg("queue gps fixes; storing them directly")
+	}
+	metrics.PositionsQueued.WithLabelValues("direct").Add(float64(len(valid)))
+	stored, _ = s.store(ctx, b)
+	return stored, rejected
+}
 
+// StorePositions writes a batch the tracking workers took from RabbitMQ.
+// It fails if any fix could not be written, for the batch to be tried
+// again: fixes stored already are skipped then, by their client IDs.
+func (s *TrackingService) StorePositions(ctx context.Context, b PositionBatch) error {
+	_, err := s.store(ctx, b)
+	return err
+}
+
+// store writes fixes in statements of trackingBatch, keeps the newest as
+// the driver's position, and pushes it to the map. A statement that fails
+// stores none of its fixes; the others still go in.
+func (s *TrackingService) store(ctx context.Context, b PositionBatch) (stored int, err error) {
+	// or is a number for the batch insert, which reads -1 as "none".
+	or := func(v *float64) float64 {
+		if v == nil {
+			return -1
+		}
+		return *v
+	}
 	var newest *Ping
-	for chunk := range slices.Chunk(valid, trackingBatch) {
-		params := db.CreateTrackingEventsParams{TenantID: a.TenantID, DriverID: a.UserID, DeviceID: toText(deviceID)}
+	for chunk := range slices.Chunk(b.Pings, trackingBatch) {
+		params := db.CreateTrackingEventsParams{TenantID: b.TenantID, DriverID: b.DriverID, DeviceID: toText(b.DeviceID)}
 		for _, p := range chunk {
 			battery := int32(-1)
 			if p.Battery != nil {
@@ -202,29 +247,30 @@ func (s *TrackingService) record(ctx context.Context, a Actor, deviceID string, 
 			params.ShipmentIds = append(params.ShipmentIds, p.ShipmentID)
 			params.Longitudes = append(params.Longitudes, p.Lng)
 			params.Latitudes = append(params.Latitudes, p.Lat)
-			params.Accuracies = append(params.Accuracies, or(p.Accuracy, true))
-			params.Speeds = append(params.Speeds, or(p.Speed, true))
-			params.Headings = append(params.Headings, or(p.Heading, p.Heading != nil && *p.Heading >= 0 && *p.Heading < 360))
+			params.Accuracies = append(params.Accuracies, or(p.Accuracy))
+			params.Speeds = append(params.Speeds, or(p.Speed))
+			params.Headings = append(params.Headings, or(p.Heading))
 			params.Batteries = append(params.Batteries, battery)
 			params.Recorded = append(params.Recorded, toTimestamp(p.RecordedAt))
 			params.ClientIds = append(params.ClientIds, p.ClientID)
 		}
-		// A statement that fails stores none of its fixes. The phone keeps
-		// what it wasn't told was stored, and sends it again.
-		if err := s.q.CreateTrackingEvents(ctx, params); err != nil {
-			s.log.Error().Err(err).Int("fixes", len(chunk)).Msg("store gps fixes")
+		// The phone (or RabbitMQ) keeps what it wasn't told was stored,
+		// and sends it again.
+		if e := s.q.CreateTrackingEvents(ctx, params); e != nil {
+			s.log.Error().Err(e).Int("fixes", len(chunk)).Msg("store gps fixes")
+			err = e
 			continue
 		}
 		stored += len(chunk)
-		for _, p := range chunk {
-			if newest == nil || p.RecordedAt.After(newest.RecordedAt) {
-				newest = p
+		for i := range chunk {
+			if newest == nil || chunk[i].RecordedAt.After(newest.RecordedAt) {
+				newest = &chunk[i]
 			}
 		}
 	}
 	if newest != nil {
 		pos := db.SetDriverPositionParams{
-			DriverID: a.UserID, TenantID: a.TenantID, Longitude: newest.Lng, Latitude: newest.Lat,
+			DriverID: b.DriverID, TenantID: b.TenantID, Longitude: newest.Lng, Latitude: newest.Lat,
 			RecordedAt: toTimestamp(newest.RecordedAt),
 		}
 		if newest.Speed != nil {
@@ -233,15 +279,16 @@ func (s *TrackingService) record(ctx context.Context, a Actor, deviceID string, 
 		if newest.Battery != nil {
 			pos.BatteryLevel = ptr(int32(*newest.Battery))
 		}
-		if err := s.q.SetDriverPosition(ctx, pos); err != nil {
-			s.log.Error().Err(err).Msg("keep the driver's newest position")
+		if e := s.q.SetDriverPosition(ctx, pos); e != nil {
+			s.log.Error().Err(e).Msg("keep the driver's newest position")
+			err = e
 		}
-		s.publish(a.TenantID, "location", map[string]any{
-			"driver_id": a.UserID.String(), "name": a.Name, "lat": newest.Lat, "lng": newest.Lng,
+		s.publish(b.TenantID, "location", map[string]any{
+			"driver_id": b.DriverID.String(), "name": b.DriverName, "lat": newest.Lat, "lng": newest.Lng,
 			"at": newest.RecordedAt, "speed_kph": newest.Speed, "battery": newest.Battery,
 		})
 	}
-	return stored, rejected
+	return stored, err
 }
 
 // Progress is how far along its route a load is, in percent, for the

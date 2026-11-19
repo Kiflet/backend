@@ -29,3 +29,13 @@ scrape_configs:
         type: A
         port: 3903
         refresh_interval: 30s
+  # With the rabbitmq profile: queue depths, consumers, publish and
+  # delivery rates, from RabbitMQ's own plugin. Reachable only on the
+  # compose network.
+  - job_name: rabbitmq
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: ["rabbitmq."]
+        type: A
+        port: 15692
+        refresh_interval: 30s

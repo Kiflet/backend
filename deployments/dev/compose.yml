@@ -1,5 +1,6 @@
-# Development database. The app itself runs on the host with `make run`.
-# DB_PORT moves it off 5434 if that port is taken.
+# Development database and RabbitMQ. The app itself runs on the host with
+# `make run`. DB_PORT and RABBITMQ_PORT move them off 5434 and 5673 if
+# those ports are taken.
 #
 # The provider sandbox, for an app on the host run with `make run-sandbox`:
 #   make sandbox-keys && docker compose -f deployments/dev/compose.yml --profile sandbox up sandbox
@@ -30,6 +31,25 @@ services:
       timeout: 5s
       retries: 10
 
+  # `make run` uses it when it is up (`make db` starts it).
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: kiflet
+      RABBITMQ_DEFAULT_PASS: kiflet
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5673}:5672"
+      # The management pages: http://localhost:15673 (kiflet, kiflet).
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15673}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
   sandbox:
     profiles: [sandbox]
     build:
@@ -51,3 +71,4 @@ services:
 
 volumes:
   postgres17_data:
+  rabbitmq_data:
