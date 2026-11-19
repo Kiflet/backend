@@ -17,6 +17,12 @@ What changed in each release, newest first.
 
 ### Fixed
 
+- **Drivers sharing a carrier address.** The driver app's API was limited
+  to 600 requests a minute from one address, so a few hundred drivers
+  behind one Ethio telecom address would have had their syncs refused. It
+  now counts each driver's requests instead (300 a minute, by token), and
+  an address's only to bound requests without a good sign-in
+  (`DRIVER_API_PER_ADDRESS`, 12,000 a minute).
 - **The overview's numbers on a laptop.** At 1280 pixels wide, the five
   numbers at the top of the overview (and of the platform's health page)
   wrapped onto two rows; they now stay on one, and go three, then two, to

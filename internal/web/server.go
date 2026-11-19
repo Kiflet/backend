@@ -154,6 +154,14 @@ func (s *Server) Handler() http.Handler {
 	strict := s.limit("strict", 10, ipKey)
 	lookup := s.limit("lookup", 60, ipKey)
 	general := s.limit("general", 600, ipKey)
+	// The driver app's API is limited per driver instead, by token, since
+	// a depot's phones, or a whole town's, may share one carrier address.
+	// The address's own allowance only bounds tokens that aren't good.
+	perDriver := s.limit("driver", driverRequestsPerMinute, tokenKey)
+	driverAddress := func(next http.Handler) http.Handler { return next }
+	if n := s.cfg.DriverAPIPerAddress; n > 0 {
+		driverAddress = s.limit("driver_address", n, ipKey)
+	}
 
 	// Public pages.
 	r.Group(func(r chi.Router) {
@@ -205,30 +213,38 @@ func (s *Server) Handler() http.Handler {
 
 	// JSON API used by the driver app.
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(general)
-		r.Use(s.decompressBody)
-		r.Get("/driver/config", s.apiDriverConfig)
-		r.With(signIn).Post("/driver/login", s.apiDriverLogin)
-		r.With(strict).Post("/driver/pin-reset/request", s.apiPINResetRequest)
-		r.With(strict).Post("/driver/pin-reset/confirm", s.apiPINResetConfirm)
+		// The driver app's signed-in calls, and the settings it fetches as
+		// it starts.
 		r.Group(func(r chi.Router) {
-			r.Use(s.requireDriver)
-			r.Post("/driver/logout", s.apiDriverLogout)
-			r.Post("/driver/pin", s.apiChangePIN)
-			r.Post("/driver/sync", s.apiSync)
+			r.Use(driverAddress)
+			r.Get("/driver/config", s.apiDriverConfig)
+			r.Group(func(r chi.Router) {
+				r.Use(perDriver, s.decompressBody, s.requireDriver)
+				r.Post("/driver/logout", s.apiDriverLogout)
+				r.Post("/driver/pin", s.apiChangePIN)
+				r.Post("/driver/sync", s.apiSync)
+			})
 		})
-		// The public API, for a company's own systems.
-		s.mountPublicAPI(r)
-		r.Post("/sms/inbound", s.apiSMSInbound)
-		r.Post("/sms/status", s.apiSMSStatus)
-		// Each payment provider's calls: how a payment went, and for one
-		// whose payers pay by reference, the look-ups before it.
-		for _, p := range s.svc.Billing.Providers() {
-			if c, ok := p.(payments.Callbacks); ok {
-				prefix := "/api/v1/payments/" + p.Code()
-				r.Mount("/payments/"+p.Code(), http.StripPrefix(prefix, c.Handler(s.svc.Billing, s.paymentFail)))
+		// Everything else: signing in, the public API, the providers' calls.
+		r.Group(func(r chi.Router) {
+			r.Use(general)
+			r.Use(s.decompressBody)
+			r.With(signIn).Post("/driver/login", s.apiDriverLogin)
+			r.With(strict).Post("/driver/pin-reset/request", s.apiPINResetRequest)
+			r.With(strict).Post("/driver/pin-reset/confirm", s.apiPINResetConfirm)
+			// The public API, for a company's own systems.
+			s.mountPublicAPI(r)
+			r.Post("/sms/inbound", s.apiSMSInbound)
+			r.Post("/sms/status", s.apiSMSStatus)
+			// Each payment provider's calls: how a payment went, and for one
+			// whose payers pay by reference, the look-ups before it.
+			for _, p := range s.svc.Billing.Providers() {
+				if c, ok := p.(payments.Callbacks); ok {
+					prefix := "/api/v1/payments/" + p.Code()
+					r.Mount("/payments/"+p.Code(), http.StripPrefix(prefix, c.Handler(s.svc.Billing, s.paymentFail)))
+				}
 			}
-		}
+		})
 	})
 
 	// The dashboard.
