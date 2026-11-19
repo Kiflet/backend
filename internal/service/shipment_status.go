@@ -229,7 +229,6 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 	toReceiver, toCustomer := s.customerStatusText(tenant, out, ch.Status, firstDeparture, reason, ch.recipient)
 	s.notifyCustomer(ctx, q, after, tenant, out, toReceiver, toCustomer)
 
-	after.do(func() { s.publishShipment(out, "status") })
 	return out, nil
 }
 
@@ -290,7 +289,6 @@ func (s *ShipmentService) updateStatusDetail(ctx context.Context, q *db.Queries,
 		TenantID: out.TenantID, ShipmentID: out.ID, DriverID: out.DriverID, Type: alertType, Severity: severity,
 		Message: fmt.Sprintf("%s updated the %s on %s: %s%s", who, what, out.TrackingNumber, model.ReasonLabel(reason), noteSuffix(note)),
 	})
-	after.do(func() { s.publishShipment(out, "status") })
 	return out, nil
 }
 
@@ -362,7 +360,6 @@ func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, r
 				})
 			}
 		}
-		after.do(func() { s.publishShipment(out, "cancelled") })
 		return nil
 	})
 	return out, err
@@ -424,7 +421,6 @@ func (s *ShipmentService) Reopen(ctx context.Context, a Actor, id pgtype.UUID) (
 				Note: "Reopened without the driver. " + why,
 			})
 		}
-		after.do(func() { s.publishShipment(out, "reopened") })
 		return nil
 	})
 	return out, err
@@ -464,7 +460,6 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 					TenantID: sh.TenantID, ShipmentID: sh.ID, DriverID: a.UserID, Type: AlertDriverMessage, Severity: SeverityInfo,
 					Message: fmt.Sprintf("%s on %s: %s", a.Name, sh.TrackingNumber, truncate(text, 200)),
 				})
-				after.do(func() { s.publishShipment(sh, "message") })
 			}
 			return nil
 		}
@@ -507,7 +502,6 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 			details = map[string]any{"sms": true, "auto": auto}
 		}
 		s.event(ctx, q, after, a, sh, shipmentEvent{Type: "message", Note: text, DriverID: sh.DriverID, VisibleToDriver: true, Details: details})
-		after.do(func() { s.publishShipment(sh, "message") })
 		return nil
 	})
 	return sent, err
