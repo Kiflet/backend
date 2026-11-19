@@ -38,10 +38,10 @@ func (c *core) queued(kind string) bool { return c.work != nil && c.work.Has(kin
 // commits: to RabbitMQ when the sender works from it, or by waking the
 // sender. A publish that fails wakes the sweeper instead, which publishes
 // what is due. With no transaction (after nil), it hands them off now.
-func (c *core) handOff(after *afterCommit, kind string, ids []pgtype.UUID, kick func()) {
+func (c *core) handOff(after func(func()), kind string, ids []pgtype.UUID, kick func()) {
 	do := func(f func()) { f() }
 	if after != nil {
-		do = after.do
+		do = after
 	}
 	do(func() {
 		if c.queued(kind) && len(ids) > 0 {

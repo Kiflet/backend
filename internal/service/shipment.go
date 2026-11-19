@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/kiflet/backend/internal/modules/shipments"
+	"github.com/kiflet/backend/internal/platform/events"
 	"math"
 	"strconv"
 	"strings"
@@ -1066,19 +1067,28 @@ func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *after
 		s.log.Error().Err(err).Str("type", e.Type).Msg("record shipment event")
 		return false
 	}
-	s.enqueueWebhooks(ctx, q, after, a, sh, e, occurred)
-	s.emit(ctx, q, sh.TenantID, "shipment."+e.Type, ShipmentEventMessage{
-		ShipmentID: sh.ID.String(), TrackingNumber: sh.TrackingNumber, Status: sh.Status,
-		Type: e.Type, FromStatus: e.From, ToStatus: e.To, Reason: e.Reason,
-		DriverID: uuidString(e.DriverID), ActorID: uuidString(a.UserID), Source: a.Source,
-		Lat: e.Lat, Lng: e.Lng, OccurredAt: occurred,
+	err = s.bus.Publish(ctx, events.Tx{Conn: q.Conn(), After: after.fn()}, events.Event{
+		Type: "shipment." + e.Type, TenantID: sh.TenantID,
+		Payload: ShipmentEventMessage{
+			ShipmentID: sh.ID.String(), TrackingNumber: sh.TrackingNumber, Status: sh.Status,
+			Type: e.Type, FromStatus: e.From, ToStatus: e.To, Reason: e.Reason,
+			DriverID: uuidString(e.DriverID), ActorID: uuidString(a.UserID), Source: a.Source,
+			Lat: e.Lat, Lng: e.Lng, OccurredAt: occurred,
+			shipment: sh, actor: a, event: e,
+		},
 	})
+	if err != nil {
+		// A failed write spoils the transaction, so the change fails with
+		// it: no change goes in without its event.
+		s.log.Error().Err(err).Str("type", e.Type).Msg("publish shipment event")
+	}
 	return true
 }
 
-// ShipmentEventMessage is what kiflet.events carries for each event in a
-// shipment's history (shipment.<type>, version 1). Consumers fetch more if
-// they need it; customers' details stay out of the broker.
+// ShipmentEventMessage is the event on the bus for each event in a
+// shipment's history, and what kiflet.events carries of it
+// (shipment.<type>, version 1). Consumers fetch more if they need it;
+// customers' details stay out of the broker.
 type ShipmentEventMessage struct {
 	ShipmentID     string    `json:"shipment_id"`
 	TrackingNumber string    `json:"tracking_number"`
@@ -1093,6 +1103,13 @@ type ShipmentEventMessage struct {
 	Lat            *float64  `json:"lat,omitempty"`
 	Lng            *float64  `json:"lng,omitempty"`
 	OccurredAt     time.Time `json:"occurred_at"`
+
+	// For the subscribers in this process (webhooks): the shipment as it
+	// is after the change, who made it, and the event in full. They stay
+	// out of the broker.
+	shipment shipments.Shipment
+	actor    Actor
+	event    shipmentEvent
 }
 
 func (s *ShipmentService) publishShipment(sh shipments.Shipment, change string) {

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/kiflet/backend/internal/modules/shipments"
+	"github.com/kiflet/backend/internal/platform/events"
 	"io"
 	"net"
 	"net/http"
@@ -421,7 +422,18 @@ func webhookTypes(e shipmentEvent) []string {
 // enqueueWebhooks writes a message for each endpoint that asked for what
 // happened, within the caller's transaction, and wakes the sender after
 // commit. A failure is logged: the change must not fail because of it.
-func (c *core) enqueueWebhooks(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, sh shipments.Shipment, e shipmentEvent, at time.Time) {
+// webhooksFor writes the webhooks a shipment's event calls for, in the
+// transaction of the change: it subscribes to shipment.* on the bus.
+func (c *core) webhooksFor(ctx context.Context, tx events.Tx, ev events.Event) error {
+	m, ok := ev.Payload.(ShipmentEventMessage)
+	if !ok {
+		return fmt.Errorf("%s carries %T, not a ShipmentEventMessage", ev.Type, ev.Payload)
+	}
+	c.enqueueWebhooks(ctx, db.New(tx.Conn), tx.After, m.actor, m.shipment, m.event, m.OccurredAt)
+	return nil
+}
+
+func (c *core) enqueueWebhooks(ctx context.Context, q *db.Queries, after func(func()), a Actor, sh shipments.Shipment, e shipmentEvent, at time.Time) {
 	types := webhookTypes(e)
 	if len(types) == 0 || c.webhooks == nil {
 		return

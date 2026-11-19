@@ -117,7 +117,7 @@ func (c *core) enqueueSMS(ctx context.Context, q *db.Queries, after *afterCommit
 		c.log.Error().Err(err).Str("purpose", m.Purpose).Msg("enqueue sms")
 		return
 	}
-	c.handOff(after, WorkSMS, []pgtype.UUID{row.ID}, c.sms.kick)
+	c.handOff(after.fn(), WorkSMS, []pgtype.UUID{row.ID}, c.sms.kick)
 }
 
 // smsRefusal says why a company's text must not be sent, or "" if it may.

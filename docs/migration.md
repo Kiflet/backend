@@ -342,6 +342,16 @@ throughout; only imports move.
    that runs handlers after the transaction commits. Alerts, notify,
    webhooks and live updates subscribe to it instead of being called
    directly.
+   Done as `internal/platform/events`, with one change: subscribers are
+   of two kinds. `Within` runs in the publisher's transaction, for what
+   must commit with the change: a webhook to deliver, a text to send, an
+   alert. Those were written in the same transaction when they were
+   called directly, and running them after the commit would lose them
+   when a process stops in between. `After` runs once it has committed,
+   for live updates and waking workers. The bus also writes the outbox,
+   which `core.emit` did. Webhooks subscribe to `shipment.*`; notify,
+   alerts and live updates follow, then booking and status changes move
+   into the shipments module, publishing instead of calling them.
 
 Done when: `internal/service`, `internal/model` and `internal/db` are gone;
 every module has the layout of the architecture's section 4; the boundary

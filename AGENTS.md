@@ -82,10 +82,13 @@ the plan, not from those.
   playing Ethio telecom, telebirr and CBE Birr for the real adapters
   (`make sandbox`, `make run-sandbox`)
 - `migrations`: goose migrations, embedded and applied on start
-- `pkg/broker`: RabbitMQ (exchanges, queues, confirms, retries). A change
-  that others react to is written to `event_outbox` with the change
-  (`core.emit`), and `internal/app/relay.go` publishes it. The app works
-  without RabbitMQ (`RABBITMQ_URL` empty), so keep that path working.
+- `internal/platform/events`: the bus. A change others react to is
+  published as an event in its transaction; subscribers run `Within` it
+  (their writes commit with the change) or `After` it commits (live
+  updates, waking workers). With RabbitMQ, each event is also written to
+  `event_outbox`, and `internal/app/relay.go` publishes it.
+- `pkg/broker`: RabbitMQ (exchanges, queues, confirms, retries). The app
+  works without RabbitMQ (`RABBITMQ_URL` empty), so keep that path working.
 
 ## Working on it
 
@@ -120,8 +123,8 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   through the same services as the dashboard; it has no rules of its own.
   `static/openapi.json` describes it, and `TestOpenAPIMatchesTheAPI` checks
   that the two have the same routes and fields: change them together.
-- Webhooks are written in `ShipmentService.event`, with the shipment's
-  history: a new kind of event reaches them by adding it to
+- Webhooks subscribe to `shipment.*` on the bus and are written with the
+  shipment's history: a new kind of event reaches them by adding it to
   `webhookTypes` in `internal/service/webhooks.go`. Their payload is the
   API's `ShipmentJSON` and `EventJSON` (`internal/service/api_json.go`).
 - The driver app's status rules come from `/api/v1/driver/config`, which is
