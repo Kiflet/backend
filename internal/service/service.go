@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/kiflet/backend/internal/modules/audit"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -70,7 +71,9 @@ type PositionQueue interface {
 
 // Deps is everything the services share.
 type Deps struct {
-	Pool      *pgxpool.Pool
+	Pool *pgxpool.Pool
+	// Audit is the audit module (internal/modules/audit).
+	Audit     audit.Log
 	Log       zerolog.Logger
 	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
@@ -133,7 +136,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit,
 		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -177,6 +180,7 @@ type core struct {
 	mail     *MailService
 	alerts   *AlertService
 	webhooks *WebhookService
+	auditLog audit.Log
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	outbox        bool

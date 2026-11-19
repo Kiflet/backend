@@ -716,3 +716,34 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 	)
 	return i, err
 }
+
+const userNamesByIDs = `-- name: UserNamesByIDs :many
+SELECT id, full_name FROM users WHERE id = ANY($1::uuid[])
+`
+
+type UserNamesByIDsRow struct {
+	ID       pgtype.UUID `db:"id" json:"id"`
+	FullName string      `db:"full_name" json:"full_name"`
+}
+
+// Names of the people in the platform's audit log, from every company:
+// for the platform admin only (UserService.Names checks).
+func (q *Queries) UserNamesByIDs(ctx context.Context, ids []pgtype.UUID) ([]UserNamesByIDsRow, error) {
+	rows, err := q.db.Query(ctx, userNamesByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserNamesByIDsRow{}
+	for rows.Next() {
+		var i UserNamesByIDsRow
+		if err := rows.Scan(&i.ID, &i.FullName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

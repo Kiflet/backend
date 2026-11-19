@@ -10,6 +10,13 @@ What changed in each release, newest first.
   `internal/config`, `geo`, `phone` and `text` are now under
   `internal/platform/`, the packages without business rules that the
   modules will share. Nothing else changes.
+- **The audit module** (phase 1, step 2): `internal/modules/audit` owns
+  `audit_logs`, with its own sqlc store, and the rest of the code reaches
+  it through its interface. Its rows are still written in the transaction
+  of the change they record. The platform's audit page looks up company
+  and user names instead of joining their tables. A test checks what
+  each module imports, and CI checks that no generated file outlives its
+  queries.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

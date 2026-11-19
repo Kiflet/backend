@@ -114,7 +114,6 @@ type Querier interface {
 	// an alert of the same episode was raised before, even if dismissed since:
 	// the unique indexes turn either duplicate into a no-op and no row returns.
 	CreateAlert(ctx context.Context, arg CreateAlertParams) (Alert, error)
-	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error)
 	CreateBroadcast(ctx context.Context, arg CreateBroadcastParams) (Broadcast, error)
 	// Links sent by email, and sign-ups waiting for their SMS code.
 	CreateEmailToken(ctx context.Context, arg CreateEmailTokenParams) error
@@ -127,6 +126,8 @@ type Querier interface {
 	CreateShipmentCharge(ctx context.Context, arg CreateShipmentChargeParams) (ShipmentCharge, error)
 	CreateShipmentDocument(ctx context.Context, arg CreateShipmentDocumentParams) (ShipmentDocument, error)
 	CreateShipmentEvent(ctx context.Context, arg CreateShipmentEventParams) (ShipmentEvent, error)
+	// The people running Kiflet: every company's audit log, support tickets
+	// and the background jobs (FR-042 AC-042.7, FR-049).
 	CreateSupportTicket(ctx context.Context, arg CreateSupportTicketParams) (SupportTicket, error)
 	// A slug already taken returns no row, so the caller can try another
 	// without aborting its transaction.
@@ -168,7 +169,6 @@ type Querier interface {
 	DeleteShipmentDocument(ctx context.Context, arg DeleteShipmentDocumentParams) (string, error)
 	DeleteShipmentTexts(ctx context.Context, ids []pgtype.UUID) error
 	DeleteTenant(ctx context.Context, id pgtype.UUID) error
-	DeleteTenantAuditLogs(ctx context.Context, tenantID pgtype.UUID) error
 	DeleteWebhookEndpoint(ctx context.Context, arg DeleteWebhookEndpointParams) (WebhookEndpoint, error)
 	// Retention: drops each day's partition that ends before the cut-off, and
 	// deletes older rows from the default partition. Returns how many days.
@@ -292,11 +292,6 @@ type Querier interface {
 	ListAlerts(ctx context.Context, arg ListAlertsParams) ([]ListAlertsRow, error)
 	ListAllInvoices(ctx context.Context, arg ListAllInvoicesParams) ([]ListAllInvoicesRow, error)
 	ListAllUsersForPlatform(ctx context.Context, tenantID pgtype.UUID) ([]ListAllUsersForPlatformRow, error)
-	ListAuditLogsByAction(ctx context.Context, arg ListAuditLogsByActionParams) ([]AuditLog, error)
-	ListAuditLogsByDateRange(ctx context.Context, arg ListAuditLogsByDateRangeParams) ([]AuditLog, error)
-	ListAuditLogsByEntity(ctx context.Context, arg ListAuditLogsByEntityParams) ([]AuditLog, error)
-	ListAuditLogsByTenant(ctx context.Context, arg ListAuditLogsByTenantParams) ([]AuditLog, error)
-	ListAuditLogsByUser(ctx context.Context, arg ListAuditLogsByUserParams) ([]AuditLog, error)
 	// The company's active admins with an email address: invoices and billing
 	// notices go to those who confirmed theirs.
 	ListBillingContacts(ctx context.Context, tenantID pgtype.UUID) ([]ListBillingContactsRow, error)
@@ -348,10 +343,6 @@ type Querier interface {
 	// yet alerted for that pickup time, oldest first.
 	ListPickupOverdue(ctx context.Context, dueBefore pgtype.Timestamptz) ([]ListPickupOverdueRow, error)
 	ListPlatformAdmins(ctx context.Context) ([]ListPlatformAdminsRow, error)
-	// The people running Kiflet: every company's audit log, support tickets
-	// and the background jobs (FR-042 AC-042.7, FR-049).
-	// A company's own rows and the platform's actions on it.
-	ListPlatformAudit(ctx context.Context, arg ListPlatformAuditParams) ([]ListPlatformAuditRow, error)
 	ListPublicShipmentEvents(ctx context.Context, shipmentID pgtype.UUID) ([]ListPublicShipmentEventsRow, error)
 	ListRecentPayments(ctx context.Context, limit int32) ([]ListRecentPaymentsRow, error)
 	// Who signed for each receiver's deliveries in the last year, newest first,
@@ -605,6 +596,9 @@ type Querier interface {
 	UpdateWebhookEndpoint(ctx context.Context, arg UpdateWebhookEndpointParams) (WebhookEndpoint, error)
 	UpsertAlertRules(ctx context.Context, arg UpsertAlertRulesParams) error
 	UpsertSyncMetadata(ctx context.Context, arg UpsertSyncMetadataParams) error
+	// Names of the people in the platform's audit log, from every company:
+	// for the platform admin only (UserService.Names checks).
+	UserNamesByIDs(ctx context.Context, ids []pgtype.UUID) ([]UserNamesByIDsRow, error)
 	VoidInvoice(ctx context.Context, arg VoidInvoiceParams) (int64, error)
 	// For the billing job, across companies: a plan invoice left unpaid past
 	// its due date lapses, since its price was worked out for that moment.

@@ -106,7 +106,7 @@ func (s *Server) auditLog(w http.ResponseWriter, r *http.Request) {
 	drivers := s.driverNames(r.Context(), p.TenantID)
 	rows := make([]auditRow, 0, len(logs))
 	for _, l := range logs {
-		row := auditRow{At: l.CreatedAt.Time, Who: names[l.UserID], Action: auditActions[l.Action], Entity: l.EntityType, IP: deref(l.IpAddress)}
+		row := auditRow{At: l.At, Who: names[l.UserID], Action: auditActions[l.Action], Entity: l.EntityType, IP: l.IP}
 		if row.Who == "" {
 			row.Who = "System"
 		}

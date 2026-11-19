@@ -1,22 +1,6 @@
 -- The people running Kiflet: every company's audit log, support tickets
 -- and the background jobs (FR-042 AC-042.7, FR-049).
 
--- name: ListPlatformAudit :many
--- A company's own rows and the platform's actions on it.
-SELECT a.id, a.created_at, a.action, a.entity_type, a.entity_id, a.old_value, a.new_value,
-       a.ip_address, a.user_agent, a.tenant_id,
-       COALESCE(t.name, '')::text AS tenant_name, COALESCE(u.full_name, '')::text AS user_name
-FROM audit_logs a
-LEFT JOIN tenants t ON t.id = a.tenant_id
-LEFT JOIN users u ON u.id = a.user_id
-WHERE (sqlc.narg(tenant_id)::uuid IS NULL OR a.tenant_id = sqlc.narg(tenant_id) OR a.entity_id = sqlc.narg(tenant_id))
-  AND (sqlc.narg(action)::text IS NULL OR a.action = sqlc.narg(action))
-  AND (sqlc.narg(ip)::text IS NULL OR a.ip_address = sqlc.narg(ip))
-  AND (sqlc.narg(since)::timestamptz IS NULL OR a.created_at >= sqlc.narg(since))
-  AND (sqlc.narg(until)::timestamptz IS NULL OR a.created_at < sqlc.narg(until))
-ORDER BY a.created_at DESC
-LIMIT sqlc.arg(max_rows) OFFSET sqlc.arg(skip);
-
 -- name: CreateSupportTicket :one
 INSERT INTO support_tickets (tenant_id, subject, opened_by)
 VALUES ($1, $2, $3)

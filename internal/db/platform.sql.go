@@ -61,6 +61,7 @@ func (q *Queries) CountWaitingTickets(ctx context.Context) (int64, error) {
 }
 
 const createSupportTicket = `-- name: CreateSupportTicket :one
+
 INSERT INTO support_tickets (tenant_id, subject, opened_by)
 VALUES ($1, $2, $3)
 RETURNING id, tenant_id, number, subject, status, opened_by, created_at, updated_at, closed_at
@@ -72,6 +73,8 @@ type CreateSupportTicketParams struct {
 	OpenedBy pgtype.UUID `db:"opened_by" json:"opened_by"`
 }
 
+// The people running Kiflet: every company's audit log, support tickets
+// and the background jobs (FR-042 AC-042.7, FR-049).
 func (q *Queries) CreateSupportTicket(ctx context.Context, arg CreateSupportTicketParams) (SupportTicket, error) {
 	row := q.db.QueryRow(ctx, createSupportTicket, arg.TenantID, arg.Subject, arg.OpenedBy)
 	var i SupportTicket
@@ -305,92 +308,6 @@ func (q *Queries) ListPlatformAdmins(ctx context.Context) ([]ListPlatformAdminsR
 	for rows.Next() {
 		var i ListPlatformAdminsRow
 		if err := rows.Scan(&i.FullName, &i.Email); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPlatformAudit = `-- name: ListPlatformAudit :many
-
-SELECT a.id, a.created_at, a.action, a.entity_type, a.entity_id, a.old_value, a.new_value,
-       a.ip_address, a.user_agent, a.tenant_id,
-       COALESCE(t.name, '')::text AS tenant_name, COALESCE(u.full_name, '')::text AS user_name
-FROM audit_logs a
-LEFT JOIN tenants t ON t.id = a.tenant_id
-LEFT JOIN users u ON u.id = a.user_id
-WHERE ($1::uuid IS NULL OR a.tenant_id = $1 OR a.entity_id = $1)
-  AND ($2::text IS NULL OR a.action = $2)
-  AND ($3::text IS NULL OR a.ip_address = $3)
-  AND ($4::timestamptz IS NULL OR a.created_at >= $4)
-  AND ($5::timestamptz IS NULL OR a.created_at < $5)
-ORDER BY a.created_at DESC
-LIMIT $7 OFFSET $6
-`
-
-type ListPlatformAuditParams struct {
-	TenantID pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
-	Action   *string            `db:"action" json:"action"`
-	Ip       *string            `db:"ip" json:"ip"`
-	Since    pgtype.Timestamptz `db:"since" json:"since"`
-	Until    pgtype.Timestamptz `db:"until" json:"until"`
-	Skip     int32              `db:"skip" json:"skip"`
-	MaxRows  int32              `db:"max_rows" json:"max_rows"`
-}
-
-type ListPlatformAuditRow struct {
-	ID         pgtype.UUID        `db:"id" json:"id"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	Action     string             `db:"action" json:"action"`
-	EntityType string             `db:"entity_type" json:"entity_type"`
-	EntityID   pgtype.UUID        `db:"entity_id" json:"entity_id"`
-	OldValue   []byte             `db:"old_value" json:"old_value"`
-	NewValue   []byte             `db:"new_value" json:"new_value"`
-	IpAddress  *string            `db:"ip_address" json:"ip_address"`
-	UserAgent  *string            `db:"user_agent" json:"user_agent"`
-	TenantID   pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
-	TenantName string             `db:"tenant_name" json:"tenant_name"`
-	UserName   string             `db:"user_name" json:"user_name"`
-}
-
-// The people running Kiflet: every company's audit log, support tickets
-// and the background jobs (FR-042 AC-042.7, FR-049).
-// A company's own rows and the platform's actions on it.
-func (q *Queries) ListPlatformAudit(ctx context.Context, arg ListPlatformAuditParams) ([]ListPlatformAuditRow, error) {
-	rows, err := q.db.Query(ctx, listPlatformAudit,
-		arg.TenantID,
-		arg.Action,
-		arg.Ip,
-		arg.Since,
-		arg.Until,
-		arg.Skip,
-		arg.MaxRows,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPlatformAuditRow{}
-	for rows.Next() {
-		var i ListPlatformAuditRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.Action,
-			&i.EntityType,
-			&i.EntityID,
-			&i.OldValue,
-			&i.NewValue,
-			&i.IpAddress,
-			&i.UserAgent,
-			&i.TenantID,
-			&i.TenantName,
-			&i.UserName,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

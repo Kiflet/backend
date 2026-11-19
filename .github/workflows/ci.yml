@@ -47,11 +47,19 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
-      - name: internal/db is sqlc's output for sqlc/queries
+      - name: internal/db and the modules' stores are sqlc's output for their queries
         run: |
           curl -fsSL "https://github.com/sqlc-dev/sqlc/releases/download/v${SQLC_VERSION}/sqlc_${SQLC_VERSION}_linux_amd64.tar.gz" \
             | tar -xz -C "$RUNNER_TEMP" sqlc
           "$RUNNER_TEMP/sqlc" diff -f sqlc/sqlc.yaml
+          # sqlc leaves the output of a queries file that has gone (or moved
+          # to a module): there must be none.
+          for f in internal/db/*.sql.go; do
+            test -f "sqlc/queries/$(basename "$f" .go)" || { echo "$f: sqlc/queries/$(basename "$f" .go) is gone"; exit 1; }
+          done
+          for f in internal/modules/*/store/*.sql.go; do
+            test -f "$(dirname "$f")/queries/$(basename "$f" .go)" || { echo "$f: its queries are gone"; exit 1; }
+          done
       - name: Known vulnerabilities, in the code and in Go itself
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - name: Shell scripts

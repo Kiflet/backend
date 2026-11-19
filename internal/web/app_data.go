@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"github.com/kiflet/backend/internal/modules/audit"
 	"io"
 	"io/fs"
 	"net/http"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/service"
 	"github.com/kiflet/backend/migrations"
@@ -356,7 +356,7 @@ func (s *Server) platformAudit(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(q.Get("page"))
 	page = max(page, 1)
 	const per = 50
-	f := service.AuditFilter{Action: q.Get("action"), IP: strings.TrimSpace(q.Get("ip"))}
+	f := audit.Filter{Action: q.Get("action"), IP: strings.TrimSpace(q.Get("ip"))}
 	if id, err := parseID(q.Get("company")); err == nil {
 		f.TenantID = id
 	}
@@ -385,9 +385,20 @@ func (s *Server) platformAudit(w http.ResponseWriter, r *http.Request) {
 	if more {
 		logs = logs[:per]
 	}
+	ids := make([]pgtype.UUID, 0, len(logs))
+	for _, l := range logs {
+		if l.UserID.Valid {
+			ids = append(ids, l.UserID)
+		}
+	}
+	people, err := s.svc.Users.Names(r.Context(), p, ids)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	rows := make([]platformAuditRow, 0, len(logs))
 	for _, l := range logs {
-		rows = append(rows, platformAuditEntry(l, companies))
+		rows = append(rows, platformAuditEntry(l, companies, people))
 	}
 	actions := make([]auditAction, 0, len(auditActions))
 	for code, label := range auditActions {
@@ -420,10 +431,10 @@ func (s *Server) platformAudit(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, "app/platform_audit", v)
 }
 
-func platformAuditEntry(l db.ListPlatformAuditRow, companies map[pgtype.UUID]string) platformAuditRow {
+func platformAuditEntry(l audit.Record, companies, people map[pgtype.UUID]string) platformAuditRow {
 	row := platformAuditRow{
-		auditRow: auditRow{At: l.CreatedAt.Time, Who: l.UserName, Action: auditActions[l.Action], IP: deref(l.IpAddress)},
-		Company:  l.TenantName,
+		auditRow: auditRow{At: l.At, Who: people[l.UserID], Action: auditActions[l.Action], IP: l.IP},
+		Company:  companies[l.TenantID],
 	}
 	if _, ok := companies[l.TenantID]; ok {
 		row.CompanyLink = tenantPath(l.TenantID)

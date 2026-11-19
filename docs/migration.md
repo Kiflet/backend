@@ -257,10 +257,30 @@ throughout; only imports move.
    4. Move its handlers from `internal/web/app_*.go` next to it under
       `http/` (still rendering templates for now).
    5. `make test test-integration`; one PR per module.
+
+   Done: audit. How it went, for the rest:
+   - **The server-rendered handlers stay in `internal/web`.** Phase 4
+     replaces those pages with Kiflet/web and phase 6 deletes them, so
+     moving them would be work thrown away. A module's `http/` holds the
+     JSON handlers phase 3 writes for it.
+   - **One transaction across modules.** A change and what it records in
+     another module (an audit row, an alert) still commit together: the
+     other module's write takes the transaction as a `database.Conn`
+     (`internal/platform/database`), and `internal/service` hands it over
+     with `q.Conn()`.
+   - **No joins into other modules' tables.** The platform's audit page
+     read company and user names by joining `tenants` and `users`; it now
+     looks them up through the tenancy and identity services.
+   - **Empty layers are left out:** audit has no `domain/`.
+   - `internal/service` keeps a thin service where the dashboard needs a
+     check the module can't make yet (the platform admin's), until the
+     module that owns it moves.
 3. **A test that enforces the boundaries:** `go list -deps` per module;
    a module may import only `internal/platform/*`, its own packages and
    other modules' root packages (their interfaces), never their `app/` or
-   `store/`. Like the sandbox's import test today.
+   `store/`. Like the sandbox's import test today. Done
+   (`internal/modules/boundaries_test.go`): it parses each module's
+   imports, and also refuses `internal/service`, `db` and `model`.
 4. **Events, in process:** an `events.Bus` interface (`Publish(ctx, tx,
    Event)`, `Subscribe(type, handler)`) with an in-memory implementation
    that runs handlers after the transaction commits. Alerts, notify,

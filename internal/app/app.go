@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgtype"
+	auditapp "github.com/kiflet/backend/internal/modules/audit/app"
 	"github.com/redis/go-redis/v9"
 	"net/http"
 	"os"
@@ -142,7 +143,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		work = brokerWork{b: a.broker, kinds: senders}
 	}
 	svc := service.New(service.Deps{
-		Pool: pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
+		Audit: auditapp.New(pool, log),
+		Pool:  pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
 		RemoteWorkers: !roles.Has("worker"), Work: work,
 		Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},
 		Payments: providers,
