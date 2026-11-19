@@ -266,6 +266,26 @@ RabbitMQ keeps its queues in the `rabbitmq-data` volume. The backups
 leave it out: what is in it is either in the database already or on its
 way there.
 
+## Separate processes
+
+By default each instance of the app does everything. The same program can
+run only some of it, `kiflet serve --roles=…` (or `ROLES`):
+
+- `web`: the pages, the APIs, and live updates to the dashboards open on it
+- `worker`: texts, email and webhooks, and GPS fixes from RabbitMQ
+- `scheduler`: the timed jobs (one instance runs them at a time)
+- `relay`: publishing the event outbox to RabbitMQ (one leads)
+
+To give the background work processes of its own, so that a burst of
+texts or positions doesn't slow the pages and the pages can be scaled on
+their own, add `workers` to `COMPOSE_PROFILES` and set `APP_ROLES=web`
+(and `WORKER_REPLICAS`, 1 by default). The `worker` service runs
+`--roles=worker,scheduler,relay`. Set both or neither: web processes alone
+queue texts that nothing sends. Work a web process queues wakes the
+workers through Postgres at once; missed, they find it within seconds.
+A process without the web role answers only `/healthz`, `/readyz` and
+`/metrics`. Staging runs this way.
+
 ## Redis
 
 Redis (`docs/architecture.md`, section 7) runs beside the app with the

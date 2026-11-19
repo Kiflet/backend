@@ -78,10 +78,14 @@ type Deps struct {
 	Positions PositionQueue
 	// Outbox writes events to event_outbox for the relay to publish. Off
 	// without RabbitMQ: nothing would read them.
-	Outbox  bool
-	Storage storage.Storage
-	SMS     SMSSender
-	Mail    MailSender
+	Outbox bool
+	// RemoteWorkers says the senders of texts, email and webhooks run in
+	// other processes: work queued here wakes them through Postgres
+	// (WorkChannel) instead of in this process.
+	RemoteWorkers bool
+	Storage       storage.Storage
+	SMS           SMSSender
+	Mail          MailSender
 	// Payments are the mobile-money providers, in the order offered.
 	Payments []payments.Provider
 	Settings Settings
@@ -128,7 +132,7 @@ func New(d Deps) *Services {
 		d.Publisher = nopPublisher{}
 	}
 	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings,
-		positions: d.Positions, outbox: d.Outbox}
+		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers}
 
 	s := &Services{}
 	s.Audit = &AuditService{core: c}
@@ -172,8 +176,40 @@ type core struct {
 	alerts   *AlertService
 	webhooks *WebhookService
 	// positions and outbox: see Deps.
-	positions PositionQueue
-	outbox    bool
+	positions     PositionQueue
+	outbox        bool
+	remoteWorkers bool
+}
+
+// WorkChannel is the Postgres channel that wakes the senders in worker
+// processes; the payload names which: sms, mail or webhooks.
+const WorkChannel = "kiflet_work"
+
+// wakeWorkers tells the worker processes there is work for a sender, when
+// they are elsewhere. Missed, the sender finds it at its next look, within
+// seconds.
+func (c *core) wakeWorkers(kind string) {
+	if !c.remoteWorkers {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := c.pool.Exec(ctx, "SELECT pg_notify($1, $2)", WorkChannel, kind); err != nil {
+		c.log.Warn().Err(err).Str("sender", kind).Msg("wake the workers")
+	}
+}
+
+// Wake wakes this process's sender of a kind (sms, mail or webhooks), as
+// a worker does when told through WorkChannel.
+func (s *Services) Wake(kind string) {
+	switch kind {
+	case "sms":
+		s.SMS.poke()
+	case "mail":
+		s.Mail.poke()
+	case "webhooks":
+		s.Webhooks.poke()
+	}
 }
 
 // tx runs fn in a transaction, committing if it returns nil. Work that must

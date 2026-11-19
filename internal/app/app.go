@@ -41,11 +41,11 @@ type Options struct {
 	NoJobs bool
 }
 
-// App is Kiflet, assembled.
+// App is Kiflet, assembled: the roles its settings name (config.Roles).
 type App struct {
 	Services *service.Services
 	web      *web.Server
-	noJobs   bool
+	roles    config.Roles
 	// workers are the background loops Run runs, besides the services'.
 	workers []func(context.Context)
 	broker  *broker.Broker
@@ -99,26 +99,34 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 
 	hub := websocket.NewHub(log.With().Str("component", "live").Logger())
 	go hub.Run()
-	a := &App{noJobs: opts.NoJobs}
+	roles := cfg.Roles
+	a := &App{roles: roles}
 	if cfg.RabbitMQURL != "" {
 		a.broker, err = broker.Dial(context.Background(), cfg.RabbitMQURL, log.With().Str("component", "broker").Logger())
 		if err != nil {
 			return nil, err
 		}
-		a.workers = append(a.workers, (&relay{pool: pool, broker: a.broker, log: log.With().Str("component", "relay").Logger()}).Run)
+		if roles.Has("relay") {
+			a.workers = append(a.workers, (&relay{pool: pool, broker: a.broker, log: log.With().Str("component", "relay").Logger()}).Run)
+		}
 	}
 	// Updates reach the hub through RabbitMQ or Postgres, so that every
-	// instance's dashboards get them.
+	// instance's dashboards get them. Every role publishes them; the web
+	// processes, where dashboards connect, listen.
 	liveLog := log.With().Str("component", "live").Logger()
 	var live service.Publisher
 	if cfg.WorkerLive == "queue" {
 		bl := &brokerLive{broker: a.broker, hub: hub, log: liveLog}
 		live = bl
-		a.workers = append(a.workers, bl.Run)
+		if roles.Has("web") {
+			a.workers = append(a.workers, bl.Run)
+		}
 	} else {
 		pl := &liveRelay{pool: pool, hub: hub, log: liveLog}
 		live = pl
-		a.workers = append(a.workers, pl.Run)
+		if roles.Has("web") {
+			a.workers = append(a.workers, pl.Run)
+		}
 	}
 	var positions service.PositionQueue
 	if cfg.WorkerTracking == "queue" {
@@ -126,7 +134,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 	}
 	svc := service.New(service.Deps{
 		Pool: pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
-		Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},
+		RemoteWorkers: !roles.Has("worker"),
+		Storage:       store, SMS: smsSender{provider}, Mail: mailSender{mailer},
 		Payments: providers,
 		Settings: service.Settings{
 			AppName: cfg.AppName, BaseURL: cfg.PublicURL, Location: cfg.Timezone,
@@ -149,28 +158,40 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		return nil, err
 	}
 	a.Services, a.web = svc, srv
-	if positions != nil {
-		a.workers = append(a.workers, func(ctx context.Context) {
-			a.broker.Consume(ctx, "tracking.ingest", trackingPrefetch, storePositions(svc.Tracking))
-		})
+	if roles.Has("worker") {
+		a.workers = append(a.workers, svc.SMS.Run, svc.Mail.Run, svc.Webhooks.Run,
+			(&workListener{pool: pool, svc: svc, log: log.With().Str("component", "work").Logger()}).Run)
+		if positions != nil {
+			a.workers = append(a.workers, func(ctx context.Context) {
+				a.broker.Consume(ctx, "tracking.ingest", trackingPrefetch, storePositions(svc.Tracking))
+			})
+		}
 	}
+	if roles.Has("scheduler") && !opts.NoJobs {
+		a.workers = append(a.workers, svc.Jobs.Run)
+	}
+	log.Info().Str("roles", roles.String()).Msg("roles")
 	return a, nil
 }
 
 // Handler serves the dashboard, the public pages, the driver app and the
-// APIs.
-func (a *App) Handler() http.Handler { return a.web.Handler() }
-
-// Run does the background work until ctx ends: passing live updates
-// between instances, sending texts, email and webhooks, and the periodic
-// jobs. It returns once each worker has finished what it had in
-// hand. Texts and email it had taken but not started are handed back, for
-// the next start to send at once.
-func (a *App) Run(ctx context.Context) {
-	workers := append([]func(context.Context){a.Services.SMS.Run, a.Services.Mail.Run, a.Services.Webhooks.Run}, a.workers...)
-	if !a.noJobs {
-		workers = append(workers, a.Services.Jobs.Run)
+// APIs; in a process without the web role, only /healthz, /readyz and
+// /metrics.
+func (a *App) Handler() http.Handler {
+	if !a.roles.Has("web") {
+		return a.web.OpsHandler()
 	}
+	return a.web.Handler()
+}
+
+// Run does the background work of the process's roles until ctx ends:
+// passing live updates to its dashboards (web); sending texts, email and
+// webhooks, and writing GPS fixes (worker); the periodic jobs (scheduler);
+// publishing the event outbox (relay). It returns once each has finished
+// what it had in hand. Texts and email taken but not started are handed
+// back, for the next start to send at once.
+func (a *App) Run(ctx context.Context) {
+	workers := a.workers
 	var wg sync.WaitGroup
 	for _, run := range workers {
 		wg.Go(func() { run(ctx) })

@@ -106,6 +106,19 @@ func New(cfg *config.Config, svc *service.Services, pool *pgxpool.Pool, hub *web
 	return s, nil
 }
 
+// OpsHandler is what a process without the web role serves: its health
+// for Docker, and its figures for Prometheus.
+func (s *Server) OpsHandler() http.Handler {
+	r := chi.NewRouter()
+	r.Use(s.recoverer)
+	r.Get("/healthz", s.healthz)
+	r.Get("/readyz", s.readyz)
+	if s.cfg.MetricsToken != "" {
+		r.With(s.requireMetricsToken).Handle("/metrics", promhttp.Handler())
+	}
+	return r
+}
+
 // Handler is the complete HTTP interface.
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()

@@ -79,7 +79,8 @@ if [ "${CONFIRM:-}" != yes ]; then
   [ "$answer" = "$name" ] || { echo "Nothing changed."; exit 1; }
 fi
 
-compose stop app
+# The workers too, with the workers profile: nothing may write meanwhile.
+compose stop app worker
 # What Postgres is still writing goes to the archive too: a switch to a new
 # segment closes the current one, which a clean stop archives.
 compose exec -T postgres psql -U logistics -d postgres -qtAc 'SELECT pg_switch_wal()' >/dev/null 2>&1 || true
@@ -129,6 +130,6 @@ compose exec -T postgres psql -U logistics -d postgres -q -v ON_ERROR_STOP=1 \
   -c 'SELECT pg_reload_conf()' >/dev/null
 compose exec -T postgres rm -rf "$pgdata/pitr-wal"
 until_="$(compose exec -T postgres psql -U logistics -d postgres -qtAc "SELECT to_char(pg_last_xact_replay_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || ' UTC'" 2>/dev/null || true)"
-compose start app
+compose start app worker
 echo "Restored${until_:+ to the last change before $until_}. The app is starting again."
 echo "The database is on a new timeline: take a backup now (scripts/backup.sh), the base of what follows."

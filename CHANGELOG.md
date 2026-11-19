@@ -24,6 +24,14 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Separate processes** (`docs/deploy.md`, "Separate processes").
+  `kiflet serve --roles=web,worker,scheduler,relay` (or `ROLES`) runs only
+  some of Kiflet; all of it by default. Production's compose file has a
+  `worker` service (profile `workers`, `WORKER_REPLICAS`) for texts,
+  email, webhooks, GPS fixes, the timed jobs and the event outbox, with
+  `APP_ROLES=web` for the app's instances. Work queued on a web process
+  wakes the workers through Postgres. Staging runs this way, and the
+  restore scripts stop and start the workers with the app.
 - **Redis** (`docs/architecture.md`, section 7; `docs/deploy.md`,
   "Redis"). Production's compose file runs it with
   `COMPOSE_PROFILES=redis`, staging and `make db` always. With

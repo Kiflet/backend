@@ -35,6 +35,10 @@ the dashboard, the public pages and the driver PWA. The Go module is
 One Go application. It serves the dispatcher dashboard
 (server-rendered `html/template`), the public tracking pages, the driver PWA
 (`internal/web/static/driver`) and its JSON API, and runs the background jobs.
+A process may run only some of that (`config.Roles`: web, worker,
+scheduler, relay; `internal/app` wires each), so background work must not
+assume it shares a process with the request that queued it: wake it
+through `core.wakeWorkers` or a queue.
 Kiflet/web and Kiflet/mobile will take over the pages and the driver app
 one at a time (`docs/migration.md`, phases 4 and 5); until a page or the
 app has moved, it is built here. Earlier Next.js and Expo apps were retired

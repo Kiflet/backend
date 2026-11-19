@@ -2,6 +2,8 @@
 // driver app and its API, and the background jobs, in one process.
 //
 //	server                      serve (the default)
+//	server serve --roles=a,b    serve only some roles: web, worker,
+//	                            scheduler, relay (ROLES; all by default)
 //	server migrate              apply database migrations and exit
 //	server seed                 load demo data into an empty database
 //	server sms-in <phone> <text>  text the running server, as a phone would
@@ -57,7 +59,9 @@ func main() {
 
 	switch cmd {
 	case "serve":
-		err = serve(ctx, cfg, log)
+		if err = rolesFlag(cfg, os.Args[2:]); err == nil {
+			err = serve(ctx, cfg, log)
+		}
 	case "migrate":
 		err = withPool(ctx, cfg, log, func(pool *pgxpool.Pool) error { return migrate(ctx, pool, log) })
 	case "seed":
@@ -70,7 +74,7 @@ func main() {
 	case "sms-in":
 		err = smsIn(ctx, cfg, os.Args[2:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: server [serve | migrate | seed | sms-in <phone> <text> | setup-storage]")
+		fmt.Println("usage: server [serve [--roles=web,worker,scheduler,relay] | migrate | seed | sms-in <phone> <text> | setup-storage]")
 		return
 	default:
 		err = fmt.Errorf("unknown command %q (want serve, migrate, seed, sms-in or setup-storage)", cmd)
@@ -254,4 +258,24 @@ func serve(ctx context.Context, cfg *config.Config, log zerolog.Logger) error {
 		log.Warn().Msg("stopped while still sending: what was being sent goes again within five minutes")
 	}
 	return err
+}
+
+// rolesFlag reads serve's --roles, which takes the place of ROLES.
+func rolesFlag(cfg *config.Config, args []string) error {
+	for i := 0; i < len(args); i++ {
+		v, ok := strings.CutPrefix(args[i], "--roles=")
+		if !ok && args[i] == "--roles" && i+1 < len(args) {
+			v, ok = args[i+1], true
+			i++
+		}
+		if !ok {
+			return fmt.Errorf("serve: unknown argument %q (want --roles=web,worker,scheduler,relay)", args[i])
+		}
+		roles, err := config.ParseRoles(v)
+		if err != nil {
+			return err
+		}
+		cfg.Roles = roles
+	}
+	return nil
 }

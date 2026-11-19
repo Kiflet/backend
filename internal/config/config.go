@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -70,6 +71,12 @@ type Config struct {
 	// Empty, the app works without it: positions are written at once, live
 	// updates pass through Postgres, and no events are published.
 	RabbitMQURL string
+	// Roles are the parts of Kiflet this process runs (ROLES, or `serve
+	// --roles`): web (the pages, the APIs and live updates), worker (texts,
+	// email, webhooks, GPS fixes), scheduler (the timed jobs) and relay (the
+	// event outbox). All of them by default.
+	Roles Roles
+
 	// RedisURL connects to Redis (redis://:password@host:6379/0). With it,
 	// the per-address and per-key request limits are shared by every
 	// instance; empty, each instance counts its own.
@@ -298,6 +305,9 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("PUBLIC_URL must be an https:// address in production, not %q", c.PublicURL)
 		}
 	}
+	if c.Roles, err = ParseRoles(getEnv("ROLES", "all")); err != nil {
+		return nil, err
+	}
 	for _, w := range []struct {
 		name string
 		v    *string
@@ -468,4 +478,47 @@ func getBoolEnv(key string, def bool) bool {
 		}
 	}
 	return def
+}
+
+// Roles is a set of the parts of Kiflet a process runs.
+type Roles map[string]bool
+
+// The roles a process can take.
+var allRoles = []string{"web", "worker", "scheduler", "relay"}
+
+// ParseRoles reads a comma-separated list of roles; "all" is every one.
+func ParseRoles(s string) (Roles, error) {
+	r := Roles{}
+	for _, name := range strings.Split(s, ",") {
+		name = strings.TrimSpace(name)
+		switch {
+		case name == "all":
+			for _, n := range allRoles {
+				r[n] = true
+			}
+		case slices.Contains(allRoles, name):
+			r[name] = true
+		case name != "":
+			return nil, fmt.Errorf("ROLES: %q isn't one of all, %s", name, strings.Join(allRoles, ", "))
+		}
+	}
+	if len(r) == 0 {
+		return nil, errors.New("ROLES: name at least one role, or all")
+	}
+	return r, nil
+}
+
+// Has says whether the process runs a role. An empty set, as tests build
+// it, runs them all.
+func (r Roles) Has(name string) bool { return len(r) == 0 || r[name] }
+
+// String lists the roles in their usual order.
+func (r Roles) String() string {
+	var out []string
+	for _, n := range allRoles {
+		if r.Has(n) {
+			out = append(out, n)
+		}
+	}
+	return strings.Join(out, ",")
 }

@@ -327,7 +327,14 @@ Roll back: each module is one PR; revert it.
 9. **Separate processes:** `cmd/api` (HTTP), `cmd/realtime` (WebSocket),
    `cmd/worker --queues=tracking.*` and so on, `cmd/scheduler`,
    `cmd/relay`, `cmd/migrate`. `cmd/server` stays for one release as "all
-   of them in one process" for development and small installs.
+   of them in one process" for development and small installs. Done as
+   roles of the one program rather than a program each (`kiflet serve
+   --roles=web,worker,scheduler,relay`; `migrate` was a command already):
+   one image, one build, and the same wiring tested in every
+   combination. Production's compose file has the `worker` service
+   (profile `workers`); staging runs it. Splitting `web` into HTTP and
+   WebSocket processes waits for the web app (phase 4), whose pages are
+   what would move.
 10. **Garage for files** (architecture, section 5). It depends on nothing
     else in this phase and can go first:
     1. `pkg/storage`: an `S3_FORCE_PATH_STYLE` setting (today path-style
