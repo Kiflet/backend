@@ -187,7 +187,16 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 			}
 		}
 	}
-	if roles.Has("scheduler") && !opts.NoJobs {
+	if cfg.WorkerJobs == "queue" && roles.Has("worker") {
+		a.workers = append(a.workers, func(ctx context.Context) {
+			a.broker.Consume(ctx, "jobs.scheduled", jobsPrefetch, runJobs(svc.Jobs))
+		})
+	}
+	if roles.Has("scheduler") && !opts.NoJobs && cfg.WorkerJobs == "queue" {
+		a.workers = append(a.workers, func(ctx context.Context) {
+			svc.Jobs.Schedule(ctx, brokerJobs{a.broker}.Publish)
+		})
+	} else if roles.Has("scheduler") && !opts.NoJobs {
 		a.workers = append(a.workers, svc.Jobs.Run)
 	}
 	log.Info().Str("roles", roles.String()).Msg("roles")

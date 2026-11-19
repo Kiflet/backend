@@ -94,6 +94,10 @@ type Config struct {
 	WorkerSMS      string
 	WorkerMail     string
 	WorkerWebhooks string
+	// WorkerJobs, the timed jobs: queue has one scheduler (the leader)
+	// name them on jobs.scheduled for any worker to run; inprocess has
+	// every scheduler run them all, taking turns on a lock.
+	WorkerJobs string
 
 	SMSProvider          string
 	SMSNumber            string
@@ -320,6 +324,7 @@ func Load() (*Config, error) {
 	}{
 		{"WORKER_TRACKING", &c.WorkerTracking}, {"WORKER_LIVE", &c.WorkerLive},
 		{"WORKER_SMS", &c.WorkerSMS}, {"WORKER_MAIL", &c.WorkerMail}, {"WORKER_WEBHOOKS", &c.WorkerWebhooks},
+		{"WORKER_JOBS", &c.WorkerJobs},
 	} {
 		*w.v = getEnv(w.name, "")
 		switch {
