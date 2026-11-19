@@ -15,6 +15,12 @@ scrape_configs:
         type: A
         port: 8080
         refresh_interval: 30s
+      # The workers, with the workers profile: a lookup of their own, so
+      # that without them the app's targets stay.
+      - names: ["worker."]
+        type: A
+        port: 8080
+        refresh_interval: 30s
 
   # Garage's own figures, with the garage profile (docs/architecture.md,
   # section 14). Its metrics token is METRICS_TOKEN too. Without the

@@ -36,7 +36,9 @@ x-hardened: &hardened
 
 services:
   app:
-    # Two, so that the end-to-end tests cross instances as production can.
+    # Two, so that the end-to-end tests cross instances as production can,
+    # with the web role only (APP_ROLES in staging.env): the worker below
+    # does the rest, as production's workers profile has it.
     deploy:
       replicas: 2
     env_file: !override
@@ -53,6 +55,23 @@ services:
       # Nothing else waits for it, and `up --wait` counts a job that has
       # exited, and that nothing waits for, as failed.
       garage-setup-backups:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  worker:
+    env_file: !override
+      - staging/staging.env
+    volumes:
+      - sandbox-keys:/run/secrets:ro
+    depends_on:
+      sandbox-keys:
+        condition: service_completed_successfully
+      garage-setup:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy

@@ -19,51 +19,68 @@ x-logging: &logging
     max-size: 10m
     max-file: "5"
 
+# The app's settings, shared by its web processes (app) and its workers.
+x-kiflet: &kiflet
+  build:
+    context: ..
+  restart: unless-stopped
+  env_file: ../.env
+  environment:
+    # The password is passed on its own, so it may contain any character.
+    DATABASE_URL: postgres://logistics@postgres:5432/logistics?sslmode=disable
+    PGPASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    PUBLIC_URL: https://${DOMAIN:?set DOMAIN}
+    ENVIRONMENT: production
+    TRUST_PROXY: "true"
+  volumes:
+    - app-data:/data
+    - ./secrets:/run/secrets:ro
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  # The app gives requests in progress and the text or email being sent
+  # 30 seconds to finish.
+  stop_grace_period: 45s
+  logging: *logging
+  depends_on:
+    postgres:
+      condition: service_healthy
+    app-data:
+      condition: service_completed_successfully
+    # With the garage profile: the bucket is ready before the app starts.
+    garage-setup:
+      condition: service_completed_successfully
+      required: false
+    rabbitmq:
+      condition: service_healthy
+      required: false
+    redis:
+      condition: service_healthy
+      required: false
+
 services:
   app:
-    build:
-      context: ..
-    restart: unless-stopped
-    env_file: ../.env
-    environment:
-      # The password is passed on its own, so it may contain any character.
-      DATABASE_URL: postgres://logistics@postgres:5432/logistics?sslmode=disable
-      PGPASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
-      PUBLIC_URL: https://${DOMAIN:?set DOMAIN}
-      ENVIRONMENT: production
-      TRUST_PROXY: "true"
-    volumes:
-      - app-data:/data
-      - ./secrets:/run/secrets:ro
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    # The app gives requests in progress and the text or email being sent
-    # 30 seconds to finish.
-    stop_grace_period: 45s
+    <<: *kiflet
+    # With the workers profile, set APP_ROLES=web: the worker service then
+    # does the rest.
+    command: ["serve", "--roles=${APP_ROLES:-all}"]
     # More than one instance shares the work: Caddy spreads requests by
     # client address, and live updates pass between them through RabbitMQ
     # or Postgres.
     deploy:
       replicas: ${APP_REPLICAS:-1}
-    logging: *logging
-    depends_on:
-      postgres:
-        condition: service_healthy
-      app-data:
-        condition: service_completed_successfully
-      # With the garage profile: the bucket is ready before the app starts.
-      garage-setup:
-        condition: service_completed_successfully
-        required: false
-      rabbitmq:
-        condition: service_healthy
-        required: false
-      redis:
-        condition: service_healthy
-        required: false
+
+  # With COMPOSE_PROFILES=workers (and APP_ROLES=web): the texts, email,
+  # webhooks and GPS fixes, the timed jobs and the event outbox, in
+  # processes of their own (docs/deploy.md, "Separate processes").
+  worker:
+    <<: *kiflet
+    profiles: [workers]
+    command: ["serve", "--roles=worker,scheduler,relay"]
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
 
   # Mounts the app's volume once, before any instance does: Docker fills a
   # new volume from the image (its folders, owned by the app's user), and

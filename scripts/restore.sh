@@ -87,7 +87,8 @@ if [ "${CONFIRM:-}" != yes ]; then
   [ "$answer" = "$name" ] || { echo "Nothing changed."; exit 1; }
 fi
 
-compose stop app
+# The workers too, with the workers profile: nothing may write meanwhile.
+compose stop app worker
 # Into a new database, so nothing of the current one stays behind.
 compose exec -T postgres psql -U logistics -d postgres -q -v ON_ERROR_STOP=1 \
   -c 'DROP DATABASE IF EXISTS logistics WITH (FORCE)' \
@@ -104,5 +105,5 @@ if [ -n "$objects" ]; then
     docker compose --progress quiet --env-file /dev/null run --rm --no-deps -T \
     --user "$(id -u):$(id -g)" -v "$unpacked:/objects:ro" objects sync /objects "store:$store_bucket"
 fi
-compose start app
+compose start app worker
 echo "Restored. The app is starting again: \`docker compose ps\` shows it healthy once it is."

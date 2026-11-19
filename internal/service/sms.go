@@ -190,7 +190,14 @@ func redactIf(sensitive bool, body string) string {
 	return body
 }
 
+// kick wakes the sender, here or in the worker processes.
 func (s *SMSService) kick() {
+	s.poke()
+	s.wakeWorkers("sms")
+}
+
+// poke wakes this process's sender.
+func (s *SMSService) poke() {
 	select {
 	case s.wake <- struct{}{}:
 	default:

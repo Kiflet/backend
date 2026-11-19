@@ -100,7 +100,14 @@ func firstName(full string) string {
 	return full
 }
 
+// kick wakes the sender, here or in the worker processes.
 func (s *MailService) kick() {
+	s.poke()
+	s.wakeWorkers("mail")
+}
+
+// poke wakes this process's sender.
+func (s *MailService) poke() {
 	select {
 	case s.wake <- struct{}{}:
 	default:

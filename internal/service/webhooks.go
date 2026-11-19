@@ -458,7 +458,14 @@ func newUUID() pgtype.UUID {
 	return u
 }
 
+// kick wakes the sender, here or in the worker processes.
 func (s *WebhookService) kick() {
+	s.poke()
+	s.wakeWorkers("webhooks")
+}
+
+// poke wakes this process's sender.
+func (s *WebhookService) poke() {
 	select {
 	case s.wake <- struct{}{}:
 	default:
