@@ -51,7 +51,11 @@ What changed in each release, newest first.
   with the change) or after it commits. The bus writes the outbox, and
   webhooks are its first subscriber. Live updates followed: dashboards
   hear of every event in a shipment's history once it has committed,
-  notes and the customer's answers included.
+  notes and the customer's answers included. Then the texts: what
+  customers and drivers are sent when a load is booked, given to a driver,
+  moves, changes destination or is cancelled is decided by a subscriber
+  of the shipment's events, in the same transaction, instead of beside
+  each change. A test now covers the cancellation texts.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

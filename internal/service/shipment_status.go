@@ -166,10 +166,18 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 		}
 	}
 
+	// The receiver's text links to the page where they confirm receipt.
+	if ch.Status == model.StatusDelivered && out.ConfirmToken == nil {
+		token := randomToken(18)
+		if err := s.shipmentData.SetConfirmToken(ctx, q.Conn(), shipments.ConfirmToken{ID: out.ID, TenantID: out.TenantID, ConfirmToken: &token}); err == nil {
+			out.ConfirmToken = &token
+		}
+	}
+
 	s.event(ctx, q, after, a, out, shipmentEvent{
 		Type: "status_changed", From: cur.Status, To: ch.Status, Reason: reason, Note: note,
 		Lat: ch.Lat, Lng: ch.Lng, Public: true, ClientID: ch.ClientID, OccurredAt: occurred,
-		DriverID: out.DriverID,
+		DriverID: out.DriverID, firstDeparture: firstDeparture, recipient: ch.recipient,
 	})
 
 	who := a.Name
@@ -204,12 +212,6 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 				Message: fmt.Sprintf("%s reported %s delivered by SMS, without a signature or photos. Confirm with the customer.", who, out.TrackingNumber),
 			})
 		}
-		if out.ConfirmToken == nil {
-			token := randomToken(18)
-			if err := s.shipmentData.SetConfirmToken(ctx, q.Conn(), shipments.ConfirmToken{ID: out.ID, TenantID: out.TenantID, ConfirmToken: &token}); err == nil {
-				out.ConfirmToken = &token
-			}
-		}
 	}
 
 	tenant, err := s.tenant(ctx, q, out.TenantID)
@@ -226,9 +228,6 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 			Message: fmt.Sprintf("%s was delivered%s in %s.", out.TrackingNumber, to, place(out.DestinationCity, out.DestinationAddress)),
 		})
 	}
-	toReceiver, toCustomer := s.customerStatusText(tenant, out, ch.Status, firstDeparture, reason, ch.recipient)
-	s.notifyCustomer(ctx, q, after, tenant, out, toReceiver, toCustomer)
-
 	return out, nil
 }
 
@@ -342,24 +341,6 @@ func (s *ShipmentService) Cancel(ctx context.Context, a Actor, id pgtype.UUID, r
 			DriverID: cur.DriverID, VisibleToDriver: cur.DriverID.Valid,
 		})
 		_ = q.AcknowledgeShipmentAlerts(ctx, db.AcknowledgeShipmentAlertsParams{TenantID: a.TenantID, ShipmentID: id, AlertTypes: resolvedByCompletion})
-
-		tenant, err := s.tenant(ctx, q, a.TenantID)
-		if err != nil {
-			return err
-		}
-		if tenant.SmsOnCancelled {
-			body := s.customerCancelledText(tenant, out)
-			s.notifyCustomer(ctx, q, after, tenant, out, body, body)
-		}
-		if cur.DriverID.Valid && model.IsActiveStatus(cur.Status) {
-			if d, err := s.user(ctx, q, a.TenantID, cur.DriverID); err == nil && d.Phone != nil {
-				s.enqueueSMS(ctx, q, after, outboundSMS{
-					TenantID: a.TenantID, ShipmentID: id, Phone: *d.Phone, Purpose: PurposeDriverMessage,
-					Body: fmt.Sprintf("%s: shipment %s (%s) is CANCELLED: %s. Do not deliver it; call the office.",
-						tenant.Name, ShortRef(out.TrackingNumber), deref(out.DestinationCity), model.ReasonLabel(reason)),
-				})
-			}
-		}
 		return nil
 	})
 	return out, err

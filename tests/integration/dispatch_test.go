@@ -643,6 +643,17 @@ func TestCancelReasonsFollowTheRoad(t *testing.T) {
 	office.mustPost("/app/shipments/"+rolling+"/cancel", url.Values{"reason": {"recipient_refused"}})
 	office.mustPost("/app/shipments/"+waiting+"/cancel", url.Values{"reason": {"customer_request"}})
 
+	// The customer and the driver are told of each, the driver with why,
+	// in the order they were cancelled.
+	for _, c := range []struct{ id, why string }{{rolling, "Recipient refused delivery"}, {waiting, "Customer request"}} {
+		if n := scalar[int64](t, `SELECT count(*) FROM sms_messages WHERE shipment_id = $1 AND body LIKE '%has been cancelled%'`, c.id); n != 1 {
+			t.Errorf("customer texted %d times of the cancellation, want 1", n)
+		}
+		if got := e.received("sms", phone, "CANCELLED: "+c.why).Body; !strings.Contains(got, "Do not deliver it") {
+			t.Errorf("the driver's text: %q", got)
+		}
+	}
+
 	p := office.get("/app/reports")
 	if !strings.Contains(p.Body, "Recipient refused delivery") || !strings.Contains(p.Body, "Customer request") {
 		t.Error("reports should count cancellations by reason")

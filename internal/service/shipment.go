@@ -386,15 +386,7 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 
 		s.event(ctx, q, after, a, out, shipmentEvent{Type: "created", To: model.StatusPending, Public: true})
 		if driver != nil {
-			s.event(ctx, q, after, a, out, shipmentEvent{Type: "assigned", To: model.StatusAssigned, DriverID: driver.ID, Public: true})
-		}
-
-		if tenant.SmsOnCreated {
-			body := s.customerCreatedText(tenant, out)
-			s.notifyCustomer(ctx, q, after, tenant, out, body, body)
-		}
-		if driver != nil && tenant.SmsDriverOnAssign {
-			s.notifyDriverAssigned(ctx, q, after, tenant, out, *driver)
+			s.event(ctx, q, after, a, out, shipmentEvent{Type: "assigned", To: model.StatusAssigned, DriverID: driver.ID, Public: true, newDriver: true})
 		}
 		return nil
 	})
@@ -483,35 +475,9 @@ func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, i
 			ev.Note = "Shipment details updated: " + strings.Join(changed, ", ")
 		}
 		s.event(ctx, q, after, a, out, ev)
-		// A new drop-off matters enough to text as well (FR-011 AC-011.4):
-		// the driver may be on the road with the app closed.
-		if cur.DriverID.Valid && contains(changed, "destination") {
-			if err := s.textNewDestination(ctx, q, after, out); err != nil {
-				return err
-			}
-		}
 		return nil
 	})
 	return out, err
-}
-
-// textNewDestination tells the assigned driver by SMS where a shipment now
-// goes.
-func (s *ShipmentService) textNewDestination(ctx context.Context, q *db.Queries, after *afterCommit, sh shipments.Shipment) error {
-	d, err := s.user(ctx, q, sh.TenantID, sh.DriverID)
-	if err != nil || d.Phone == nil {
-		return nil
-	}
-	t, err := s.tenant(ctx, q, sh.TenantID)
-	if err != nil {
-		return err
-	}
-	s.enqueueSMS(ctx, q, after, outboundSMS{
-		TenantID: sh.TenantID, ShipmentID: sh.ID, Phone: *d.Phone, Purpose: PurposeDriverMessage,
-		Body: fmt.Sprintf("%s: shipment %s now goes to %s. %s.",
-			t.Name, ShortRef(sh.TrackingNumber), place(sh.DestinationCity, sh.DestinationAddress), meet(sh)),
-	})
-	return nil
 }
 
 func changedFields(a, b shipments.Shipment) []string {
@@ -601,7 +567,10 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 			return err
 		}
 
-		ev := shipmentEvent{Type: "assigned", From: cur.Status, To: status, DriverID: driver.ID, Public: cur.Status == model.StatusPending}
+		ev := shipmentEvent{
+			Type: "assigned", From: cur.Status, To: status, DriverID: driver.ID, Public: cur.Status == model.StatusPending,
+			newDriver: cur.DriverID != driver.ID,
+		}
 		if cur.DriverID.Valid && cur.DriverID != driver.ID {
 			ev.PreviousDriverID = cur.DriverID
 		}
@@ -609,18 +578,6 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 			ev.Details = map[string]any{"vehicle": v.PlateNumber}
 		}
 		s.event(ctx, q, after, a, out, ev)
-
-		if cur.DriverID != driver.ID && tenant.SmsDriverOnAssign {
-			s.notifyDriverAssigned(ctx, q, after, tenant, out, driver)
-		}
-		if ev.PreviousDriverID.Valid && model.IsOnRoad(cur.Status) {
-			if prev, err := s.user(ctx, q, a.TenantID, cur.DriverID); err == nil && prev.Phone != nil {
-				s.enqueueSMS(ctx, q, after, outboundSMS{
-					TenantID: a.TenantID, ShipmentID: id, Phone: *prev.Phone, Purpose: PurposeDriverMessage,
-					Body: fmt.Sprintf("%s: shipment %s has been handed to %s.", tenant.Name, ShortRef(out.TrackingNumber), driver.FullName),
-				})
-			}
-		}
 		return nil
 	})
 	return out, err
@@ -1019,6 +976,11 @@ type shipmentEvent struct {
 	Details          map[string]any
 	ClientID         string
 	OccurredAt       time.Time
+
+	// Not kept in the history; for the subscribers that text people.
+	newDriver      bool   // assigned: the driver is new to the load
+	firstDeparture bool   // status_changed: the load's first move to in transit
+	recipient      string // status_changed: who took delivery, from the proof
 }
 
 // event appends to a shipment's timeline. It reports false when the event is
