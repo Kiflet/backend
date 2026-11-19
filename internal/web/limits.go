@@ -1,7 +1,10 @@
 package web
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/httprate"
@@ -35,4 +38,21 @@ func (s *Server) limit(name string, n int, key httprate.KeyFunc) func(http.Handl
 		}))
 	}
 	return httprate.LimitBy(n, time.Minute, key, opts...)
+}
+
+// driverRequestsPerMinute is one driver's allowance on the driver app's
+// API: a phone syncs about once a minute, and more often only to send
+// what it saved while offline.
+const driverRequestsPerMinute = 300
+
+// tokenKey keys a limit by the bearer token, hashed so that no token is
+// kept in Redis: one driver's phone, from whatever address. A request
+// without one is keyed by its address, and refused by requireDriver.
+func tokenKey(r *http.Request) (string, error) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || token == "" {
+		return "address:" + remoteIP(r), nil
+	}
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:16]), nil
 }

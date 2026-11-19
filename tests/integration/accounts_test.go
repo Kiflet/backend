@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"github.com/kiflet/backend/internal/service"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -515,4 +516,37 @@ func TestTeamPage(t *testing.T) {
 	if p := office.get("/app/team?q=kidist"); !strings.Contains(p.Body, "No one matches “kidist”") || !strings.Contains(p.Body, "Kidist Abera") || strings.Contains(p.Body, "Former staff") {
 		t.Error("the search should narrow the list to Kidist")
 	}
+}
+
+// TestDriversBehindOneAddress: the driver app's API counts each driver's
+// requests, not the address's, since a depot's phones may all reach the
+// internet through one carrier address.
+func TestDriversBehindOneAddress(t *testing.T) {
+	withinOneMinute(t, func(e *env) string {
+		office := e.company("Shared Address Freight")
+		var phones []*driverApp
+		for _, name := range []string{"Hana Girma", "Abebe Kebede", "Tigist Haile"} {
+			_, phone, pin := office.addDriver(name)
+			phones = append(phones, e.signIn(phone, pin))
+		}
+		// 870 syncs in a minute from one address, more than the address's
+		// general allowance of 600, and close to each phone's own of 300
+		// (signing in made a request or two).
+		for i := range 290 {
+			for n, d := range phones {
+				if _, code := d.sync(service.SyncRequest{}); code != http.StatusOK {
+					return fmt.Sprintf("sync %d from phone %d: status %d", i+1, n+1, code)
+				}
+			}
+		}
+		// One phone going on runs into its own allowance.
+		for i := range 11 {
+			if _, code := phones[0].sync(service.SyncRequest{}); code == http.StatusTooManyRequests {
+				return ""
+			} else if code != http.StatusOK {
+				return fmt.Sprintf("sync %d more: status %d", i+1, code)
+			}
+		}
+		return "a phone's 301st request in a minute was taken, want 429"
+	})
 }

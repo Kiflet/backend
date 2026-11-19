@@ -140,6 +140,13 @@ type Config struct {
 	// resets, track by phone) the platform texts in 24 hours at most; 0
 	// means no limit.
 	CodesPerDay int
+	// DriverAPIPerAddress is how many requests a minute the driver app's
+	// API takes from one address. Each driver has an allowance of their
+	// own; this only bounds what one address can send with tokens that
+	// aren't good, and is set high because Ethio telecom puts many phones
+	// behind one address. 0 means no limit, for a load test from one
+	// machine.
+	DriverAPIPerAddress int
 
 	// AllowMockProviders lets a production deployment start with stand-in
 	// SMS, email or payments, for a demo or staging site.
@@ -281,6 +288,12 @@ func Load() (*Config, error) {
 		return nil, errors.New("OTP_DAILY_BUDGET must be a number of codes, or 0 for no limit")
 	}
 	c.CodesPerDay = codes
+
+	perAddress, err := strconv.Atoi(getEnv("DRIVER_API_PER_ADDRESS", "12000"))
+	if err != nil || perAddress < 0 {
+		return nil, errors.New("DRIVER_API_PER_ADDRESS must be a number of requests a minute, or 0 for no limit")
+	}
+	c.DriverAPIPerAddress = perAddress
 
 	tz, err := time.LoadLocation(getEnv("APP_TIMEZONE", "Africa/Addis_Ababa"))
 	if err != nil {
