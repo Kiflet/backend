@@ -72,7 +72,6 @@ type Querier interface {
 	ClaimWebhooksByIDs(ctx context.Context, ids []pgtype.UUID) ([]WebhookDelivery, error)
 	ClearVehicleFromDrivers(ctx context.Context, arg ClearVehicleFromDriversParams) error
 	CountActiveAPIKeys(ctx context.Context, tenantID pgtype.UUID) (int64, error)
-	CountActiveDriversByTenant(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	CountActiveShipmentsByDriver(ctx context.Context, arg CountActiveShipmentsByDriverParams) (int64, error)
 	CountAlerts(ctx context.Context, arg CountAlertsParams) (int64, error)
 	// Verification codes queued or sent across the platform, for the daily
@@ -93,7 +92,6 @@ type Querier interface {
 	CountShipments(ctx context.Context, arg CountShipmentsParams) (int64, error)
 	CountShipmentsByStatus(ctx context.Context, tenantID pgtype.UUID) ([]CountShipmentsByStatusRow, error)
 	CountShipmentsCreatedSince(ctx context.Context, arg CountShipmentsCreatedSinceParams) (int64, error)
-	CountStaffByTenant(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	// A company's texts queued or sent since a time, in SMS parts, for its
 	// limits.
 	CountTenantSMSSegmentsSince(ctx context.Context, arg CountTenantSMSSegmentsSinceParams) (int64, error)
@@ -130,7 +128,6 @@ type Querier interface {
 	// its partition key) it is what a retried batch conflicts on, so replaying
 	// a batch whose response was lost cannot duplicate telemetry.
 	CreateTrackingEvents(ctx context.Context, arg CreateTrackingEventsParams) error
-	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVehicle(ctx context.Context, arg CreateVehicleParams) (Vehicle, error)
 	// Webhooks (FR-047): a company's endpoints, and the outbox of messages to
 	// them.
@@ -230,9 +227,6 @@ type Querier interface {
 	GetTenantForUpdate(ctx context.Context, id pgtype.UUID) (Tenant, error)
 	// Only for the platform admin, who answers every company.
 	GetTicketForPlatform(ctx context.Context, id pgtype.UUID) (GetTicketForPlatformRow, error)
-	GetUserByEmail(ctx context.Context, email string) (User, error)
-	GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error)
-	GetUserByPhone(ctx context.Context, phone *string) (User, error)
 	GetVehicleByID(ctx context.Context, arg GetVehicleByIDParams) (Vehicle, error)
 	// What a vehicle carries already: the weight of its active shipments other
 	// than this one, and another driver on any of them.
@@ -241,7 +235,6 @@ type Querier interface {
 	// Where a claimed message goes, read as it is sent: a changed address or
 	// secret applies to messages still waiting.
 	GetWebhookTarget(ctx context.Context, id pgtype.UUID) (GetWebhookTargetRow, error)
-	IncrementFailedLoginAttempts(ctx context.Context, id pgtype.UUID) (User, error)
 	// Written in the transaction of the change it tells of.
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error
 	IsPhoneOptedOut(ctx context.Context, phone string) (bool, error)
@@ -259,7 +252,6 @@ type Querier interface {
 	ListAlertSMSRecipients(ctx context.Context, arg ListAlertSMSRecipientsParams) ([]ListAlertSMSRecipientsRow, error)
 	ListAlerts(ctx context.Context, arg ListAlertsParams) ([]ListAlertsRow, error)
 	ListAllInvoices(ctx context.Context, arg ListAllInvoicesParams) ([]ListAllInvoicesRow, error)
-	ListAllUsersForPlatform(ctx context.Context, tenantID pgtype.UUID) ([]ListAllUsersForPlatformRow, error)
 	// The company's active admins with an email address: invoices and billing
 	// notices go to those who confirmed theirs.
 	ListBillingContacts(ctx context.Context, tenantID pgtype.UUID) ([]ListBillingContactsRow, error)
@@ -390,7 +382,6 @@ type Querier interface {
 	// Trials ending before $1 whose end hasn't been announced yet. The episode
 	// is the end time, so an extended trial is announced again.
 	ListTrialsEnding(ctx context.Context, trialEndsAt pgtype.Timestamptz) ([]Tenant, error)
-	ListUsersByTenant(ctx context.Context, arg ListUsersByTenantParams) ([]User, error)
 	ListVehiclesWithDrivers(ctx context.Context, tenantID pgtype.UUID) ([]ListVehiclesWithDriversRow, error)
 	ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]ListWebhookDeliveriesRow, error)
 	ListWebhookEndpoints(ctx context.Context, tenantID pgtype.UUID) ([]ListWebhookEndpointsRow, error)
@@ -400,9 +391,6 @@ type Querier interface {
 	// A provider's notification carries only our reference. References are
 	// random and unique, so this finds one company's payment.
 	LockPaymentByReference(ctx context.Context, reference string) (Payment, error)
-	// Locking clears the count: when the lock expires the account starts again
-	// from zero, instead of one mistype locking it at once.
-	LockUserAccount(ctx context.Context, arg LockUserAccountParams) error
 	// Makes the partitions of the days ahead, and those of recent days whose
 	// positions wait in the default partition. Returns how many it made.
 	MaintainTrackingPartitions(ctx context.Context, arg MaintainTrackingPartitionsParams) (int32, error)
@@ -448,7 +436,6 @@ type Querier interface {
 	// undelivered may still arrive when the network tries again. The error is
 	// the report's reason, none once delivered.
 	RecordSMSDelivery(ctx context.Context, arg RecordSMSDeliveryParams) (int64, error)
-	RecordSuccessfulLogin(ctx context.Context, id pgtype.UUID) error
 	// As ReleaseSMS.
 	ReleaseEmails(ctx context.Context, ids []pgtype.UUID) error
 	ReleaseJob(ctx context.Context, name string) error
@@ -481,8 +468,6 @@ type Querier interface {
 	RequeueStuckWebhooks(ctx context.Context) error
 	// Sends a message again, from the start of its retries.
 	ResendWebhook(ctx context.Context, arg ResendWebhookParams) (WebhookDelivery, error)
-	// Following a reset link proves the address, and ends any lockout.
-	ResetUserPassword(ctx context.Context, arg ResetUserPasswordParams) error
 	ReviewPOD(ctx context.Context, arg ReviewPODParams) error
 	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (ApiKey, error)
 	// Hours from departure to delivery for recent deliveries between two cities.
@@ -506,10 +491,10 @@ type Querier interface {
 	// Keeps the driver's newest position for the fleet map. An older fix,
 	// from a phone sending what it saved while offline, changes nothing.
 	SetDriverPosition(ctx context.Context, arg SetDriverPositionParams) error
+	// The drivers' profile: their vehicle, licence and app settings, and the
+	// drivers page. These columns of users are the fleet module's
+	// (docs/architecture.md, section 4), and move with it.
 	SetDriverVehicle(ctx context.Context, arg SetDriverVehicleParams) error
-	// Confirming an address and resetting a password from a link (the
-	// identity module's links), until users move into it.
-	SetEmailVerified(ctx context.Context, arg SetEmailVerifiedParams) (int64, error)
 	SetEnterpriseOffer(ctx context.Context, arg SetEnterpriseOfferParams) error
 	// Files an inbound message under the company and shipment it turned out to
 	// be about, once the sender is known.
@@ -537,27 +522,18 @@ type Querier interface {
 	SetShipmentStatusDetail(ctx context.Context, arg SetShipmentStatusDetailParams) (Shipment, error)
 	SetSupportTicketStatus(ctx context.Context, arg SetSupportTicketStatusParams) error
 	SetTrialEnd(ctx context.Context, arg SetTrialEndParams) error
-	SetUserActive(ctx context.Context, arg SetUserActiveParams) error
-	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
 	SetWebhookEndpointActive(ctx context.Context, arg SetWebhookEndpointActiveParams) (WebhookEndpoint, error)
 	SetWebhookSecret(ctx context.Context, arg SetWebhookSecretParams) (WebhookEndpoint, error)
 	SumPaidSince(ctx context.Context, completedAt pgtype.Timestamptz) (int64, error)
 	TenantForDeletion(ctx context.Context, id pgtype.UUID) (TenantForDeletionRow, error)
 	// At most one write a minute, however busy the key.
 	TouchAPIKey(ctx context.Context, id pgtype.UUID) error
-	UpdatePIN(ctx context.Context, arg UpdatePINParams) error
-	UpdatePassword(ctx context.Context, arg UpdatePasswordParams) error
 	// Edits replace every editable field; the form always submits all of them.
 	UpdateShipmentDetails(ctx context.Context, arg UpdateShipmentDetailsParams) (Shipment, error)
-	// A changed email address has to be confirmed again.
-	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 	UpdateVehicle(ctx context.Context, arg UpdateVehicleParams) (Vehicle, error)
 	UpdateWebhookEndpoint(ctx context.Context, arg UpdateWebhookEndpointParams) (WebhookEndpoint, error)
 	UpsertAlertRules(ctx context.Context, arg UpsertAlertRulesParams) error
 	UpsertSyncMetadata(ctx context.Context, arg UpsertSyncMetadataParams) error
-	// Names of the people in the platform's audit log, from every company:
-	// for the platform admin only (UserService.Names checks).
-	UserNamesByIDs(ctx context.Context, ids []pgtype.UUID) ([]UserNamesByIDsRow, error)
 	VoidInvoice(ctx context.Context, arg VoidInvoiceParams) (int64, error)
 	// For the billing job, across companies: a plan invoice left unpaid past
 	// its due date lapses, since its price was worked out for that moment.

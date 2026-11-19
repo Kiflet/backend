@@ -43,7 +43,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string, ci
 	if addr, err := mail.ParseAddress(email); err != nil || addr.Address != email {
 		return invalid("email", "Enter the email address you sign in with.")
 	}
-	u, err := s.q.GetUserByEmail(ctx, email)
+	u, err := s.userByEmail(ctx, s.q, email)
 	if isNoRows(err) {
 		return nil
 	}
@@ -119,7 +119,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string,
 		if !company.IsActive {
 			return s.suspended()
 		}
-		if err := q.ResetUserPassword(ctx, db.ResetUserPasswordParams{ID: t.UserID, TenantID: t.TenantID, PasswordHash: &h}); err != nil {
+		if err := s.users.ResetPassword(ctx, q.Conn(), t.TenantID, t.UserID, h); err != nil {
 			return err
 		}
 		if err := s.links.ExpireAll(ctx, q.Conn(), t.TenantID, t.UserID, linkPasswordReset); err != nil {
@@ -128,7 +128,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string,
 		if err := s.sessions.EndAll(ctx, q.Conn(), t.UserID); err != nil {
 			return err
 		}
-		if u, err = q.GetUserByID(ctx, db.GetUserByIDParams{ID: t.UserID, TenantID: t.TenantID}); err != nil {
+		if u, err = s.user(ctx, q, t.TenantID, t.UserID); err != nil {
 			return err
 		}
 		s.audit(ctx, q, userActor(u, ci), "password_reset", "user", u.ID, nil, nil)
@@ -150,7 +150,7 @@ func (s *AuthService) RequestPasswordCode(ctx context.Context, rawPhone string) 
 	if err != nil {
 		return "", invalid("phone", err.Error())
 	}
-	u, err := s.q.GetUserByPhone(ctx, &p)
+	u, err := s.userByPhone(ctx, s.q, &p)
 	if err != nil && !isNoRows(err) {
 		return "", err
 	}
@@ -185,7 +185,7 @@ func (s *AuthService) ResetPasswordByCode(ctx context.Context, rawPhone, code, p
 		if err := s.consumeCode(ctx, q, codeID); err != nil {
 			return err
 		}
-		if u, err = q.GetUserByPhone(ctx, &p); isNoRows(err) {
+		if u, err = s.userByPhone(ctx, q, &p); isNoRows(err) {
 			return errCodeInvalid
 		} else if err != nil {
 			return err
@@ -202,7 +202,7 @@ func (s *AuthService) ResetPasswordByCode(ctx context.Context, rawPhone, code, p
 				return s.suspended()
 			}
 		}
-		if err := q.UpdatePassword(ctx, db.UpdatePasswordParams{ID: u.ID, PasswordHash: &h, PasswordResetRequired: false}); err != nil {
+		if err := s.users.SetPassword(ctx, q.Conn(), u.ID, h, false); err != nil {
 			return err
 		}
 		if err := s.sessions.EndAll(ctx, q.Conn(), u.ID); err != nil {
@@ -220,7 +220,7 @@ func (s *AuthService) ResetPasswordByCode(ctx context.Context, rawPhone, code, p
 
 // ResendVerification sends the caller a new link to confirm their address.
 func (s *AuthService) ResendVerification(ctx context.Context, p *Principal) error {
-	u, err := s.q.GetUserByID(ctx, db.GetUserByIDParams{ID: p.UserID, TenantID: p.TenantID})
+	u, err := s.user(ctx, s.q, p.TenantID, p.UserID)
 	if err != nil {
 		return err
 	}
@@ -250,11 +250,11 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string, ci ClientIn
 	if err != nil {
 		return "", err
 	}
-	n, err := s.q.SetEmailVerified(ctx, db.SetEmailVerifiedParams{ID: t.UserID, TenantID: t.TenantID, Email: &t.Email})
+	confirmed, err := s.users.VerifyEmail(ctx, s.q.Conn(), t.TenantID, t.UserID, t.Email)
 	if err != nil {
 		return "", err
 	}
-	if n > 0 {
+	if confirmed {
 		s.audit(ctx, s.q, Actor{UserID: t.UserID, TenantID: t.TenantID, Name: t.FullName, Role: t.Role, IP: ci.IP, UserAgent: ci.UserAgent},
 			"email_verified", "user", t.UserID, nil, map[string]any{"email": t.Email})
 	}

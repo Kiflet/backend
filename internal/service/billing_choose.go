@@ -46,7 +46,7 @@ func (s *BillingService) ChoosePlan(ctx context.Context, p *Principal, code, cyc
 		if !fresh && t.RenewalCancelledAt.Valid {
 			return conflict(fmt.Sprintf("Your plan ends on %s and won't renew. Turn renewal back on first, then change your plan.", s.date(t.PeriodEnd.Time)))
 		}
-		drivers, err := q.CountActiveDriversByTenant(ctx, t.ID)
+		drivers, err := s.users.CountDrivers(ctx, q.Conn(), t.ID)
 		if err != nil {
 			return err
 		}

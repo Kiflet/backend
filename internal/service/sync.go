@@ -596,7 +596,7 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 		s.cutCursor(resp, msgSince, all[len(all)-1].CreatedAt.Time)
 	}
 
-	u, err := s.q.GetUserByID(ctx, db.GetUserByIDParams{ID: p.UserID, TenantID: p.TenantID})
+	u, err := s.user(ctx, s.q, p.TenantID, p.UserID)
 	if err != nil {
 		return err
 	}

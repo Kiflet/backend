@@ -258,9 +258,7 @@ throughout; only imports move.
       `http/` (still rendering templates for now).
    5. `make test test-integration`; one PR per module.
 
-   Done: audit, tenancy; identity in part (sessions, roles, `Principal`
-   and `Actor`, verification codes, email links, pending sign-ups; `users`
-   is next). How it went, for the rest:
+   Done: audit, tenancy, identity. How it went, for the rest:
    - **The server-rendered handlers stay in `internal/web`.** Phase 4
      replaces those pages with Kiflet/web and phase 6 deletes them, so
      moving them would be work thrown away. A module's `http/` holds the
@@ -306,6 +304,15 @@ throughout; only imports move.
      messaging's texts, as a function it runs where it ran before. An email
      link no longer joins `tenants`: whether the company is active comes
      from tenancy.
+   - **A table may have columns of two modules:** `users` is identity's,
+     but its driver profile columns (`vehicle_id`, `licence_expires_on`,
+     the app settings) are fleet's, as `docs/architecture.md` has it.
+     Their queries wait in `sqlc/queries/drivers.sql` for fleet.
+   - **What still reaches into identity's tables**, to go through
+     `identity.Users` when that code moves: joins on `users` for names
+     and drivers in `alerts`, `billing`, `dashboard`, `pod`, `reports`,
+     `shipments`, `tracking`, `vehicles`, `platform` and `driver` queries;
+     the company's deletion and anonymising people (`data.sql`).
    - `internal/service` keeps a thin service where the dashboard needs a
      check the module can't make yet (the platform admin's), until the
      module that owns it moves.

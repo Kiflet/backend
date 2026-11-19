@@ -175,7 +175,7 @@ func (s *TenantService) CompleteSignup(ctx context.Context, token, code string, 
 		if err := s.consumeCode(ctx, q, codeID); err != nil {
 			return err
 		}
-		if err := signupClash(ctx, q, ps.Email, ps.Phone); err != nil {
+		if err := s.signupClash(ctx, q, ps.Email, ps.Phone); err != nil {
 			return err
 		}
 		admin, err = s.createCompany(ctx, q, newCompany{
@@ -226,7 +226,7 @@ func (s *TenantService) CreateCompany(ctx context.Context, in SignupInput, ci Cl
 		if admin, err = s.createCompany(ctx, q, c, ci); err != nil {
 			return err
 		}
-		_, err = q.SetEmailVerified(ctx, db.SetEmailVerifiedParams{ID: admin.ID, TenantID: admin.TenantID, Email: admin.Email})
+		_, err = s.users.VerifyEmail(ctx, q.Conn(), admin.TenantID, admin.ID, deref(admin.Email))
 		return err
 	})
 	if err != nil {
@@ -238,14 +238,14 @@ func (s *TenantService) CreateCompany(ctx context.Context, in SignupInput, ci Cl
 // signupClash refuses a sign-up whose email or phone already has an
 // account. Told only after the code is checked, to the holder of the phone,
 // on a page without those fields: so the error names no field.
-func signupClash(ctx context.Context, q *db.Queries, email, phone string) error {
-	if _, err := q.GetUserByEmail(ctx, email); err == nil {
+func (c *core) signupClash(ctx context.Context, q *db.Queries, email, phone string) error {
+	if _, err := c.userByEmail(ctx, q, email); err == nil {
 		return &Error{Kind: KindInvalid, Message: "Someone is already registered with this email address. Sign in, or reset your password from the sign-in page. " +
 			"To register another company, start again with a different address."}
 	} else if !isNoRows(err) {
 		return err
 	}
-	if _, err := q.GetUserByPhone(ctx, &phone); err == nil {
+	if _, err := c.userByPhone(ctx, q, &phone); err == nil {
 		return &Error{Kind: KindInvalid, Message: "Someone is already registered with this phone number. Sign in, or start again with a different number."}
 	} else if !isNoRows(err) {
 		return err
@@ -265,7 +265,7 @@ func (s *TenantService) createCompany(ctx context.Context, q *db.Queries, c newC
 		return db.User{}, err
 	}
 	tenant := db.Tenant(created)
-	admin, err := q.CreateUser(ctx, db.CreateUserParams{
+	admin, err := s.createUser(ctx, q, identity.NewUser{
 		TenantID: tenant.ID, Role: model.RoleAdmin, FullName: c.admin.name,
 		Phone: c.admin.phone, Email: c.admin.email, PasswordHash: &c.passwordHash,
 	})
@@ -327,13 +327,13 @@ func (s *TenantService) Usage(ctx context.Context, tenantID pgtype.UUID) (*Usage
 	if u.Plan.Code == "" {
 		u.Plan = model.Plan{Code: t.Plan, Name: t.Plan, MaxDrivers: t.MaxDrivers}
 	}
-	if u.ActiveDrivers, err = s.q.CountActiveDriversByTenant(ctx, tenantID); err != nil {
+	if u.ActiveDrivers, err = s.users.CountDrivers(ctx, s.q.Conn(), tenantID); err != nil {
 		return nil, err
 	}
 	if u.Vehicles, err = s.q.CountVehiclesByTenant(ctx, tenantID); err != nil {
 		return nil, err
 	}
-	if u.Staff, err = s.q.CountStaffByTenant(ctx, tenantID); err != nil {
+	if u.Staff, err = s.users.CountStaff(ctx, s.q.Conn(), tenantID); err != nil {
 		return nil, err
 	}
 	if u.ShipmentsThisMonth, err = s.q.CountShipmentsCreatedSince(ctx, db.CountShipmentsCreatedSinceParams{TenantID: tenantID, CreatedAt: toTimestamp(month)}); err != nil {

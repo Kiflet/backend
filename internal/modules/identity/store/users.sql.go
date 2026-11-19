@@ -3,27 +3,13 @@
 //   sqlc v1.30.0
 // source: users.sql
 
-package db
+package store
 
 import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-const clearVehicleFromDrivers = `-- name: ClearVehicleFromDrivers :exec
-UPDATE users SET vehicle_id = NULL WHERE vehicle_id = $1 AND tenant_id = $2
-`
-
-type ClearVehicleFromDriversParams struct {
-	VehicleID pgtype.UUID `db:"vehicle_id" json:"vehicle_id"`
-	TenantID  pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-}
-
-func (q *Queries) ClearVehicleFromDrivers(ctx context.Context, arg ClearVehicleFromDriversParams) error {
-	_, err := q.db.Exec(ctx, clearVehicleFromDrivers, arg.VehicleID, arg.TenantID)
-	return err
-}
 
 const countActiveDriversByTenant = `-- name: CountActiveDriversByTenant :one
 SELECT COUNT(*) FROM users WHERE tenant_id = $1 AND role = 'driver' AND is_active
@@ -149,6 +135,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
+
 SELECT id, tenant_id, role, full_name, phone, email, password_hash, pin_hash, is_active, created_at, updated_at, failed_login_attempts, locked_until, password_reset_required, vehicle_id, last_login_at, email_verified_at, alert_emails, language, app_battery_saver, app_vibrate, anonymised_at, alerts_seen_at, licence_expires_on, alert_sms FROM users
 WHERE id = $1 AND tenant_id = $2
 `
@@ -158,6 +145,9 @@ type GetUserByIDParams struct {
 	TenantID pgtype.UUID `db:"tenant_id" json:"tenant_id"`
 }
 
+// The identity module's people: who they are, their role and how they
+// sign in. The driver profile columns (vehicle_id, licence_expires_on and
+// the app settings) are fleet's: sqlc/queries/drivers.sql until it moves.
 func (q *Queries) GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByID, arg.ID, arg.TenantID)
 	var i User
@@ -269,183 +259,6 @@ func (q *Queries) IncrementFailedLoginAttempts(ctx context.Context, id pgtype.UU
 	return i, err
 }
 
-const listAllUsersForPlatform = `-- name: ListAllUsersForPlatform :many
-SELECT u.id, u.tenant_id, u.role, u.full_name, u.email, u.phone, u.is_active
-FROM users u
-WHERE u.tenant_id = $1
-ORDER BY u.role, u.full_name
-`
-
-type ListAllUsersForPlatformRow struct {
-	ID       pgtype.UUID `db:"id" json:"id"`
-	TenantID pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-	Role     string      `db:"role" json:"role"`
-	FullName string      `db:"full_name" json:"full_name"`
-	Email    *string     `db:"email" json:"email"`
-	Phone    *string     `db:"phone" json:"phone"`
-	IsActive bool        `db:"is_active" json:"is_active"`
-}
-
-func (q *Queries) ListAllUsersForPlatform(ctx context.Context, tenantID pgtype.UUID) ([]ListAllUsersForPlatformRow, error) {
-	rows, err := q.db.Query(ctx, listAllUsersForPlatform, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListAllUsersForPlatformRow{}
-	for rows.Next() {
-		var i ListAllUsersForPlatformRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.TenantID,
-			&i.Role,
-			&i.FullName,
-			&i.Email,
-			&i.Phone,
-			&i.IsActive,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDriversWithStatus = `-- name: ListDriversWithStatus :many
-SELECT u.id, u.full_name, u.phone, u.is_active, u.vehicle_id, u.created_at, u.licence_expires_on,
-       v.plate_number AS vehicle_plate,
-       sm.last_sync_at, sm.battery_level, sm.tracking_paused, sm.app_version, sm.storage_used_kb,
-       COALESCE(sm.power_saving, false)::bool AS power_saving,
-       -- On duty (FR-031): carrying a load that has left, or with the app
-       -- open and sharing location in the last half hour.
-       -- A driver who never synced has no sync row, hence the COALESCEs.
-       COALESCE(u.is_active AND (
-           EXISTS (SELECT 1 FROM shipments s
-                   WHERE s.driver_id = u.id AND s.status IN ('in_transit', 'delayed', 'arrived', 'issue'))
-           OR (COALESCE(sm.last_sync_at > NOW() - INTERVAL '30 minutes', false) AND NOT COALESCE(sm.tracking_paused, false))
-       ), false)::bool AS on_duty,
-       (SELECT COUNT(*) FROM shipments s
-        WHERE s.driver_id = u.id
-          AND s.status IN ('assigned', 'in_transit', 'delayed', 'arrived', 'issue'))::bigint AS active_shipments,
-       (SELECT COUNT(*) FROM shipments s
-        WHERE s.driver_id = u.id AND s.status = 'delivered'
-          AND s.actual_delivery >= date_trunc('month', NOW()))::bigint AS delivered_this_month,
-       -- The load they carry now: one on the road before one waiting.
-       COALESCE(cur.tracking_number, '')::text AS current_tracking,
-       COALESCE(cur.status, '')::text AS current_status,
-       cur.id AS current_shipment_id,
-       COALESCE(ST_Y(dp.coordinates), 0)::float8 AS position_lat,
-       COALESCE(ST_X(dp.coordinates), 0)::float8 AS position_lng,
-       dp.recorded_at AS position_at
-FROM users u
-LEFT JOIN vehicles v ON v.id = u.vehicle_id
-LEFT JOIN sync_metadata sm ON sm.driver_id = u.id
-LEFT JOIN driver_positions dp ON dp.driver_id = u.id AND dp.tenant_id = u.tenant_id
-LEFT JOIN LATERAL (
-    SELECT s.id, s.tracking_number, s.status FROM shipments s
-    WHERE s.driver_id = u.id AND s.tenant_id = u.tenant_id
-      AND s.status IN ('assigned', 'in_transit', 'delayed', 'arrived', 'issue')
-    ORDER BY s.status = 'assigned', s.updated_at DESC
-    LIMIT 1
-) cur ON true
-WHERE u.tenant_id = $1
-  AND u.role = 'driver'
-  AND (NOT $2::bool OR u.is_active)
-  AND ($3::uuid IS NULL OR u.id = $3::uuid)
-  AND ($4::text IS NULL
-       OR u.full_name ILIKE '%' || $4::text || '%'
-       OR u.phone ILIKE '%' || $4::text || '%')
-ORDER BY u.is_active DESC, u.full_name
-`
-
-type ListDriversWithStatusParams struct {
-	TenantID   pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-	ActiveOnly bool        `db:"active_only" json:"active_only"`
-	DriverID   pgtype.UUID `db:"driver_id" json:"driver_id"`
-	Query      *string     `db:"query" json:"query"`
-}
-
-type ListDriversWithStatusRow struct {
-	ID                 pgtype.UUID        `db:"id" json:"id"`
-	FullName           string             `db:"full_name" json:"full_name"`
-	Phone              *string            `db:"phone" json:"phone"`
-	IsActive           bool               `db:"is_active" json:"is_active"`
-	VehicleID          pgtype.UUID        `db:"vehicle_id" json:"vehicle_id"`
-	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	LicenceExpiresOn   pgtype.Date        `db:"licence_expires_on" json:"licence_expires_on"`
-	VehiclePlate       *string            `db:"vehicle_plate" json:"vehicle_plate"`
-	LastSyncAt         pgtype.Timestamptz `db:"last_sync_at" json:"last_sync_at"`
-	BatteryLevel       *int32             `db:"battery_level" json:"battery_level"`
-	TrackingPaused     *bool              `db:"tracking_paused" json:"tracking_paused"`
-	AppVersion         *string            `db:"app_version" json:"app_version"`
-	StorageUsedKb      *int32             `db:"storage_used_kb" json:"storage_used_kb"`
-	PowerSaving        bool               `db:"power_saving" json:"power_saving"`
-	OnDuty             bool               `db:"on_duty" json:"on_duty"`
-	ActiveShipments    int64              `db:"active_shipments" json:"active_shipments"`
-	DeliveredThisMonth int64              `db:"delivered_this_month" json:"delivered_this_month"`
-	CurrentTracking    string             `db:"current_tracking" json:"current_tracking"`
-	CurrentStatus      string             `db:"current_status" json:"current_status"`
-	CurrentShipmentID  pgtype.UUID        `db:"current_shipment_id" json:"current_shipment_id"`
-	PositionLat        float64            `db:"position_lat" json:"position_lat"`
-	PositionLng        float64            `db:"position_lng" json:"position_lng"`
-	PositionAt         pgtype.Timestamptz `db:"position_at" json:"position_at"`
-}
-
-// The drivers page and the assignment picker: who is on duty, how loaded they
-// are, what they carry now, where and when their phone was last heard from,
-// and when their licence runs out.
-func (q *Queries) ListDriversWithStatus(ctx context.Context, arg ListDriversWithStatusParams) ([]ListDriversWithStatusRow, error) {
-	rows, err := q.db.Query(ctx, listDriversWithStatus,
-		arg.TenantID,
-		arg.ActiveOnly,
-		arg.DriverID,
-		arg.Query,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListDriversWithStatusRow{}
-	for rows.Next() {
-		var i ListDriversWithStatusRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.FullName,
-			&i.Phone,
-			&i.IsActive,
-			&i.VehicleID,
-			&i.CreatedAt,
-			&i.LicenceExpiresOn,
-			&i.VehiclePlate,
-			&i.LastSyncAt,
-			&i.BatteryLevel,
-			&i.TrackingPaused,
-			&i.AppVersion,
-			&i.StorageUsedKb,
-			&i.PowerSaving,
-			&i.OnDuty,
-			&i.ActiveShipments,
-			&i.DeliveredThisMonth,
-			&i.CurrentTracking,
-			&i.CurrentStatus,
-			&i.CurrentShipmentID,
-			&i.PositionLat,
-			&i.PositionLng,
-			&i.PositionAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUsersByTenant = `-- name: ListUsersByTenant :many
 SELECT id, tenant_id, role, full_name, phone, email, password_hash, pin_hash, is_active, created_at, updated_at, failed_login_attempts, locked_until, password_reset_required, vehicle_id, last_login_at, email_verified_at, alert_emails, language, app_battery_saver, app_vibrate, anonymised_at, alerts_seen_at, licence_expires_on, alert_sms FROM users
 WHERE tenant_id = $1 AND role <> 'driver'
@@ -554,68 +367,7 @@ func (q *Queries) ResetUserPassword(ctx context.Context, arg ResetUserPasswordPa
 	return err
 }
 
-const setDriverAppSettings = `-- name: SetDriverAppSettings :exec
-UPDATE users
-SET language = COALESCE($1::text, language),
-    app_battery_saver = COALESCE($2::boolean, app_battery_saver),
-    app_vibrate = COALESCE($3::boolean, app_vibrate)
-WHERE id = $4 AND tenant_id = $5 AND role = 'driver'
-`
-
-type SetDriverAppSettingsParams struct {
-	Language     *string     `db:"language" json:"language"`
-	BatterySaver *bool       `db:"battery_saver" json:"battery_saver"`
-	Vibrate      *bool       `db:"vibrate" json:"vibrate"`
-	ID           pgtype.UUID `db:"id" json:"id"`
-	TenantID     pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-}
-
-// The driver app's settings, chosen on the phone (FR-026 AC-026.6). The
-// phone sends only those the driver changed; the rest stay as they are.
-func (q *Queries) SetDriverAppSettings(ctx context.Context, arg SetDriverAppSettingsParams) error {
-	_, err := q.db.Exec(ctx, setDriverAppSettings,
-		arg.Language,
-		arg.BatterySaver,
-		arg.Vibrate,
-		arg.ID,
-		arg.TenantID,
-	)
-	return err
-}
-
-const setDriverLicence = `-- name: SetDriverLicence :exec
-UPDATE users SET licence_expires_on = $1
-WHERE id = $2 AND tenant_id = $3 AND role = 'driver'
-`
-
-type SetDriverLicenceParams struct {
-	LicenceExpiresOn pgtype.Date `db:"licence_expires_on" json:"licence_expires_on"`
-	ID               pgtype.UUID `db:"id" json:"id"`
-	TenantID         pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-}
-
-func (q *Queries) SetDriverLicence(ctx context.Context, arg SetDriverLicenceParams) error {
-	_, err := q.db.Exec(ctx, setDriverLicence, arg.LicenceExpiresOn, arg.ID, arg.TenantID)
-	return err
-}
-
-const setDriverVehicle = `-- name: SetDriverVehicle :exec
-UPDATE users SET vehicle_id = $3 WHERE id = $1 AND tenant_id = $2 AND role = 'driver'
-`
-
-type SetDriverVehicleParams struct {
-	ID        pgtype.UUID `db:"id" json:"id"`
-	TenantID  pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-	VehicleID pgtype.UUID `db:"vehicle_id" json:"vehicle_id"`
-}
-
-func (q *Queries) SetDriverVehicle(ctx context.Context, arg SetDriverVehicleParams) error {
-	_, err := q.db.Exec(ctx, setDriverVehicle, arg.ID, arg.TenantID, arg.VehicleID)
-	return err
-}
-
 const setEmailVerified = `-- name: SetEmailVerified :execrows
-
 UPDATE users SET email_verified_at = NOW(), updated_at = NOW()
 WHERE id = $1 AND tenant_id = $2 AND email = $3 AND email_verified_at IS NULL
 `
@@ -626,8 +378,6 @@ type SetEmailVerifiedParams struct {
 	Email    *string     `db:"email" json:"email"`
 }
 
-// Confirming an address and resetting a password from a link (the
-// identity module's links), until users move into it.
 func (q *Queries) SetEmailVerified(ctx context.Context, arg SetEmailVerifiedParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setEmailVerified, arg.ID, arg.TenantID, arg.Email)
 	if err != nil {

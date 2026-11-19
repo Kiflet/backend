@@ -81,6 +81,7 @@ type Deps struct {
 	Codes     identity.Codes
 	Links     identity.Links
 	Signups   identity.Signups
+	Users     identity.Users
 	Log       zerolog.Logger
 	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
@@ -143,7 +144,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users,
 		positions: d.Positions, outbox: d.Outbox, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -193,6 +194,7 @@ type core struct {
 	codes    identity.Codes
 	links    identity.Links
 	signups  identity.Signups
+	users    identity.Users
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	outbox        bool
@@ -301,7 +303,11 @@ func randomToken(n int) string {
 }
 
 // isNoRows reports whether a query found nothing.
-func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+// A person who isn't there counts too (identity.ErrNoUser), while the
+// code here still checks for no rows after looking one up.
+func isNoRows(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows) || errors.Is(err, identity.ErrNoUser)
+}
 
 // isUniqueViolation reports whether err is a unique-constraint failure, and
 // on which constraint.
@@ -355,4 +361,45 @@ func (c *core) emit(ctx context.Context, q *db.Queries, tenantID pgtype.UUID, ty
 func (c *core) tenant(ctx context.Context, q *db.Queries, id pgtype.UUID) (db.Tenant, error) {
 	t, err := c.tenancy.Get(ctx, q.Conn(), id)
 	return db.Tenant(t), err
+}
+
+// user, userByPhone, userByEmail, staff, createUser and updateProfile reach
+// the identity module's people on q's connection (its transaction, if it
+// has one), as the rest of internal/service knows them until it moves into
+// modules.
+func (c *core) user(ctx context.Context, q *db.Queries, tenantID, id pgtype.UUID) (db.User, error) {
+	u, err := c.users.Get(ctx, q.Conn(), tenantID, id)
+	return db.User(u), err
+}
+
+func (c *core) userByPhone(ctx context.Context, q *db.Queries, phone *string) (db.User, error) {
+	if phone == nil {
+		return db.User{}, identity.ErrNoUser
+	}
+	u, err := c.users.ByPhone(ctx, q.Conn(), *phone)
+	return db.User(u), err
+}
+
+func (c *core) userByEmail(ctx context.Context, q *db.Queries, email string) (db.User, error) {
+	u, err := c.users.ByEmail(ctx, q.Conn(), email)
+	return db.User(u), err
+}
+
+func (c *core) staff(ctx context.Context, q *db.Queries, tenantID pgtype.UUID) ([]db.User, error) {
+	us, err := c.users.Staff(ctx, q.Conn(), tenantID)
+	out := make([]db.User, len(us))
+	for i, u := range us {
+		out[i] = db.User(u)
+	}
+	return out, err
+}
+
+func (c *core) createUser(ctx context.Context, q *db.Queries, n identity.NewUser) (db.User, error) {
+	u, err := c.users.Create(ctx, q.Conn(), n)
+	return db.User(u), err
+}
+
+func (c *core) updateProfile(ctx context.Context, q *db.Queries, p identity.Profile) (db.User, error) {
+	u, err := c.users.UpdateProfile(ctx, q.Conn(), p)
+	return db.User(u), err
 }

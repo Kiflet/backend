@@ -105,7 +105,7 @@ func (s *DataService) AnonymisePerson(ctx context.Context, p *Principal, id pgty
 	}
 	var was string
 	err := s.purgeTx(ctx, func(q *db.Queries, after *afterCommit) error {
-		u, err := q.GetUserByID(ctx, db.GetUserByIDParams{ID: id, TenantID: p.TenantID})
+		u, err := s.user(ctx, q, p.TenantID, id)
 		if isNoRows(err) {
 			return notFound("Person not found.")
 		}

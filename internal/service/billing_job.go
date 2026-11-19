@@ -76,7 +76,7 @@ func (s *BillingService) renew(ctx context.Context, id pgtype.UUID) error {
 		var notes []string
 		if t.PendingPlan != nil {
 			next, err := s.planTerms(t, *t.PendingPlan)
-			drivers, cerr := q.CountActiveDriversByTenant(ctx, t.ID)
+			drivers, cerr := s.users.CountDrivers(ctx, q.Conn(), t.ID)
 			if cerr != nil {
 				return cerr
 			}

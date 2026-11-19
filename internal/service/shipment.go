@@ -498,7 +498,7 @@ func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, i
 // textNewDestination tells the assigned driver by SMS where a shipment now
 // goes.
 func (s *ShipmentService) textNewDestination(ctx context.Context, q *db.Queries, after *afterCommit, sh db.Shipment) error {
-	d, err := q.GetUserByID(ctx, db.GetUserByIDParams{ID: sh.DriverID, TenantID: sh.TenantID})
+	d, err := s.user(ctx, q, sh.TenantID, sh.DriverID)
 	if err != nil || d.Phone == nil {
 		return nil
 	}
@@ -614,7 +614,7 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 			s.notifyDriverAssigned(ctx, q, after, tenant, out, driver)
 		}
 		if ev.PreviousDriverID.Valid && model.IsOnRoad(cur.Status) {
-			if prev, err := q.GetUserByID(ctx, db.GetUserByIDParams{ID: cur.DriverID, TenantID: a.TenantID}); err == nil && prev.Phone != nil {
+			if prev, err := s.user(ctx, q, a.TenantID, cur.DriverID); err == nil && prev.Phone != nil {
 				s.enqueueSMS(ctx, q, after, outboundSMS{
 					TenantID: a.TenantID, ShipmentID: id, Phone: *prev.Phone, Purpose: PurposeDriverMessage,
 					Body: fmt.Sprintf("%s: shipment %s has been handed to %s.", tenant.Name, ShortRef(out.TrackingNumber), driver.FullName),
@@ -665,7 +665,7 @@ func (s *ShipmentService) assignableDriver(ctx context.Context, q *db.Queries, t
 	if err != nil {
 		return db.User{}, invalid("driver_id", "Choose a driver.")
 	}
-	d, err := q.GetUserByID(ctx, db.GetUserByIDParams{ID: id, TenantID: tenant.ID})
+	d, err := s.user(ctx, q, tenant.ID, id)
 	if err != nil || d.Role != model.RoleDriver {
 		return db.User{}, invalid("driver_id", "Choose a driver.")
 	}
@@ -914,7 +914,7 @@ func (s *ShipmentService) Detail(ctx context.Context, tenantID, id pgtype.UUID) 
 	}
 	d := &ShipmentDetail{Shipment: sh, Next: model.AllowedTransitions(sh.Status, model.ActorDispatcher)}
 	if sh.DriverID.Valid {
-		if u, err := s.q.GetUserByID(ctx, db.GetUserByIDParams{ID: sh.DriverID, TenantID: tenantID}); err == nil {
+		if u, err := s.user(ctx, s.q, tenantID, sh.DriverID); err == nil {
 			d.Driver = &u
 		}
 	}

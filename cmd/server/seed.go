@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
 	"image"
 	"image/color"
 	"image/png"
@@ -80,7 +81,6 @@ var (
 )
 
 func seed(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger) error {
-	q := db.New(pool)
 	var exists bool
 	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE email = 'demo@kiflet.et')`).Scan(&exists); err != nil {
 		return err
@@ -151,7 +151,7 @@ func seed(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log zerol
 	if err != nil {
 		return err
 	}
-	if err := q.UpdatePassword(ctx, db.UpdatePasswordParams{ID: disp.User.ID, PasswordHash: &pw, PasswordResetRequired: false}); err != nil {
+	if err := identityapp.NewUsers(pool).SetPassword(ctx, pool, disp.User.ID, pw, false); err != nil {
 		return err
 	}
 	// The demo dispatcher's address counts as confirmed, like the admin's.
@@ -199,7 +199,7 @@ func seed(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log zerol
 		if err != nil {
 			return fmt.Errorf("driver %s: %w", d.name, err)
 		}
-		if err := q.UpdatePIN(ctx, db.UpdatePINParams{ID: acct.User.ID, PinHash: &pinHash, PasswordResetRequired: false}); err != nil {
+		if err := identityapp.NewUsers(pool).SetPIN(ctx, pool, acct.User.ID, pinHash, false); err != nil {
 			return err
 		}
 		drivers = append(drivers, acct.User)

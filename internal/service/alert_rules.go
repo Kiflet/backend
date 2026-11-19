@@ -252,7 +252,7 @@ func (s *AlertService) SetRecipients(ctx context.Context, p *Principal, in []Rec
 	return s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
 		changes := map[string]any{}
 		for _, r := range in {
-			u, err := q.GetUserByID(ctx, db.GetUserByIDParams{ID: r.UserID, TenantID: p.TenantID})
+			u, err := s.user(ctx, q, p.TenantID, r.UserID)
 			if err != nil || u.Role == "driver" {
 				return notFound("Person not found.")
 			}

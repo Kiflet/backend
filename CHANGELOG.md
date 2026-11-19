@@ -28,7 +28,10 @@ What changed in each release, newest first.
   every request, signing out and ending sessions go through it; the old
   names stay as aliases until their callers move. Then its one-time codes,
   email links and waiting sign-ups: `verification_codes`, `email_tokens`
-  and `pending_signups` are identity's, and only `users` is left to move.
+  and `pending_signups` are identity's. Last, `users`: every lookup,
+  account change and sign-in record goes through the module, and a person
+  who isn't there is now "not found" rather than an internal error. The
+  drivers' profile columns of `users` wait for the fleet module.
 - **To the Kiflet organization.** This repository is now
   [Kiflet/backend](https://github.com/Kiflet/backend), moved with its whole
   history and the `v0.9.0` tag from `Natnael-Alemayehu/kiflet`, beside

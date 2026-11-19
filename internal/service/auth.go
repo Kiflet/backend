@@ -76,7 +76,7 @@ func (s *AuthService) DriverLogin(ctx context.Context, rawPhone, pin string, ci 
 	if err != nil {
 		return nil, invalid("phone", err.Error())
 	}
-	u, err := s.q.GetUserByPhone(ctx, &p)
+	u, err := s.userByPhone(ctx, s.q, &p)
 	if isNoRows(err) {
 		hash.CheckPIN(pin, dummyPINHash)
 		return nil, ErrInvalidCredentials
@@ -117,9 +117,9 @@ func (s *AuthService) StaffLogin(ctx context.Context, identifier, password strin
 	var u db.User
 	var err error
 	if strings.Contains(identifier, "@") {
-		u, err = s.q.GetUserByEmail(ctx, identifier)
+		u, err = s.userByEmail(ctx, s.q, identifier)
 	} else if p, perr := phone.Normalize(identifier); perr == nil {
-		u, err = s.q.GetUserByPhone(ctx, &p)
+		u, err = s.userByPhone(ctx, s.q, &p)
 	} else {
 		return nil, invalid("identifier", "Enter a valid email address or phone number.")
 	}
@@ -166,15 +166,15 @@ func (s *AuthService) checkCredential(ctx context.Context, u db.User, c credenti
 		return nil
 	}
 	actor := userActor(u, ci)
-	updated, err := s.q.IncrementFailedLoginAttempts(ctx, u.ID)
+	attempts, err := s.users.FailedLogin(ctx, s.q.Conn(), u.ID)
 	if err != nil {
 		return err
 	}
-	if updated.FailedLoginAttempts >= maxFailedLogins {
-		if err := s.q.LockUserAccount(ctx, db.LockUserAccountParams{ID: u.ID, LockedUntil: toTimestamp(now.Add(lockoutDuration))}); err != nil {
+	if attempts >= maxFailedLogins {
+		if err := s.users.Lock(ctx, s.q.Conn(), u.ID, now.Add(lockoutDuration)); err != nil {
 			return err
 		}
-		s.audit(ctx, s.q, actor, "login_locked", "user", u.ID, nil, map[string]any{"attempts": updated.FailedLoginAttempts})
+		s.audit(ctx, s.q, actor, "login_locked", "user", u.ID, nil, map[string]any{"attempts": attempts})
 		return ErrAccountLocked
 	}
 	s.audit(ctx, s.q, actor, "login_failed", "user", u.ID, nil, nil)
@@ -196,7 +196,7 @@ func (s *AuthService) admit(ctx context.Context, u db.User, ci ClientInfo) error
 			return s.suspended()
 		}
 	}
-	if err := s.q.RecordSuccessfulLogin(ctx, u.ID); err != nil {
+	if err := s.users.LoggedIn(ctx, s.q.Conn(), u.ID); err != nil {
 		return err
 	}
 	s.audit(ctx, s.q, userActor(u, ci), "login", "user", u.ID, nil, nil)
@@ -258,7 +258,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, p *Principal, current,
 	if err := checkPassword(next); err != nil {
 		return err
 	}
-	u, err := s.q.GetUserByID(ctx, db.GetUserByIDParams{ID: p.UserID, TenantID: p.TenantID})
+	u, err := s.user(ctx, s.q, p.TenantID, p.UserID)
 	if err != nil {
 		return err
 	}
@@ -272,7 +272,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, p *Principal, current,
 	if err != nil {
 		return err
 	}
-	if err := s.q.UpdatePassword(ctx, db.UpdatePasswordParams{ID: u.ID, PasswordHash: &h, PasswordResetRequired: false}); err != nil {
+	if err := s.users.SetPassword(ctx, s.q.Conn(), u.ID, h, false); err != nil {
 		return err
 	}
 	_ = s.sessions.EndOthers(ctx, s.q.Conn(), u.ID, p.SessionID)
@@ -288,7 +288,7 @@ func (s *AuthService) ChangePIN(ctx context.Context, p *Principal, current, next
 	if err := checkPIN(next); err != nil {
 		return err
 	}
-	u, err := s.q.GetUserByID(ctx, db.GetUserByIDParams{ID: p.UserID, TenantID: p.TenantID})
+	u, err := s.user(ctx, s.q, p.TenantID, p.UserID)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func (s *AuthService) ChangePIN(ctx context.Context, p *Principal, current, next
 	if err != nil {
 		return err
 	}
-	if err := s.q.UpdatePIN(ctx, db.UpdatePINParams{ID: u.ID, PinHash: &h, PasswordResetRequired: false}); err != nil {
+	if err := s.users.SetPIN(ctx, s.q.Conn(), u.ID, h, false); err != nil {
 		return err
 	}
 	s.audit(ctx, s.q, p.Actor(SourceApp, ci.IP, ci.UserAgent), "pin_changed", "user", u.ID, nil, nil)
@@ -317,7 +317,7 @@ func (s *AuthService) RequestPINReset(ctx context.Context, rawPhone string) erro
 	if err != nil {
 		return invalid("phone", err.Error())
 	}
-	u, err := s.q.GetUserByPhone(ctx, &p)
+	u, err := s.userByPhone(ctx, s.q, &p)
 	if err != nil && !isNoRows(err) {
 		return err
 	}
@@ -343,7 +343,7 @@ func (s *AuthService) ConfirmPINReset(ctx context.Context, rawPhone, code, newPI
 	if err := s.checkCode(ctx, p, codePurposePINReset, strings.TrimSpace(code)); err != nil {
 		return nil, err
 	}
-	u, err := s.q.GetUserByPhone(ctx, &p)
+	u, err := s.userByPhone(ctx, s.q, &p)
 	if err != nil || u.Role != model.RoleDriver || !u.IsActive {
 		return nil, errCodeInvalid
 	}
@@ -351,7 +351,7 @@ func (s *AuthService) ConfirmPINReset(ctx context.Context, rawPhone, code, newPI
 	if err != nil {
 		return nil, err
 	}
-	if err := s.q.UpdatePIN(ctx, db.UpdatePINParams{ID: u.ID, PinHash: &h, PasswordResetRequired: false}); err != nil {
+	if err := s.users.SetPIN(ctx, s.q.Conn(), u.ID, h, false); err != nil {
 		return nil, err
 	}
 	_ = s.sessions.EndAll(ctx, s.q.Conn(), u.ID)
@@ -369,7 +369,7 @@ func (s *AuthService) ResetCredential(ctx context.Context, p *Principal, userID 
 	if userID == p.UserID {
 		return "", false, invalid("", "Change your own password from your account page.")
 	}
-	u, err := s.q.GetUserByID(ctx, db.GetUserByIDParams{ID: userID, TenantID: p.TenantID})
+	u, err := s.user(ctx, s.q, p.TenantID, userID)
 	if isNoRows(err) {
 		return "", false, notFound("User not found.")
 	}
@@ -394,7 +394,7 @@ func (s *AuthService) ResetCredential(ctx context.Context, p *Principal, userID 
 			if err != nil {
 				return err
 			}
-			if err := q.UpdatePIN(ctx, db.UpdatePINParams{ID: u.ID, PinHash: &h, PasswordResetRequired: true}); err != nil {
+			if err := s.users.SetPIN(ctx, q.Conn(), u.ID, h, true); err != nil {
 				return err
 			}
 			body = fmt.Sprintf("%s: your temporary driver app PIN is %s. You'll choose a new one when you sign in.", p.TenantName, temp)
@@ -404,7 +404,7 @@ func (s *AuthService) ResetCredential(ctx context.Context, p *Principal, userID 
 			if err != nil {
 				return err
 			}
-			if err := q.UpdatePassword(ctx, db.UpdatePasswordParams{ID: u.ID, PasswordHash: &h, PasswordResetRequired: true}); err != nil {
+			if err := s.users.SetPassword(ctx, q.Conn(), u.ID, h, true); err != nil {
 				return err
 			}
 			body = fmt.Sprintf("%s: your temporary dashboard password is %s. You'll choose a new one when you sign in.", p.TenantName, temp)

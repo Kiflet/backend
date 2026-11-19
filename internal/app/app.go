@@ -151,6 +151,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		Codes:    identityapp.NewCodes(pool, cfg.Secret, nil),
 		Links:    identityapp.NewLinks(pool),
 		Signups:  identityapp.NewSignups(pool),
+		Users:    identityapp.NewUsers(pool),
 		Pool:     pool, Log: log, Publisher: live, Positions: positions, Outbox: a.broker != nil,
 		RemoteWorkers: !roles.Has("worker"), Work: work,
 		Storage: store, SMS: smsSender{provider}, Mail: mailSender{mailer},
