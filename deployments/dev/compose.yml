@@ -33,7 +33,7 @@ services:
 
   # `make run` uses it when it is up (`make db` starts it).
   rabbitmq:
-    image: rabbitmq:4.1-management-alpine
+    image: rabbitmq:4.4-management-alpine
     hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: kiflet

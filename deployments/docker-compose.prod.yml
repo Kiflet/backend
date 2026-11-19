@@ -167,7 +167,7 @@ services:
   # its queue for the tracking workers, events leave the outbox through it,
   # and live updates cross instances on it.
   rabbitmq:
-    image: rabbitmq:4.1-management-alpine
+    image: rabbitmq:4.4-management-alpine
     profiles: [rabbitmq]
     restart: unless-stopped
     # RabbitMQ keeps its data under its node's name, which comes from the

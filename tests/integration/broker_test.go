@@ -26,7 +26,7 @@ import (
 )
 
 // rabbitImage is the version deployments/ runs.
-const rabbitImage = "rabbitmq:4.1-management-alpine"
+const rabbitImage = "rabbitmq:4.4-management-alpine"
 
 // sharedRabbitMQ starts one RabbitMQ for the tests that need one; TestMain
 // stops it.
