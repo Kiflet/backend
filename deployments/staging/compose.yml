@@ -50,6 +50,10 @@ services:
         condition: service_completed_successfully
       garage-setup:
         condition: service_completed_successfully
+      # Nothing else waits for it, and `up --wait` counts a job that has
+      # exited, and that nothing waits for, as failed.
+      garage-setup-backups:
+        condition: service_completed_successfully
       mailpit:
         condition: service_started
 
