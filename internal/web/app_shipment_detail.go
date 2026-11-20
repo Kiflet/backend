@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kiflet/backend/internal/db"
@@ -305,7 +304,12 @@ func (s *Server) shipmentMedia(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.serveMedia(w, r, podMediaKey(d.POD.SignatureUrl, d.POD.PhotoUrls, chi.URLParam(r, "n")))
+	key, err := s.svc.Shipments.PODMedia(r.Context(), d.POD.TenantID, d.POD.ID, mediaNumber(r))
+	if err != nil {
+		s.notFound(w, r)
+		return
+	}
+	s.serveMedia(w, r, key)
 }
 
 // shipmentAcceptPOD completes a shipment with a proof of delivery held for
@@ -345,12 +349,12 @@ func (s *Server) shipmentReviewMedia(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	sig, photos, err := s.svc.Shipments.HeldPODMedia(r.Context(), principal(r).TenantID, id, pod)
+	key, err := s.svc.Shipments.HeldPODMedia(r.Context(), principal(r).TenantID, id, pod, mediaNumber(r))
 	if err != nil {
 		s.notFound(w, r)
 		return
 	}
-	s.serveMedia(w, r, podMediaKey(sig, photos, chi.URLParam(r, "n")))
+	s.serveMedia(w, r, key)
 }
 
 // tripStep is one stage of a shipment in the progress strip at the top of

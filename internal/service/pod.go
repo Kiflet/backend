@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/kiflet/backend/internal/modules/shipments"
 	"slices"
 	"strings"
 	"time"
@@ -14,8 +13,10 @@ import (
 
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/platform/phone"
+	"github.com/kiflet/backend/pkg/storage"
 )
 
 // What happened to a proof of delivery, matching the proof_of_deliveries
@@ -68,8 +69,8 @@ func heldMessage(code string) string {
 type PODInput struct {
 	RecipientName  string
 	RecipientPhone string
-	SignatureKey   string
-	PhotoKeys      []string
+	Signature      PODFile
+	Photos         []PODFile
 	Notes          string
 	Lat, Lng       *float64
 	// LocationReason is why the driver recorded it away from the
@@ -110,7 +111,17 @@ func (in *PODInput) Check() error {
 }
 
 func (in *PODInput) mediaKeys() []string {
-	return append([]string{in.SignatureKey}, in.PhotoKeys...)
+	keys := []string{in.Signature.Key}
+	for _, p := range in.Photos {
+		keys = append(keys, p.Key)
+	}
+	return keys
+}
+
+// files are the proof's stored files as pod_media numbers them: the
+// signature at 0, then the photos.
+func (in *PODInput) files() []PODFile {
+	return append([]PODFile{in.Signature}, in.Photos...)
 }
 
 // RecordPOD stores proof of delivery and completes the shipment (FR-020–023).
@@ -131,7 +142,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 	if err := in.Check(); err != nil {
 		return shipments.Shipment{}, err
 	}
-	if in.SignatureKey == "" {
+	if in.Signature.Key == "" {
 		return shipments.Shipment{}, invalid("signature", "The recipient's signature is required.")
 	}
 	now := s.now()
@@ -215,8 +226,10 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 			DriverID:               driverID,
 			RecipientName:          truncate(in.RecipientName, 200),
 			RecipientPhone:         toText(in.RecipientPhone),
-			SignatureUrl:           &in.SignatureKey,
-			PhotoUrls:              in.PhotoKeys,
+			// Written for a release, so a rollback finds them; pod_media
+			// is read.
+			SignatureUrl:           &in.Signature.Key,
+			PhotoUrls:              in.mediaKeys()[1:],
 			DeliveryAddress:        &cur.DestinationAddress,
 			Latitude:               in.Lat,
 			Longitude:              in.Lng,
@@ -232,9 +245,30 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 		if err != nil {
 			return err
 		}
+		for i, f := range in.files() {
+			kind := "photo"
+			if i == 0 {
+				kind = "signature"
+			}
+			var taken pgtype.Timestamptz
+			if !f.TakenAt.IsZero() {
+				taken = toTimestamp(f.TakenAt)
+			}
+			size, sum := &f.Size, &f.MD5
+			if f.Size <= 0 || f.MD5 == "" {
+				size, sum = nil, nil
+			}
+			if err := q.AddPODMedia(ctx, db.AddPODMediaParams{
+				TenantID: a.TenantID, PodID: podID, Kind: kind, Position: int16(i), // at most 1 + MaxPhotosPerPOD
+				StorageKey: f.Key, ContentType: f.ContentType, SizeBytes: size, Md5: sum,
+				TakenAt: taken, Latitude: f.Lat, Longitude: f.Lng,
+			}); err != nil {
+				return err
+			}
+		}
 		kept = true
 		details := map[string]any{
-			"recipient": in.RecipientName, "photos": len(in.PhotoKeys),
+			"recipient": in.RecipientName, "photos": len(in.Photos),
 			"location_verified": verified, "distance_m": int(distance), "has_fix": haveFix,
 		}
 
@@ -371,15 +405,28 @@ func (s *ShipmentService) DismissHeldPOD(ctx context.Context, a Actor, id, podID
 
 // HeldPODMedia finds the stored file n (0 for the signature, then photos)
 // of a proof under review, for the shipment page.
-func (s *ShipmentService) HeldPODMedia(ctx context.Context, tenantID, id, podID pgtype.UUID) (signature *string, photos []string, err error) {
+func (s *ShipmentService) HeldPODMedia(ctx context.Context, tenantID, id, podID pgtype.UUID, n int) (string, error) {
 	pods, err := s.ReviewPODs(ctx, tenantID, id)
 	if err != nil {
-		return nil, nil, err
+		return "", err
 	}
 	for _, p := range pods {
 		if p.ID == podID {
-			return p.SignatureUrl, p.PhotoUrls, nil
+			return s.PODMedia(ctx, tenantID, podID, n)
 		}
 	}
-	return nil, nil, notFound("File not found.")
+	return "", notFound("File not found.")
+}
+
+// PODMedia finds the stored file n (0 for the signature, then photos) of a
+// proof the caller may see.
+func (s *ShipmentService) PODMedia(ctx context.Context, tenantID, podID pgtype.UUID, n int) (string, error) {
+	if n < 0 || n > storage.MaxPhotosPerPOD {
+		return "", notFound("File not found.")
+	}
+	f, err := s.q.GetPODMediaKey(ctx, db.GetPODMediaKeyParams{TenantID: tenantID, PodID: podID, Position: int16(n)})
+	if isNoRows(err) {
+		return "", notFound("File not found.")
+	}
+	return f.StorageKey, err
 }

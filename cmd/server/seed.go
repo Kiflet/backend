@@ -256,13 +256,13 @@ func seed(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log zerol
 				return fmt.Errorf("history %s: %w", st, err)
 			}
 		}
-		key, _, err := svc.Media.SavePOD(ctx, sh.ID.String(), signature, nil)
+		sig, _, err := svc.Media.SavePOD(ctx, sh.ID.String(), signature, nil)
 		if err != nil {
 			return fmt.Errorf("signature: %w", err)
 		}
 		lat, lng := jitter(rng, *sh.DestinationLat, *sh.DestinationLng, 0.002)
 		if _, err := svc.Shipments.RecordPOD(ctx, a, sh.ID, service.PODInput{
-			RecipientName: demoRecipients[rng.IntN(len(demoRecipients))], SignatureKey: key, Lat: &lat, Lng: &lng,
+			RecipientName: demoRecipients[rng.IntN(len(demoRecipients))], Signature: sig, Lat: &lat, Lng: &lng,
 		}); err != nil {
 			return fmt.Errorf("history pod: %w", err)
 		}

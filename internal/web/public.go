@@ -546,24 +546,22 @@ func (s *Server) confirmMedia(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.serveMedia(w, r, podMediaKey(cv.POD.SignatureUrl, cv.POD.PhotoUrls, chi.URLParam(r, "n")))
+	key, err := s.svc.Shipments.PODMedia(r.Context(), cv.POD.TenantID, cv.POD.ID, mediaNumber(r))
+	if err != nil {
+		s.notFound(w, r)
+		return
+	}
+	s.serveMedia(w, r, key)
 }
 
-func podMediaKey(signature *string, photos []string, n string) string {
-	i, err := strconv.Atoi(n)
-	if err != nil || i < 0 {
-		return ""
+// mediaNumber is a proof's file in the path, {n}: 0 for the signature, then
+// the photos; -1 when it isn't a number.
+func mediaNumber(r *http.Request) int {
+	n, err := strconv.Atoi(chi.URLParam(r, "n"))
+	if err != nil {
+		return -1
 	}
-	if i == 0 {
-		if signature == nil {
-			return ""
-		}
-		return *signature
-	}
-	if i > len(photos) {
-		return ""
-	}
-	return photos[i-1]
+	return n
 }
 
 func (s *Server) serveMedia(w http.ResponseWriter, r *http.Request, key string) {

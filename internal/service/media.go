@@ -7,6 +7,7 @@ import (
 	"io"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/kiflet/backend/pkg/storage"
 )
@@ -42,36 +43,48 @@ var ErrMediaInvalid = &Error{Kind: KindInvalid, Field: "photos", Message: "A pho
 // needed, refused before it is decoded.
 var ErrMediaTooLarge = &Error{Kind: KindInvalid, Field: "photos", Message: "A photo or the signature is too large. Take the photo again, or at a lower resolution."}
 
-// SavePOD stores a signature and photos given as data URLs, returning their
-// keys.
-func (m *MediaService) SavePOD(ctx context.Context, shipmentID, signature string, photos []string) (string, []string, error) {
+// PODFile is a stored file of a proof of delivery, the signature or a
+// photo, and when and where it was taken if the app said (pod_media).
+type PODFile struct {
+	storage.File
+	TakenAt  time.Time
+	Lat, Lng *float64
+}
+
+// SavePOD stores a signature and photos given as data URLs, and describes
+// what it stored. The PWA doesn't say when or where each was taken.
+func (m *MediaService) SavePOD(ctx context.Context, shipmentID, signature string, photos []string) (PODFile, []PODFile, error) {
 	if m.pod == nil {
-		return "", nil, errors.New("media storage is not configured")
+		return PODFile{}, nil, errors.New("media storage is not configured")
 	}
 	if signature == "" {
-		return "", nil, invalid("signature", "The recipient's signature is required.")
+		return PODFile{}, nil, invalid("signature", "The recipient's signature is required.")
 	}
 	if len(signature) > maxSignatureBytes {
-		return "", nil, ErrMediaInvalid
+		return PODFile{}, nil, ErrMediaInvalid
 	}
 	if len(photos) > storage.MaxPhotosPerPOD {
-		return "", nil, invalid("photos", fmt.Sprintf("Attach at most %d photos.", storage.MaxPhotosPerPOD))
+		return PODFile{}, nil, invalid("photos", fmt.Sprintf("Attach at most %d photos.", storage.MaxPhotosPerPOD))
 	}
 	for _, p := range photos {
 		if len(p) > maxPhotoBytes {
-			return "", nil, ErrMediaInvalid
+			return PODFile{}, nil, ErrMediaInvalid
 		}
 	}
 	sig, err := m.pod.UploadSignature(ctx, shipmentID, signature)
 	if err != nil {
-		return "", nil, classifyUpload(err)
+		return PODFile{}, nil, classifyUpload(err)
 	}
-	keys, err := m.pod.UploadMultiplePhotos(ctx, shipmentID, photos)
+	stored, err := m.pod.UploadMultiplePhotos(ctx, shipmentID, photos)
 	if err != nil {
-		m.Delete(context.WithoutCancel(ctx), sig)
-		return "", nil, classifyUpload(err)
+		m.Delete(context.WithoutCancel(ctx), sig.Key)
+		return PODFile{}, nil, classifyUpload(err)
 	}
-	return sig, keys, nil
+	files := make([]PODFile, len(stored))
+	for i, f := range stored {
+		files[i] = PODFile{File: f}
+	}
+	return PODFile{File: sig}, files, nil
 }
 
 // Delete removes stored files whose proof of delivery was refused.

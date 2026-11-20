@@ -85,9 +85,11 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] The per-driver load limit counted under a lock (D3).
 - [x] Charges and cargo values in santim (D4).
 - [ ] A release after: drop `shipments.cargo_value` and
-      `shipment_charges.amount`, which nothing reads since the step above.
+      `shipment_charges.amount`, which nothing reads since the step above,
+      and `proof_of_deliveries.signature_data`, `signature_url` and
+      `photo_urls`, which nothing reads since `pod_media`.
 - [x] Every query without `tenant_id` says why, checked in CI (D5).
-- [ ] `pod_media`, and signatures stored as files (D6).
+- [x] `pod_media`, and signatures stored as files (D6).
 - [ ] A `version` on every edited record, and `idempotency_keys` (D7).
 - [ ] One catalogue of the words for codes, for the office, customers and
       drivers, in English and Amharic (D8).

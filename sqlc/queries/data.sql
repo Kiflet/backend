@@ -38,7 +38,8 @@ SELECT p.id, s.tracking_number, p.status, p.recorded_at, p.synced_at, p.recipien
        COALESCE(ST_X(p.delivery_coordinates), 0)::float8 AS longitude,
        p.location_verified, COALESCE(p.location_mismatch_meters, 0)::float8 AS mismatch_meters,
        COALESCE(p.location_reason, '')::text AS location_reason, COALESCE(p.delivery_notes, '')::text AS delivery_notes,
-       COALESCE(p.signature_url, '')::text AS signature_key, COALESCE(p.photo_urls, '{}')::text[] AS photo_keys
+       COALESCE((SELECT m.storage_key FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position = 0), '')::text AS signature_key,
+       ARRAY(SELECT m.storage_key FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position > 0 ORDER BY m.position)::text[] AS photo_keys
 FROM proof_of_deliveries p
 JOIN shipments s ON s.id = p.shipment_id AND s.tenant_id = p.tenant_id
 LEFT JOIN users u ON u.id = p.driver_id
@@ -74,9 +75,16 @@ LIMIT sqlc.arg(max_rows);
 
 -- name: ListPODMediaForShipments :many
 -- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
-SELECT COALESCE(signature_url, '')::text AS signature_key, COALESCE(photo_urls, '{}')::text[] AS photo_keys
-FROM proof_of_deliveries
-WHERE shipment_id = ANY(sqlc.arg(ids)::uuid[]);
+SELECT m.storage_key
+FROM pod_media m
+JOIN proof_of_deliveries p ON p.tenant_id = m.tenant_id AND p.id = m.pod_id
+WHERE p.shipment_id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- name: DeletePODMediaForShipments :exec
+-- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
+DELETE FROM pod_media m
+USING proof_of_deliveries p
+WHERE p.tenant_id = m.tenant_id AND p.id = m.pod_id AND p.shipment_id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: AnonymisePODs :exec
 -- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
@@ -150,9 +158,7 @@ WHERE t.id = $1
 FOR UPDATE;
 
 -- name: ListTenantPODMedia :many
-SELECT COALESCE(signature_url, '')::text AS signature_key, COALESCE(photo_urls, '{}')::text[] AS photo_keys
-FROM proof_of_deliveries
-WHERE tenant_id = $1;
+SELECT storage_key FROM pod_media WHERE tenant_id = $1;
 
 -- name: VoidTenantInvoices :many
 -- Invoices outlive a deleted company; those still open are cancelled.

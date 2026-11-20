@@ -21,7 +21,9 @@ INSERT INTO proof_of_deliveries (
 -- name: GetPODByShipmentID :one
 SELECT p.id, p.tenant_id, p.shipment_id, p.driver_id,
        p.recipient_name, p.recipient_phone,
-       p.signature_data, p.signature_url, p.photo_urls,
+       EXISTS (SELECT 1 FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position = 0) AS has_signature,
+       -- The photos' positions, 1, 2…, for the pages' /media/{n} links.
+       ARRAY(SELECT m.position FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position > 0 ORDER BY m.position)::int[] AS photos,
        p.delivery_address,
        -- 0,0 stands for "no fix": it is in the Gulf of Guinea, never a delivery here.
        COALESCE(ST_Y(p.delivery_coordinates), 0)::float8 AS delivery_latitude,
@@ -33,6 +35,20 @@ FROM proof_of_deliveries p
 LEFT JOIN users u ON u.id = p.driver_id
 WHERE p.shipment_id = $1 AND p.tenant_id = $2 AND p.status = 'accepted';
 
+-- name: AddPODMedia :exec
+-- A stored file of a proof: position 0 is the signature, 1, 2… the photos.
+INSERT INTO pod_media (
+    tenant_id, pod_id, kind, position, storage_key, content_type, size_bytes, md5, taken_at, latitude, longitude
+) VALUES (
+    sqlc.arg(tenant_id), sqlc.arg(pod_id), sqlc.arg(kind), sqlc.arg(position), sqlc.arg(storage_key), sqlc.arg(content_type),
+    sqlc.narg(size_bytes), sqlc.narg(md5), sqlc.narg(taken_at), sqlc.narg(latitude), sqlc.narg(longitude)
+);
+
+-- name: GetPODMediaKey :one
+-- The stored file n of a proof (0 the signature, then the photos).
+SELECT storage_key, content_type FROM pod_media
+WHERE tenant_id = sqlc.arg(tenant_id) AND pod_id = sqlc.arg(pod_id) AND position = sqlc.arg(position);
+
 -- name: GetPODByClientID :one
 -- The device's identifier for a proof: a replayed upload finds the first.
 SELECT id, shipment_id, status, held_reason
@@ -42,7 +58,10 @@ WHERE tenant_id = $1 AND driver_id = $2 AND client_id = $3;
 -- name: ListReviewPODs :many
 -- Proofs of delivery held for the office to review, and those it dismissed.
 SELECT p.id, p.driver_id, p.recipient_name, p.recipient_phone,
-       p.signature_url, p.photo_urls, p.delivery_notes,
+       EXISTS (SELECT 1 FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position = 0) AS has_signature,
+       -- The photos' positions, 1, 2…, for the pages' /media/{n} links.
+       ARRAY(SELECT m.position FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position > 0 ORDER BY m.position)::int[] AS photos,
+       p.delivery_notes,
        COALESCE(ST_Y(p.delivery_coordinates), 0)::float8 AS delivery_latitude,
        COALESCE(ST_X(p.delivery_coordinates), 0)::float8 AS delivery_longitude,
        p.location_verified, p.location_mismatch_meters, p.location_reason,

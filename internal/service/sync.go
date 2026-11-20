@@ -473,7 +473,7 @@ func (s *SyncService) applyPOD(ctx context.Context, a Actor, in SyncPOD, at time
 	if err != nil {
 		return resultFor(r, err)
 	}
-	pod.SignatureKey, pod.PhotoKeys = sig, photos
+	pod.Signature, pod.Photos = sig, photos
 	_, err = s.shipments.RecordPOD(ctx, a, id, pod)
 	return resultFor(r, err)
 }

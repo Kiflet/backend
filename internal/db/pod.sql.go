@@ -11,6 +11,47 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addPODMedia = `-- name: AddPODMedia :exec
+INSERT INTO pod_media (
+    tenant_id, pod_id, kind, position, storage_key, content_type, size_bytes, md5, taken_at, latitude, longitude
+) VALUES (
+    $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10, $11
+)
+`
+
+type AddPODMediaParams struct {
+	TenantID    pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	PodID       pgtype.UUID        `db:"pod_id" json:"pod_id"`
+	Kind        string             `db:"kind" json:"kind"`
+	Position    int16              `db:"position" json:"position"`
+	StorageKey  string             `db:"storage_key" json:"storage_key"`
+	ContentType string             `db:"content_type" json:"content_type"`
+	SizeBytes   *int64             `db:"size_bytes" json:"size_bytes"`
+	Md5         *string            `db:"md5" json:"md5"`
+	TakenAt     pgtype.Timestamptz `db:"taken_at" json:"taken_at"`
+	Latitude    *float64           `db:"latitude" json:"latitude"`
+	Longitude   *float64           `db:"longitude" json:"longitude"`
+}
+
+// A stored file of a proof: position 0 is the signature, 1, 2… the photos.
+func (q *Queries) AddPODMedia(ctx context.Context, arg AddPODMediaParams) error {
+	_, err := q.db.Exec(ctx, addPODMedia,
+		arg.TenantID,
+		arg.PodID,
+		arg.Kind,
+		arg.Position,
+		arg.StorageKey,
+		arg.ContentType,
+		arg.SizeBytes,
+		arg.Md5,
+		arg.TakenAt,
+		arg.Latitude,
+		arg.Longitude,
+	)
+	return err
+}
+
 const countHeldPODs = `-- name: CountHeldPODs :one
 SELECT COUNT(*) FROM proof_of_deliveries
 WHERE shipment_id = $1 AND tenant_id = $2 AND status = 'held'
@@ -173,7 +214,9 @@ func (q *Queries) GetPODByClientID(ctx context.Context, arg GetPODByClientIDPara
 const getPODByShipmentID = `-- name: GetPODByShipmentID :one
 SELECT p.id, p.tenant_id, p.shipment_id, p.driver_id,
        p.recipient_name, p.recipient_phone,
-       p.signature_data, p.signature_url, p.photo_urls,
+       EXISTS (SELECT 1 FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position = 0) AS has_signature,
+       -- The photos' positions, 1, 2…, for the pages' /media/{n} links.
+       ARRAY(SELECT m.position FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position > 0 ORDER BY m.position)::int[] AS photos,
        p.delivery_address,
        -- 0,0 stands for "no fix": it is in the Gulf of Guinea, never a delivery here.
        COALESCE(ST_Y(p.delivery_coordinates), 0)::float8 AS delivery_latitude,
@@ -198,9 +241,8 @@ type GetPODByShipmentIDRow struct {
 	DriverID               pgtype.UUID        `db:"driver_id" json:"driver_id"`
 	RecipientName          string             `db:"recipient_name" json:"recipient_name"`
 	RecipientPhone         *string            `db:"recipient_phone" json:"recipient_phone"`
-	SignatureData          *string            `db:"signature_data" json:"signature_data"`
-	SignatureUrl           *string            `db:"signature_url" json:"signature_url"`
-	PhotoUrls              []string           `db:"photo_urls" json:"photo_urls"`
+	HasSignature           bool               `db:"has_signature" json:"has_signature"`
+	Photos                 []int32            `db:"photos" json:"photos"`
 	DeliveryAddress        *string            `db:"delivery_address" json:"delivery_address"`
 	DeliveryLatitude       float64            `db:"delivery_latitude" json:"delivery_latitude"`
 	DeliveryLongitude      float64            `db:"delivery_longitude" json:"delivery_longitude"`
@@ -223,9 +265,8 @@ func (q *Queries) GetPODByShipmentID(ctx context.Context, arg GetPODByShipmentID
 		&i.DriverID,
 		&i.RecipientName,
 		&i.RecipientPhone,
-		&i.SignatureData,
-		&i.SignatureUrl,
-		&i.PhotoUrls,
+		&i.HasSignature,
+		&i.Photos,
 		&i.DeliveryAddress,
 		&i.DeliveryLatitude,
 		&i.DeliveryLongitude,
@@ -237,6 +278,30 @@ func (q *Queries) GetPODByShipmentID(ctx context.Context, arg GetPODByShipmentID
 		&i.SyncedAt,
 		&i.DriverName,
 	)
+	return i, err
+}
+
+const getPODMediaKey = `-- name: GetPODMediaKey :one
+SELECT storage_key, content_type FROM pod_media
+WHERE tenant_id = $1 AND pod_id = $2 AND position = $3
+`
+
+type GetPODMediaKeyParams struct {
+	TenantID pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	PodID    pgtype.UUID `db:"pod_id" json:"pod_id"`
+	Position int16       `db:"position" json:"position"`
+}
+
+type GetPODMediaKeyRow struct {
+	StorageKey  string `db:"storage_key" json:"storage_key"`
+	ContentType string `db:"content_type" json:"content_type"`
+}
+
+// The stored file n of a proof (0 the signature, then the photos).
+func (q *Queries) GetPODMediaKey(ctx context.Context, arg GetPODMediaKeyParams) (GetPODMediaKeyRow, error) {
+	row := q.db.QueryRow(ctx, getPODMediaKey, arg.TenantID, arg.PodID, arg.Position)
+	var i GetPODMediaKeyRow
+	err := row.Scan(&i.StorageKey, &i.ContentType)
 	return i, err
 }
 
@@ -288,7 +353,10 @@ func (q *Queries) ListRecentRecipients(ctx context.Context, arg ListRecentRecipi
 
 const listReviewPODs = `-- name: ListReviewPODs :many
 SELECT p.id, p.driver_id, p.recipient_name, p.recipient_phone,
-       p.signature_url, p.photo_urls, p.delivery_notes,
+       EXISTS (SELECT 1 FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position = 0) AS has_signature,
+       -- The photos' positions, 1, 2…, for the pages' /media/{n} links.
+       ARRAY(SELECT m.position FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position > 0 ORDER BY m.position)::int[] AS photos,
+       p.delivery_notes,
        COALESCE(ST_Y(p.delivery_coordinates), 0)::float8 AS delivery_latitude,
        COALESCE(ST_X(p.delivery_coordinates), 0)::float8 AS delivery_longitude,
        p.location_verified, p.location_mismatch_meters, p.location_reason,
@@ -311,8 +379,8 @@ type ListReviewPODsRow struct {
 	DriverID               pgtype.UUID        `db:"driver_id" json:"driver_id"`
 	RecipientName          string             `db:"recipient_name" json:"recipient_name"`
 	RecipientPhone         *string            `db:"recipient_phone" json:"recipient_phone"`
-	SignatureUrl           *string            `db:"signature_url" json:"signature_url"`
-	PhotoUrls              []string           `db:"photo_urls" json:"photo_urls"`
+	HasSignature           bool               `db:"has_signature" json:"has_signature"`
+	Photos                 []int32            `db:"photos" json:"photos"`
 	DeliveryNotes          *string            `db:"delivery_notes" json:"delivery_notes"`
 	DeliveryLatitude       float64            `db:"delivery_latitude" json:"delivery_latitude"`
 	DeliveryLongitude      float64            `db:"delivery_longitude" json:"delivery_longitude"`
@@ -342,8 +410,8 @@ func (q *Queries) ListReviewPODs(ctx context.Context, arg ListReviewPODsParams) 
 			&i.DriverID,
 			&i.RecipientName,
 			&i.RecipientPhone,
-			&i.SignatureUrl,
-			&i.PhotoUrls,
+			&i.HasSignature,
+			&i.Photos,
 			&i.DeliveryNotes,
 			&i.DeliveryLatitude,
 			&i.DeliveryLongitude,

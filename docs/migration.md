@@ -381,7 +381,7 @@ with its tests; the IDs are the audit's.
 5. **Tenancy checked** (done; D5): every query without `tenant_id` says why
    (`-- tenant: none, <reason>`), and a test that reads every queries file
    fails on one that doesn't.
-6. **Delivery media** (D6): `pod_media` (the delivery, kind, storage key,
+6. **Delivery media** (done; D6): `pod_media` (the delivery, kind, storage key,
    size, MD5, when and where it was taken); signatures stored as files like
    photos; `photo_urls` and `signature_data` replaced, and the PWA's inline
    uploads stored the same way.

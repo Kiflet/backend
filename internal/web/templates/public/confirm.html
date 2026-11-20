@@ -13,8 +13,8 @@
       <div><dt>{{$.T "confirm.received_by"}}</dt><dd>{{.RecipientName}}</dd></div>
     </dl>
     <div class="pod-media">
-      {{if .SignatureUrl}}<figure><img src="/c/{{$tok}}/media/0" alt="{{$.T "confirm.signature"}}" class="signature"><figcaption>{{$.T "confirm.signature"}}</figcaption></figure>{{end}}
-      {{range $i, $p := .PhotoUrls}}<figure><img src="/c/{{$tok}}/media/{{add $i 1}}" alt="{{$.T "confirm.photo" (add $i 1)}}" loading="lazy"></figure>{{end}}
+      {{if .HasSignature}}<figure><img src="/c/{{$tok}}/media/0" alt="{{$.T "confirm.signature"}}" class="signature"><figcaption>{{$.T "confirm.signature"}}</figcaption></figure>{{end}}
+      {{range $n := .Photos}}<figure><img src="/c/{{$tok}}/media/{{$n}}" alt="{{$.T "confirm.photo" $n}}" loading="lazy"></figure>{{end}}
     </div>
     {{else}}
     <p>{{$.T "confirm.delivered_at" ($.When $s.ActualDelivery)}}</p>

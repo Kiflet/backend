@@ -242,6 +242,22 @@ type PendingSignup struct {
 	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type PodMedium struct {
+	ID          pgtype.UUID        `db:"id" json:"id"`
+	TenantID    pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	PodID       pgtype.UUID        `db:"pod_id" json:"pod_id"`
+	Kind        string             `db:"kind" json:"kind"`
+	Position    int16              `db:"position" json:"position"`
+	StorageKey  string             `db:"storage_key" json:"storage_key"`
+	ContentType string             `db:"content_type" json:"content_type"`
+	SizeBytes   *int64             `db:"size_bytes" json:"size_bytes"`
+	Md5         *string            `db:"md5" json:"md5"`
+	TakenAt     pgtype.Timestamptz `db:"taken_at" json:"taken_at"`
+	Latitude    *float64           `db:"latitude" json:"latitude"`
+	Longitude   *float64           `db:"longitude" json:"longitude"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type ProcessedMessage struct {
 	Consumer    string             `db:"consumer" json:"consumer"`
 	MessageID   pgtype.UUID        `db:"message_id" json:"message_id"`
