@@ -111,7 +111,9 @@ What changed in each release, newest first.
   checks them (`scripts/clients-check.sh`: ready, the demo driver has
   loads, texts reach the sandbox) and pushes them. Kiflet/web's and
   Kiflet/mobile's tests start a given tag with the demo company and the
-  sandbox from `deployments/clients/compose.yml`.
+  sandbox from `deployments/clients/compose.yml`. `make clients-up` runs
+  that stack from the working tree, for the front ends' development,
+  without the registry.
 - **The load test** (`docs/deploy.md`, "Load test"). `make load-seed`
   puts `LOAD_PHONES` drivers on the road in staging, signed in, with
   `kiflet seed-load`. `make test-load` then plays their phones with k6: a
