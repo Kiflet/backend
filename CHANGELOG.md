@@ -76,6 +76,10 @@ What changed in each release, newest first.
 
 ### Fixed
 
+- **`make clients-up` runs again over its data.** Its seed step refused a
+  database it had already seeded, so the app never started the second
+  time. `server seed --if-empty` leaves loaded data alone, and the local
+  stack's compose file uses it.
 - **The cross-origin check covers the API** (audit A2). Every `/api/`
   path was exempt from it. Now only requests with an `Authorization`
   header (an API key or a driver's token, which a page on another site
