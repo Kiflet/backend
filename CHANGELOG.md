@@ -203,6 +203,20 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The driver sync reads a change feed** (`docs/migration.md`, phase 1,
+  step 1; audit D1). Every change a driver's phone must hear of writes an
+  entry in `driver_feed`, in the transaction of the change, numbered in
+  that driver's own sequence: a load that changed or was taken away (with
+  the reason: `reassigned`, `unassigned` or `cancelled`), a note from the
+  office, a message to every driver. A sync sends what the entries after
+  its cursor name, each load once as it is now, instead of every load
+  touched in the last week; a change whose transaction committed after a
+  sync began is no longer missed. The cursor is an opaque string, and
+  the profile is sent only when it changed. A cursor that can't be
+  carried on from (missing, another driver's, older than the 30 days the
+  feed keeps, or a timestamp from a PWA loaded before this) gets a full
+  download (`full`), which the PWA now honours. The new driversync module
+  owns the feed; the load test syncs from a cursor, as phones do.
 - **The plan, revised after an audit** (`docs/audit-2026-11-19.md`):
   backend first. `docs/migration.md` is rewritten in new phases: the data
   and the flow (a change feed for the driver sync, the tenant in every

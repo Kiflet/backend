@@ -970,7 +970,7 @@ func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *after
 	if e.OccurredAt.IsZero() {
 		e.OccurredAt = s.now()
 	}
-	recorded, err := s.shipmentData.Record(ctx, events.Tx{Conn: q.Conn(), After: after.fn()}, a, sh, e)
+	recorded, err := s.shipmentData.Record(ctx, eventTx(q, after), a, sh, e)
 	if err != nil {
 		// A failed write spoils the transaction, so the change fails with
 		// it: no change goes in without its event.

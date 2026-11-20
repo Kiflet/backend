@@ -220,9 +220,12 @@ func TestHeldPODAfterReassignment(t *testing.T) {
 	}
 
 	// The second driver's phone lets go of the shipment.
-	resp, _ = second.sync(service.SyncRequest{Since: &cursor})
+	resp, _ = second.sync(service.SyncRequest{Since: cursor})
 	if len(resp.RemovedShipmentIDs) != 1 || resp.RemovedShipmentIDs[0] != shipmentID {
 		t.Errorf("second driver's removed shipments %v, want the delivered one", resp.RemovedShipmentIDs)
+	}
+	if len(resp.Removed) != 1 || resp.Removed[0].Reason != "reassigned" {
+		t.Errorf("second driver's removals %+v, want the delivered one, reassigned", resp.Removed)
 	}
 }
 

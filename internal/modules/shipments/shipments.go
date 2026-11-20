@@ -26,7 +26,7 @@ type (
 	StatusCount   = store.CountShipmentsByStatusRow
 	PublicEvent   = store.ListPublicShipmentEventsRow
 	ActivityEntry = store.ListTenantActivityRow
-	DriverMessage = store.ListDriverMessagesSinceRow
+	DriverMessage = store.ListDriverMessagesRow
 )
 
 // The arguments of Shipments' methods.
@@ -51,7 +51,7 @@ type (
 	NewEvent             = store.CreateShipmentEventParams
 	EventsQuery          = store.ListShipmentEventsParams
 	ActivityQuery        = store.ListTenantActivityParams
-	DriverMessagesQuery  = store.ListDriverMessagesSinceParams
+	DriverMessagesQuery  = store.ListDriverMessagesParams
 	UnassignedQuery      = store.ListShipmentsUnassignedFromDriverSinceParams
 	AssignedQuery        = store.WasAssignedToParams
 	ClientEventQuery     = store.GetShipmentEventByClientIDParams
@@ -114,6 +114,9 @@ type Shipments interface {
 	// ForDriverSync are the shipments a driver's phone should hold.
 	ForDriverSync(ctx context.Context, conn database.Conn, arg SyncQuery) ([]Shipment, error)
 
+	// ByIDs are a company's shipments of the IDs given, as they are now.
+	ByIDs(ctx context.Context, conn database.Conn, tenantID pgtype.UUID, ids []pgtype.UUID) ([]Shipment, error)
+
 	// RecentForDriver are a driver's latest shipments.
 	RecentForDriver(ctx context.Context, conn database.Conn, arg DriverRecent) ([]Shipment, error)
 
@@ -141,8 +144,8 @@ type Shipments interface {
 	// Activity is a company's latest history, newest first.
 	Activity(ctx context.Context, conn database.Conn, arg ActivityQuery) ([]ActivityEntry, error)
 
-	// DriverMessagesSince are the notes the office addressed to a driver since a time.
-	DriverMessagesSince(ctx context.Context, conn database.Conn, arg DriverMessagesQuery) ([]DriverMessage, error)
+	// DriverMessages are the notes the office addressed to a driver: those of the IDs given, or with none the newest since a time.
+	DriverMessages(ctx context.Context, conn database.Conn, arg DriverMessagesQuery) ([]DriverMessage, error)
 
 	// UnassignedFromDriverSince are the shipments taken from a driver since a time and not handed back.
 	UnassignedFromDriverSince(ctx context.Context, conn database.Conn, arg UnassignedQuery) ([]pgtype.UUID, error)

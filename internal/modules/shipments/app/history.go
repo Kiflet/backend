@@ -28,7 +28,7 @@ func (s Service) Record(ctx context.Context, tx events.Tx, a identity.Actor, sh 
 			return false, fmt.Errorf("%s details: %w", c.Type, err)
 		}
 	}
-	_, err := s.AddEvent(ctx, tx.Conn, shipments.NewEvent{
+	ev, err := s.AddEvent(ctx, tx.Conn, shipments.NewEvent{
 		TenantID:         sh.TenantID,
 		ShipmentID:       sh.ID,
 		EventType:        c.Type,
@@ -65,7 +65,7 @@ func (s Service) Record(ctx context.Context, tx events.Tx, a identity.Actor, sh 
 			Type: c.Type, FromStatus: c.From, ToStatus: c.To, Reason: c.Reason,
 			DriverID: uuid(c.DriverID), ActorID: uuid(a.UserID), Source: a.Source,
 			Lat: c.Lat, Lng: c.Lng, OccurredAt: c.OccurredAt,
-			Shipment: sh, Actor: a, Change: c,
+			EventID: ev.ID, Shipment: sh, Actor: a, Change: c,
 		},
 	})
 }

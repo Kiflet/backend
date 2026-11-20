@@ -50,17 +50,19 @@ GROUP BY b.id
 ORDER BY b.created_at DESC
 LIMIT $2;
 
--- name: ListDriverBroadcastsSince :many
--- Messages to every driver on the road that reached this driver. The LIMIT
--- is maxDriverBroadcasts in the sync service.
+-- name: ListDriverBroadcasts :many
+-- Messages to every driver on the road that reached this driver: those
+-- the driver's feed names (ids), or with none named the newest since a
+-- time, for a full download.
 SELECT b.id, b.body, b.sender_name, b.created_at
 FROM broadcasts b
 JOIN broadcast_recipients r ON r.broadcast_id = b.id
 WHERE b.tenant_id = sqlc.arg(tenant_id)
   AND r.driver_id = sqlc.arg(driver_id)
+  AND (sqlc.narg(ids)::uuid[] IS NULL OR b.id = ANY(sqlc.narg(ids)::uuid[]))
   AND b.created_at > sqlc.arg(since)
-ORDER BY b.created_at ASC
-LIMIT 50;
+ORDER BY b.created_at DESC
+LIMIT sqlc.arg(max_messages);
 
 -- name: DeleteOldBroadcasts :exec
 DELETE FROM broadcasts WHERE created_at < $1;

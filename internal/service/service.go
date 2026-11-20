@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/kiflet/backend/internal/modules/audit"
+	"github.com/kiflet/backend/internal/modules/driversync"
 	"github.com/kiflet/backend/internal/modules/fleet"
 	"github.com/kiflet/backend/internal/modules/identity"
 	"github.com/kiflet/backend/internal/modules/shipments"
@@ -91,8 +92,10 @@ type Deps struct {
 	Bus events.Bus
 	// ShipmentFiles are shipments' documents and charges.
 	ShipmentFiles shipments.Files
-	Log           zerolog.Logger
-	Publisher     Publisher
+	// Feed is the driversync module's change feed, which the sync reads.
+	Feed      driversync.Feed
+	Log       zerolog.Logger
+	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
 	// stores them at once.
 	Positions PositionQueue
@@ -150,7 +153,7 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments, shipmentFiles: d.ShipmentFiles,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments, shipmentFiles: d.ShipmentFiles, feed: d.Feed,
 		positions: d.Positions, bus: d.Bus, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
 	s := &Services{}
@@ -210,6 +213,7 @@ type core struct {
 	// some services already (the ShipmentService they call).
 	shipmentData  shipments.Shipments
 	shipmentFiles shipments.Files
+	feed          driversync.Feed
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	bus           events.Bus
@@ -258,8 +262,11 @@ func (c *core) tx(ctx context.Context, fn func(q *db.Queries, after *afterCommit
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
-	after := &afterCommit{}
+	after := &afterCommit{scope: &events.Scope{}}
 	if err := fn(c.q.WithTx(tx), after); err != nil {
+		return err
+	}
+	if err := after.scope.Finish(ctx); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -271,11 +278,27 @@ func (c *core) tx(ctx context.Context, fn func(q *db.Queries, after *afterCommit
 	return nil
 }
 
+// snapshot runs fn in a read-only transaction that sees the database as
+// it was at its first query, for reads that must agree with each other.
+func (c *core) snapshot(ctx context.Context, fn func(q *db.Queries) error) error {
+	tx, err := c.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
+	if err := fn(c.q.WithTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 type afterCommit struct {
 	fns []func()
 	// to, when set, is the After of the events.Tx a subscriber runs in:
 	// what it defers goes to the publisher's transaction.
 	to func(func())
+	// scope is what the transaction's subscribers keep until it commits.
+	scope *events.Scope
 }
 
 func (a *afterCommit) do(f func()) {
@@ -292,7 +315,16 @@ func afterOf(tx events.Tx) *afterCommit {
 	if tx.After == nil {
 		return nil
 	}
-	return &afterCommit{to: tx.After}
+	return &afterCommit{to: tx.After, scope: tx.Scope}
+}
+
+// eventTx is the events.Tx of a transaction run by tx, or of none when
+// after is nil.
+func eventTx(q *db.Queries, after *afterCommit) events.Tx {
+	if after == nil {
+		return events.Tx{Conn: q.Conn()}
+	}
+	return events.Tx{Conn: q.Conn(), After: after.do, Scope: after.scope}
 }
 
 // fn is do as a function, or nil for no transaction: what an events.Tx

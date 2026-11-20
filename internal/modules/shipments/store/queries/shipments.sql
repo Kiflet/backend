@@ -155,20 +155,23 @@ WHERE driver_id = $1
   AND status IN ('assigned', 'in_transit', 'delayed', 'arrived', 'issue');
 
 -- name: ListShipmentsForDriverSync :many
--- Everything the driver's device should hold: active work, plus recently
--- finished work so the completed list survives a reinstall. On an incremental
--- sync anything changed since the cursor is included as well, so a
--- cancellation or a dispatcher edit reaches the device.
+-- Everything the driver's device should hold, for a full download: active
+-- work, plus recently finished work so the completed list survives a
+-- reinstall. Later changes reach the device through the driver feed.
 SELECT * FROM shipments
 WHERE driver_id = sqlc.arg(driver_id)
   AND tenant_id = sqlc.arg(tenant_id)
   AND (
     status IN ('assigned', 'in_transit', 'delayed', 'arrived', 'issue')
     OR updated_at > NOW() - INTERVAL '7 days'
-    OR (sqlc.narg(since)::timestamptz IS NOT NULL AND updated_at > sqlc.narg(since)::timestamptz)
   )
 ORDER BY created_at DESC
 LIMIT 200;
+
+-- name: ListShipmentsByIDs :many
+-- The loads a driver's feed names, as they are now.
+SELECT * FROM shipments
+WHERE tenant_id = sqlc.arg(tenant_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: CountShipmentsByStatus :many
 SELECT status, COUNT(*)::bigint AS total

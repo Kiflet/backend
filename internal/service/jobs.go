@@ -8,6 +8,7 @@ import (
 
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/driversync"
 	"github.com/kiflet/backend/pkg/metrics"
 )
 
@@ -263,6 +264,11 @@ func (j *Jobs) Retention(ctx context.Context) error {
 	}
 	if err := j.links.DeleteOld(ctx, now.Add(-retainLinks)); err != nil {
 		return err
+	}
+	if n, err := j.feed.Prune(ctx, now.Add(-driversync.Retention)); err != nil {
+		return err
+	} else if n > 0 {
+		j.log.Info().Int64("drivers", n).Msg("pruned the driver feed")
 	}
 	if err := j.q.DeleteOldBroadcasts(ctx, toTimestamp(now.Add(-retainBroadcasts))); err != nil {
 		return err

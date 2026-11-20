@@ -240,41 +240,51 @@ func (q *Queries) ListBroadcasts(ctx context.Context, arg ListBroadcastsParams) 
 	return items, nil
 }
 
-const listDriverBroadcastsSince = `-- name: ListDriverBroadcastsSince :many
+const listDriverBroadcasts = `-- name: ListDriverBroadcasts :many
 SELECT b.id, b.body, b.sender_name, b.created_at
 FROM broadcasts b
 JOIN broadcast_recipients r ON r.broadcast_id = b.id
 WHERE b.tenant_id = $1
   AND r.driver_id = $2
-  AND b.created_at > $3
-ORDER BY b.created_at ASC
-LIMIT 50
+  AND ($3::uuid[] IS NULL OR b.id = ANY($3::uuid[]))
+  AND b.created_at > $4
+ORDER BY b.created_at DESC
+LIMIT $5
 `
 
-type ListDriverBroadcastsSinceParams struct {
-	TenantID pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
-	DriverID pgtype.UUID        `db:"driver_id" json:"driver_id"`
-	Since    pgtype.Timestamptz `db:"since" json:"since"`
+type ListDriverBroadcastsParams struct {
+	TenantID    pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	DriverID    pgtype.UUID        `db:"driver_id" json:"driver_id"`
+	Ids         []pgtype.UUID      `db:"ids" json:"ids"`
+	Since       pgtype.Timestamptz `db:"since" json:"since"`
+	MaxMessages int32              `db:"max_messages" json:"max_messages"`
 }
 
-type ListDriverBroadcastsSinceRow struct {
+type ListDriverBroadcastsRow struct {
 	ID         pgtype.UUID        `db:"id" json:"id"`
 	Body       string             `db:"body" json:"body"`
 	SenderName string             `db:"sender_name" json:"sender_name"`
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
-// Messages to every driver on the road that reached this driver. The LIMIT
-// is maxDriverBroadcasts in the sync service.
-func (q *Queries) ListDriverBroadcastsSince(ctx context.Context, arg ListDriverBroadcastsSinceParams) ([]ListDriverBroadcastsSinceRow, error) {
-	rows, err := q.db.Query(ctx, listDriverBroadcastsSince, arg.TenantID, arg.DriverID, arg.Since)
+// Messages to every driver on the road that reached this driver: those
+// the driver's feed names (ids), or with none named the newest since a
+// time, for a full download.
+func (q *Queries) ListDriverBroadcasts(ctx context.Context, arg ListDriverBroadcastsParams) ([]ListDriverBroadcastsRow, error) {
+	rows, err := q.db.Query(ctx, listDriverBroadcasts,
+		arg.TenantID,
+		arg.DriverID,
+		arg.Ids,
+		arg.Since,
+		arg.MaxMessages,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListDriverBroadcastsSinceRow{}
+	items := []ListDriverBroadcastsRow{}
 	for rows.Next() {
-		var i ListDriverBroadcastsSinceRow
+		var i ListDriverBroadcastsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Body,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -57,5 +58,33 @@ func TestPublish(t *testing.T) {
 	}
 	if err := b.Publish(context.Background(), Tx{}, Event{Type: "shipment.assigned"}); err != nil || ran[len(ran)-1] != "after shipment.assigned" {
 		t.Errorf("without a transaction, After runs at once: %v, %v", ran, err)
+	}
+}
+
+func TestScope(t *testing.T) {
+	var s Scope
+	n := s.Value("k", func() any { return new(int) }).(*int)
+	*n = 2
+	if got := *s.Value("k", func() any { return new(int) }).(*int); got != 2 {
+		t.Errorf("the second Value made a new one: %d", got)
+	}
+	var ran []string
+	s.BeforeCommit(func(context.Context) error {
+		ran = append(ran, "first")
+		s.BeforeCommit(func(context.Context) error { ran = append(ran, "added while finishing"); return nil })
+		return nil
+	})
+	s.BeforeCommit(func(context.Context) error { ran = append(ran, "second"); return nil })
+	if err := s.Finish(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ran, ", "); got != "first, second, added while finishing" {
+		t.Errorf("ran %s", got)
+	}
+	var failed Scope
+	failed.BeforeCommit(func(context.Context) error { return errors.New("no") })
+	failed.BeforeCommit(func(context.Context) error { t.Error("ran after a failure"); return nil })
+	if err := failed.Finish(context.Background()); err == nil {
+		t.Error("a failure wasn't returned")
 	}
 }

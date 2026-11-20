@@ -102,6 +102,10 @@ func (Service) ForDriverSync(ctx context.Context, conn database.Conn, arg shipme
 	return store.New(conn).ListShipmentsForDriverSync(ctx, arg)
 }
 
+func (Service) ByIDs(ctx context.Context, conn database.Conn, tenantID pgtype.UUID, ids []pgtype.UUID) ([]shipments.Shipment, error) {
+	return store.New(conn).ListShipmentsByIDs(ctx, store.ListShipmentsByIDsParams{TenantID: tenantID, Ids: ids})
+}
+
 func (Service) RecentForDriver(ctx context.Context, conn database.Conn, arg shipments.DriverRecent) ([]shipments.Shipment, error) {
 	return store.New(conn).ListRecentShipmentsByDriver(ctx, arg)
 }
@@ -138,8 +142,8 @@ func (Service) Activity(ctx context.Context, conn database.Conn, arg shipments.A
 	return store.New(conn).ListTenantActivity(ctx, arg)
 }
 
-func (Service) DriverMessagesSince(ctx context.Context, conn database.Conn, arg shipments.DriverMessagesQuery) ([]shipments.DriverMessage, error) {
-	return store.New(conn).ListDriverMessagesSince(ctx, arg)
+func (Service) DriverMessages(ctx context.Context, conn database.Conn, arg shipments.DriverMessagesQuery) ([]shipments.DriverMessage, error) {
+	return store.New(conn).ListDriverMessages(ctx, arg)
 }
 
 func (Service) UnassignedFromDriverSince(ctx context.Context, conn database.Conn, arg shipments.UnassignedQuery) ([]pgtype.UUID, error) {

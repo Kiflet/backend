@@ -177,12 +177,11 @@ func TestManyMessagesArriveInPages(t *testing.T) {
 	driverID, phone, pin := office.addDriver("Meron Tadesse")
 	shipmentID, _ := office.book("Addis Ababa", "Adama", driverID)
 	d := e.signIn(phone, pin)
-	exec(t, `INSERT INTO shipment_events (tenant_id, shipment_id, event_type, driver_id, actor_name, note, visible_to_driver, created_at)
-		SELECT tenant_id, id, 'note', driver_id, 'Dispatch', 'Note ' || g, true, NOW() - make_interval(secs => 300 - g)
-		FROM shipments, generate_series(1, 250) g WHERE id = $1`, shipmentID)
+	first, _ := d.sync(service.SyncRequest{})
+	notesToDriver(t, shipmentID, 650)
 
 	got := map[string]bool{}
-	var since *time.Time
+	since := first.Cursor
 	for round := 1; ; round++ {
 		if round > 5 {
 			t.Fatal("still more messages after five syncs")
@@ -196,13 +195,13 @@ func TestManyMessagesArriveInPages(t *testing.T) {
 				got[m.Text] = true
 			}
 		}
-		since = &resp.Cursor
+		since = resp.Cursor
 		if !resp.More {
 			break
 		}
 	}
-	if len(got) != 250 {
-		t.Errorf("%d of 250 messages arrived", len(got))
+	if len(got) != 650 {
+		t.Errorf("%d of 650 messages arrived", len(got))
 	}
 }
 

@@ -303,7 +303,7 @@ flowchart TD
 | alerts | `alerts`, `alert_rules` | `alert.raised`, `alert.resolved` | shipment, tracking and fleet events; `jobs.alerts.*` |
 | notify | `sms_messages`, `sms_opt_outs`, `emails`, `push_tokens` | `sms.status_reported`, `sms.inbound` | `notify.sms`, `notify.email`, `notify.push` |
 | messaging | `broadcasts`, `broadcast_recipients`; messages between a driver and the office are shipment events (`shipment_events`), written through shipments | `message.sent` | |
-| driversync | `driver_feed`, `driver_feed_heads`, `driver_devices`, `driver_diagnostics`, `sync_metadata` | | shipment events, `message.sent` and changes to a driver's profile, within their transactions (section 11, "The driver sync") |
+| driversync | `driver_feed`, `driver_feed_heads`, `driver_devices`, `driver_diagnostics`, `sync_metadata` | | shipment events and `message.sent`, within their transactions (section 11, "The driver sync") |
 | customer | confirmation links | `customer.confirmed` | |
 | billing | `invoices`, `invoice_counters`, `payments`, `billing_notices` | `billing.invoice_issued`, `.paid`, `.standing_changed` | `jobs.billing.*` |
 | integrations | `api_keys`, `webhook_endpoints`, `webhook_deliveries` | | shipment events (delivered as webhooks) |
@@ -971,8 +971,8 @@ what is beyond gets no answer and is sent again next time.
 | `shipments` | each load that changed since the cursor, whole, as it is now |
 | `removed` | each load taken off the phone, with its reason: `reassigned`, `unassigned` or `cancelled` (and `removed_shipment_ids`, the IDs alone, for the PWA) |
 | `messages` | new messages from the office, and broadcasts |
-| `driver` | the profile and settings, when they changed |
-| `config_etag` | the config's current `ETag`: the app fetches config again when it differs from its own |
+| `driver` | the profile and settings, when they changed since the cursor |
+| `config_etag` | the config's current `ETag`: the app fetches config again when it differs from its own (with the driver API, phase 3) |
 | `cursor` | an opaque string, sent back as `since` next time |
 | `full` | this is a full download: the loads in it are all the driver should hold |
 | `more` | there is more: sync again at once |
@@ -981,7 +981,8 @@ what is beyond gets no answer and is sent again next time.
 **How the server knows what changed.** Every change a driver's phone must
 hear of writes an entry in `driver_feed`, in the same transaction as the
 change: the driver, a number in that driver's own sequence, what changed
-(a load, a message, the profile), and, for a load taken away, why. A
+(a load, a note from the office, a message to every driver), and, for a
+load taken away, why. A
 change to a load writes an entry for its driver and, when the load was
 taken from another driver, one for them too. The number comes from the
 driver's row in `driver_feed_heads`, raised with `UPDATE … RETURNING`: the
@@ -989,7 +990,11 @@ row stays locked until the transaction commits, so a driver's entries
 become visible in the order of their numbers, and a reader that sees
 entry *n* sees every entry before it. Entries are written at the end of
 the transaction, the heads locked in order of driver ID, so they add no
-deadlock.
+deadlock (`events.Scope`'s `BeforeCommit`, which runs as the transaction
+ends). The profile writes no entries: the cursor carries a digest of the
+one last sent, and a sync sends the profile when it differs, so an edit
+made anywhere (the company's name, the truck's plate, a PIN reset)
+reaches the phone.
 
 A sync reads, in one snapshot, the entries after its cursor, groups them
 by load, and sends each load once, as it is now: a load still the
@@ -1004,7 +1009,8 @@ change whose transaction began before a sync and committed after it
 belongs to another driver, or is older than the 30 days the feed keeps.
 The server reads, in one snapshot, the driver's last number and then all
 the driver should hold: active loads, those finished in the last 7 days,
-the recent messages and the profile, with `full: true`. The phone
+the newest 50 notes and 50 broadcasts of the last 7 days, and the profile,
+with `full: true`. The phone
 replaces its loads with them, keeping any with items not yet sent or a
 delivery draft. A timestamp cursor, from a PWA loaded before the change,
 gets a full download too, which also lists in `removed_shipment_ids` the

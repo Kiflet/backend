@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5/pgtype"
 	auditapp "github.com/kiflet/backend/internal/modules/audit/app"
+	driversyncapp "github.com/kiflet/backend/internal/modules/driversync/app"
 	fleetapp "github.com/kiflet/backend/internal/modules/fleet/app"
 	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
 	shipmentsapp "github.com/kiflet/backend/internal/modules/shipments/app"
@@ -161,6 +162,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		Fleet:         fleetapp.New(pool),
 		Shipments:     shipmentsapp.New(bus),
 		ShipmentFiles: shipmentsapp.New(bus),
+		Feed:          driversyncapp.New(pool, bus),
 		Bus:           bus,
 		Pool:          pool, Log: log, Publisher: live, Positions: positions,
 		RemoteWorkers: !roles.Has("worker"), Work: work,

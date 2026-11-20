@@ -10,7 +10,7 @@ import { saving, stopTracking, updateTracking } from "./gps.js";
 import { go, render, renderPill, rerender } from "./router.js";
 import { adoptSettings } from "./settings.js";
 import { ACTIVE, S, VERSION, uuid } from "./state.js";
-import { clear, del, dropDrafts, kvSet, put, storageEstimate, tx } from "./store.js";
+import { clear, del, dropDrafts, kvGet, kvSet, put, storageEstimate, tx } from "./store.js";
 import { msgText, t } from "./text.js";
 
 export async function enqueue(kind, payload) {
@@ -189,10 +189,21 @@ async function applySync(resp, locKeys) {
     S.pendingLocations = Math.max(0, S.pendingLocations - locKeys.length);
   }
 
-  // Shipments: the server sends what the device should hold.
+  // Shipments: the server sends those that changed, as they are now.
   for (const sh of resp.shipments || []) {
     S.shipments.set(sh.id, sh);
     await put("shipments", sh);
+  }
+  // A full download is everything the driver should hold: the others go,
+  // except one with changes not yet sent or a delivery draft.
+  if (resp.full) {
+    const sent = new Set((resp.shipments || []).map((sh) => sh.id));
+    const waiting = new Set(S.outbox.map((o) => o.payload && o.payload.shipment_id));
+    for (const id of [...S.shipments.keys()]) {
+      if (sent.has(id) || waiting.has(id) || (await kvGet("draft:" + id))) continue;
+      S.shipments.delete(id);
+      await del("shipments", id);
+    }
   }
   for (const id of resp.removed_shipment_ids || []) {
     if (S.shipments.has(id)) {

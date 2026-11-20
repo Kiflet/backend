@@ -79,7 +79,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 
 ### Phase 1: the data and the flow
 
-- [ ] The driver sync's change feed, with an opaque cursor and full
+- [x] The driver sync's change feed, with an opaque cursor and full
       downloads (D1).
 - [ ] The tenant in every reference between companies' tables (D2).
 - [ ] The per-driver load limit counted under a lock (D3).

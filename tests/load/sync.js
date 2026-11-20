@@ -11,7 +11,9 @@
 // tracking.ingest more than two minutes, which tests/load/report.sql
 // reads from the database afterwards.
 //
-// The phones are from `kiflet seed-load` (make load-seed).
+// The phones are from `kiflet seed-load` (make load-seed). setup() gives
+// each its cursor with one full download, so that the syncs measured are
+// the app's usual ones: what changed since its last.
 import http from "k6/http";
 import { check } from "k6";
 import { SharedArray } from "k6/data";
@@ -59,17 +61,29 @@ export const options = {
   },
 };
 
-function sync(p, n, locations) {
-  return http.post(
+function request(p, n, since, locations) {
+  return [
+    "POST",
     `${BASE}/api/v1/driver/sync`,
-    JSON.stringify({
-      device_id: `load-${n}`,
-      app_version: "load-test",
-      since: new Date(Date.now() - 60 * 1000).toISOString(),
-      locations,
-    }),
+    JSON.stringify({ device_id: `load-${n}`, app_version: "load-test", since, locations }),
     { headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.token}` } },
-  );
+  ];
+}
+
+function sync(data, p, n, locations) {
+  const [method, url, body, params] = request(p, n, data.cursors[n] || "", locations);
+  return http.request(method, url, body, params);
+}
+
+// Each phone's cursor, from a full download, a hundred phones at a time.
+export function setup() {
+  const cursors = [];
+  for (let i = 0; i < phones.length; i += 100) {
+    const batch = [];
+    for (let n = i; n < Math.min(i + 100, phones.length); n++) batch.push(request(phones[n], n, "", []));
+    for (const res of http.batch(batch)) cursors.push(res.status === 200 ? res.json("cursor") : "");
+  }
+  return { cursors };
 }
 
 function fix(p, n, id, at, k) {
@@ -96,17 +110,17 @@ function stored(res, want) {
 }
 
 // One phone's sync a minute, with the position it took just now.
-export function live() {
+export function live(data) {
   const i = exec.scenario.iterationInTest;
   const n = i % LIVE;
   const p = phones[n];
-  const res = sync(p, n, [fix(p, n, `live-${i}`, Date.now(), Math.floor(i / LIVE))]);
+  const res = sync(data, p, n, [fix(p, n, `live-${i}`, Date.now(), Math.floor(i / LIVE))]);
   check(res, { "live: position taken": (r) => stored(r, 1) });
 }
 
 // A phone back in signal with two hours of positions, taken from the end
 // of the list so that, with enough phones, they aren't the live ones.
-export function reconnect() {
+export function reconnect(data) {
   const i = exec.scenario.iterationInTest;
   const n = phones.length - 1 - (i % RECONNECT);
   const p = phones[n];
@@ -115,7 +129,7 @@ export function reconnect() {
   for (let k = 0, at = now - BACKLOG; at < now; k++, at += FIX_EVERY) {
     locations.push(fix(p, n, `back-${i}-${k}`, at, k));
   }
-  const res = sync(p, n, locations);
+  const res = sync(data, p, n, locations);
   reconnectDuration.add(res.timings.duration);
   check(res, { "reconnect: positions taken": (r) => stored(r, locations.length) });
 }

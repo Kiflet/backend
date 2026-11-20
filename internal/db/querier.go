@@ -238,9 +238,10 @@ type Querier interface {
 	ListBroadcasts(ctx context.Context, arg ListBroadcastsParams) ([]ListBroadcastsRow, error)
 	ListCompanyTickets(ctx context.Context, tenantID pgtype.UUID) ([]ListCompanyTicketsRow, error)
 	ListDocumentKeysForShipments(ctx context.Context, ids []pgtype.UUID) ([]string, error)
-	// Messages to every driver on the road that reached this driver. The LIMIT
-	// is maxDriverBroadcasts in the sync service.
-	ListDriverBroadcastsSince(ctx context.Context, arg ListDriverBroadcastsSinceParams) ([]ListDriverBroadcastsSinceRow, error)
+	// Messages to every driver on the road that reached this driver: those
+	// the driver's feed names (ids), or with none named the newest since a
+	// time, for a full download.
+	ListDriverBroadcasts(ctx context.Context, arg ListDriverBroadcastsParams) ([]ListDriverBroadcastsRow, error)
 	// Active drivers with a shipment assigned or under way: who a message to
 	// "every driver on the road" reaches.
 	ListDriversOnTheRoad(ctx context.Context, tenantID pgtype.UUID) ([]ListDriversOnTheRoadRow, error)
