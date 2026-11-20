@@ -327,9 +327,10 @@ func (s *UserService) CreateStaff(ctx context.Context, p *Principal, in PersonIn
 			})
 			out.Texted = true
 		}
-		password := p.Name + " will give you a temporary password for your first sign-in."
+		// G101 below: sentences about a password, not passwords.
+		password := p.Name + " will give you a temporary password for your first sign-in." //nolint:gosec // G101
 		if out.Texted {
-			password = "We've texted a temporary password for your first sign-in to your phone."
+			password = "We've texted a temporary password for your first sign-in to your phone." //nolint:gosec // G101
 		}
 		intro := fmt.Sprintf("%s added you to %s on %s. Sign in at %s/login with this email address. %s",
 			p.Name, p.TenantName, s.cfg.AppName, s.cfg.BaseURL, password)

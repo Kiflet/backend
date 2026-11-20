@@ -29,7 +29,7 @@ import (
 func setupStorage(ctx context.Context, log zerolog.Logger) error {
 	token := os.Getenv("GARAGE_ADMIN_TOKEN")
 	if f := os.Getenv("GARAGE_ADMIN_TOKEN_FILE"); f != "" {
-		raw, err := os.ReadFile(f)
+		raw, err := os.ReadFile(f) //nolint:gosec // G304: the secret file the operator names
 		if err != nil {
 			return fmt.Errorf("GARAGE_ADMIN_TOKEN_FILE: %w", err)
 		}

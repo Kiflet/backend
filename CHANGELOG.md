@@ -76,6 +76,15 @@ What changed in each release, newest first.
 
 ### Fixed
 
+- **Texts refused together sign in once.** When Ethio telecom's gateway
+  ends its token early, every text in flight was refused and each asked
+  for a new token; now the first does and the others use it. This was the
+  likely cause of `TestGatewayFaults` failing now and then (audit T5).
+- **Local files can't leave their folder.** The local store (development
+  and tests) opens every file through `os.Root`, so no name or link can
+  reach outside `uploads/`; its folders are no longer readable by all.
+- **A test that failed late in the UTC day.** The platform audit test's
+  "tomorrow" is now Addis Ababa's, whose dates the filter reads.
 - **Drivers sharing a carrier address.** The driver app's API was limited
   to 600 requests a minute from one address, so a few hundred drivers
   behind one Ethio telecom address would have had their syncs refused. It
@@ -89,6 +98,9 @@ What changed in each release, newest first.
 
 ### Added
 
+- **gosec in `make lint`** (audit P2). Its findings were checked one by
+  one: none was a vulnerability. The exceptions are in `.golangci.yml`,
+  or beside the line, each with its reason.
 - **The load test** (`docs/deploy.md`, "Load test"). `make load-seed`
   puts `LOAD_PHONES` drivers on the road in staging, signed in, with
   `kiflet seed-load`. `make test-load` then plays their phones with k6: a

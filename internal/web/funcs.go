@@ -39,6 +39,8 @@ func invoiceKind(kind string) string {
 
 // mark escapes s and wraps each occurrence of term in it, ignoring case,
 // in <mark>, to show what a search matched (FR-009 AC-009.5).
+//
+//nolint:gosec // G203: every rune of term and s is escaped; only <mark> is added
 func mark(term, s string) template.HTML {
 	t := []rune(strings.TrimSpace(term))
 	if len(t) == 0 {
@@ -359,7 +361,7 @@ func (s *Server) funcs() template.FuncMap {
 		},
 		"maskPhone": phone.Mask,
 		"telURL": func(p string) template.URL {
-			return template.URL("tel:" + strings.ReplaceAll(p, " ", ""))
+			return template.URL("tel:" + strings.ReplaceAll(p, " ", "")) //nolint:gosec // G203: the scheme is fixed, so no javascript: URL can come out
 		},
 		"local": func(t time.Time) time.Time { return t.In(loc) },
 		"firstName": func(name string) string {

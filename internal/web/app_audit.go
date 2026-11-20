@@ -24,6 +24,7 @@ type auditRow struct {
 
 type auditChange struct{ Field, From, To string }
 
+//nolint:gosec // G101: the names of audited actions, not credentials
 var auditActions = map[string]string{
 	"login":                      "Signed in",
 	"login_failed":               "Failed sign-in",

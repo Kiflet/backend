@@ -210,7 +210,7 @@ func (s *Sandbox) openPhone(w http.ResponseWriter, r *http.Request) {
 		s.renderHome(w, r, http.StatusUnprocessableEntity, "That isn't an Ethiopian mobile number, such as 0911234567.")
 		return
 	}
-	http.Redirect(w, r, "/phones/"+number, http.StatusSeeOther)
+	http.Redirect(w, r, "/phones/"+number, http.StatusSeeOther) //nolint:gosec // G710: a local path, and number is digits only (localNumber)
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +258,7 @@ func (s *Sandbox) phonePage(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" {
 			target += "?" + r.URL.RawQuery
 		}
-		http.Redirect(w, r, target, http.StatusFound)
+		http.Redirect(w, r, target, http.StatusFound) //nolint:gosec // G710: a local path, and number is digits only (localNumber)
 		return
 	}
 	q := r.URL.Query()

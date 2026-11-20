@@ -95,7 +95,7 @@ func seed(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log zerol
 	}
 	svc := a.Services
 	ci := service.ClientInfo{IP: "127.0.0.1", UserAgent: "seed"}
-	rng := rand.New(rand.NewPCG(2026, 10))
+	rng := rand.New(rand.NewPCG(2026, 10)) //nolint:gosec // G404: demo data, the same on every seed
 	now := time.Now()
 
 	// The platform operator's own account.

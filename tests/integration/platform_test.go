@@ -451,7 +451,10 @@ func TestPlatformAuditAndHealth(t *testing.T) {
 	if rows := entries("&ip=10.9.9.9"); !strings.Contains(rows, "Nothing matches") {
 		t.Error("an address with no entries still lists some")
 	}
-	if rows := entries("&from=" + time.Now().AddDate(0, 0, 1).Format("2006-01-02")); !strings.Contains(rows, "Nothing matches") {
+	// Tomorrow in Addis Ababa, whose dates the filter reads: three hours
+	// ahead of UTC, so late in a UTC day its "tomorrow" is already today.
+	eat := time.FixedZone("EAT", 3*3600)
+	if rows := entries("&from=" + time.Now().In(eat).AddDate(0, 0, 1).Format("2006-01-02")); !strings.Contains(rows, "Nothing matches") {
 		t.Error("a date range with no entries still lists some")
 	}
 	if p := office.get("/app/platform/audit"); p.Status != http.StatusForbidden {

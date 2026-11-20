@@ -2,8 +2,10 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,9 @@ import (
 type LocalStorage struct {
 	basePath string
 	baseURL  string
+	// root opens every file, so no name, link or race can reach outside
+	// basePath. It stays open for the life of the process.
+	root *os.Root
 }
 
 func NewLocalStorage(basePath string) (*LocalStorage, error) {
@@ -24,29 +29,31 @@ func NewLocalStorage(basePath string) (*LocalStorage, error) {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
-	if err := os.MkdirAll(absPath, 0755); err != nil {
+	if err := os.MkdirAll(absPath, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
+	}
+	root, err := os.OpenRoot(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open storage directory: %w", err)
 	}
 
 	return &LocalStorage{
 		basePath: absPath,
 		baseURL:  "/uploads",
+		root:     root,
 	}, nil
 }
 
 func (l *LocalStorage) Upload(ctx context.Context, path string, reader io.Reader, contentType string) (string, error) {
-	if err := l.validatePath(path); err != nil {
+	name, err := l.name(path)
+	if err != nil {
 		return "", err
 	}
-
-	fullPath := filepath.Join(l.basePath, path)
-	dir := filepath.Dir(fullPath)
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := l.root.MkdirAll(filepath.Dir(name), 0o750); err != nil {
 		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	file, err := os.Create(fullPath)
+	file, err := l.root.Create(name)
 	if err != nil {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
@@ -57,7 +64,7 @@ func (l *LocalStorage) Upload(ctx context.Context, path string, reader io.Reader
 		err = cerr
 	}
 	if err != nil {
-		_ = os.Remove(fullPath) // the error above is the one to report
+		_ = l.root.Remove(name) // the error above is the one to report
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -65,15 +72,14 @@ func (l *LocalStorage) Upload(ctx context.Context, path string, reader io.Reader
 }
 
 func (l *LocalStorage) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	if err := l.validatePath(path); err != nil {
+	name, err := l.name(path)
+	if err != nil {
 		return nil, err
 	}
 
-	fullPath := filepath.Join(l.basePath, path)
-
-	file, err := os.Open(fullPath)
+	file, err := l.root.Open(name)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, ErrFileNotFound
 		}
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -83,14 +89,13 @@ func (l *LocalStorage) Download(ctx context.Context, path string) (io.ReadCloser
 }
 
 func (l *LocalStorage) Delete(ctx context.Context, path string) error {
-	if err := l.validatePath(path); err != nil {
+	name, err := l.name(path)
+	if err != nil {
 		return err
 	}
 
-	fullPath := filepath.Join(l.basePath, path)
-
-	if err := os.Remove(fullPath); err != nil {
-		if os.IsNotExist(err) {
+	if err := l.root.Remove(name); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
 			return ErrFileNotFound
 		}
 		return fmt.Errorf("failed to delete file: %w", err)
@@ -123,6 +128,14 @@ func (l *LocalStorage) validatePath(path string) error {
 	}
 
 	return nil
+}
+
+// name is path as a name inside the root: checked, cleaned and relative.
+func (l *LocalStorage) name(path string) (string, error) {
+	if err := l.validatePath(path); err != nil {
+		return "", err
+	}
+	return strings.TrimLeft(filepath.Clean(path), `/\`), nil
 }
 
 func (l *LocalStorage) GetBasePath() string {
