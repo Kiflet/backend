@@ -154,6 +154,18 @@ func (q *Queries) DeleteMessagesToPerson(ctx context.Context, arg DeleteMessages
 	return err
 }
 
+const deletePODMediaForShipments = `-- name: DeletePODMediaForShipments :exec
+DELETE FROM pod_media m
+USING proof_of_deliveries p
+WHERE p.tenant_id = m.tenant_id AND p.id = m.pod_id AND p.shipment_id = ANY($1::uuid[])
+`
+
+// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
+func (q *Queries) DeletePODMediaForShipments(ctx context.Context, ids []pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deletePODMediaForShipments, ids)
+	return err
+}
+
 const deletePersonDeviceData = `-- name: DeletePersonDeviceData :exec
 DELETE FROM sync_metadata WHERE driver_id = $1
 `
@@ -278,7 +290,8 @@ SELECT p.id, s.tracking_number, p.status, p.recorded_at, p.synced_at, p.recipien
        COALESCE(ST_X(p.delivery_coordinates), 0)::float8 AS longitude,
        p.location_verified, COALESCE(p.location_mismatch_meters, 0)::float8 AS mismatch_meters,
        COALESCE(p.location_reason, '')::text AS location_reason, COALESCE(p.delivery_notes, '')::text AS delivery_notes,
-       COALESCE(p.signature_url, '')::text AS signature_key, COALESCE(p.photo_urls, '{}')::text[] AS photo_keys
+       COALESCE((SELECT m.storage_key FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position = 0), '')::text AS signature_key,
+       ARRAY(SELECT m.storage_key FROM pod_media m WHERE m.tenant_id = p.tenant_id AND m.pod_id = p.id AND m.position > 0 ORDER BY m.position)::text[] AS photo_keys
 FROM proof_of_deliveries p
 JOIN shipments s ON s.id = p.shipment_id AND s.tenant_id = p.tenant_id
 LEFT JOIN users u ON u.id = p.driver_id
@@ -628,30 +641,26 @@ func (q *Queries) ListDocumentKeysForShipments(ctx context.Context, ids []pgtype
 }
 
 const listPODMediaForShipments = `-- name: ListPODMediaForShipments :many
-SELECT COALESCE(signature_url, '')::text AS signature_key, COALESCE(photo_urls, '{}')::text[] AS photo_keys
-FROM proof_of_deliveries
-WHERE shipment_id = ANY($1::uuid[])
+SELECT m.storage_key
+FROM pod_media m
+JOIN proof_of_deliveries p ON p.tenant_id = m.tenant_id AND p.id = m.pod_id
+WHERE p.shipment_id = ANY($1::uuid[])
 `
 
-type ListPODMediaForShipmentsRow struct {
-	SignatureKey string   `db:"signature_key" json:"signature_key"`
-	PhotoKeys    []string `db:"photo_keys" json:"photo_keys"`
-}
-
 // tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
-func (q *Queries) ListPODMediaForShipments(ctx context.Context, ids []pgtype.UUID) ([]ListPODMediaForShipmentsRow, error) {
+func (q *Queries) ListPODMediaForShipments(ctx context.Context, ids []pgtype.UUID) ([]string, error) {
 	rows, err := q.db.Query(ctx, listPODMediaForShipments, ids)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListPODMediaForShipmentsRow{}
+	items := []string{}
 	for rows.Next() {
-		var i ListPODMediaForShipmentsRow
-		if err := rows.Scan(&i.SignatureKey, &i.PhotoKeys); err != nil {
+		var storage_key string
+		if err := rows.Scan(&storage_key); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, storage_key)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -721,29 +730,22 @@ func (q *Queries) ListTenantDocumentKeys(ctx context.Context, tenantID pgtype.UU
 }
 
 const listTenantPODMedia = `-- name: ListTenantPODMedia :many
-SELECT COALESCE(signature_url, '')::text AS signature_key, COALESCE(photo_urls, '{}')::text[] AS photo_keys
-FROM proof_of_deliveries
-WHERE tenant_id = $1
+SELECT storage_key FROM pod_media WHERE tenant_id = $1
 `
 
-type ListTenantPODMediaRow struct {
-	SignatureKey string   `db:"signature_key" json:"signature_key"`
-	PhotoKeys    []string `db:"photo_keys" json:"photo_keys"`
-}
-
-func (q *Queries) ListTenantPODMedia(ctx context.Context, tenantID pgtype.UUID) ([]ListTenantPODMediaRow, error) {
+func (q *Queries) ListTenantPODMedia(ctx context.Context, tenantID pgtype.UUID) ([]string, error) {
 	rows, err := q.db.Query(ctx, listTenantPODMedia, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListTenantPODMediaRow{}
+	items := []string{}
 	for rows.Next() {
-		var i ListTenantPODMediaRow
-		if err := rows.Scan(&i.SignatureKey, &i.PhotoKeys); err != nil {
+		var storage_key string
+		if err := rows.Scan(&storage_key); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, storage_key)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

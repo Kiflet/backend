@@ -31,6 +31,8 @@ type Querier interface {
 	AcknowledgeStalePickupAlerts(ctx context.Context) error
 	AddBillingNotice(ctx context.Context, arg AddBillingNoticeParams) (int64, error)
 	AddBroadcastRecipient(ctx context.Context, arg AddBroadcastRecipientParams) error
+	// A stored file of a proof: position 0 is the signature, 1, 2… the photos.
+	AddPODMedia(ctx context.Context, arg AddPODMediaParams) error
 	// tenant: none, opting out is the phone's, from every company's texts.
 	AddSMSOptOut(ctx context.Context, phone string) error
 	AddSupportMessage(ctx context.Context, arg AddSupportMessageParams) (SupportMessage, error)
@@ -160,6 +162,8 @@ type Querier interface {
 	DeleteOldSMS(ctx context.Context, createdAt pgtype.Timestamptz) error
 	// tenant: none, retention, across every company.
 	DeleteOldWebhookDeliveries(ctx context.Context, createdAt pgtype.Timestamptz) error
+	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
+	DeletePODMediaForShipments(ctx context.Context, ids []pgtype.UUID) error
 	// tenant: none, a person being removed, by the user ID the caller found in their company.
 	DeletePersonDeviceData(ctx context.Context, driverID pgtype.UUID) error
 	DeleteSavedFilter(ctx context.Context, arg DeleteSavedFilterParams) (int64, error)
@@ -237,6 +241,8 @@ type Querier interface {
 	// The device's identifier for a proof: a replayed upload finds the first.
 	GetPODByClientID(ctx context.Context, arg GetPODByClientIDParams) (GetPODByClientIDRow, error)
 	GetPODByShipmentID(ctx context.Context, arg GetPODByShipmentIDParams) (GetPODByShipmentIDRow, error)
+	// The stored file n of a proof (0 the signature, then the photos).
+	GetPODMediaKey(ctx context.Context, arg GetPODMediaKeyParams) (GetPODMediaKeyRow, error)
 	GetPayment(ctx context.Context, arg GetPaymentParams) (GetPaymentRow, error)
 	// What the stand-in payment prompt shows: the reference is the secret.
 	GetPaymentByReference(ctx context.Context, reference string) (GetPaymentByReferenceRow, error)
@@ -316,7 +322,7 @@ type Querier interface {
 	// How late counts is the company's rule (alert_rules.late_minutes).
 	ListOverdueShipments(ctx context.Context) ([]ListOverdueShipmentsRow, error)
 	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
-	ListPODMediaForShipments(ctx context.Context, ids []pgtype.UUID) ([]ListPODMediaForShipmentsRow, error)
+	ListPODMediaForShipments(ctx context.Context, ids []pgtype.UUID) ([]string, error)
 	ListPaymentsByInvoice(ctx context.Context, arg ListPaymentsByInvoiceParams) ([]Payment, error)
 	// tenant: none, the payment checker, across every company.
 	// Payments a provider may have finished without its notification reaching
@@ -376,7 +382,7 @@ type Querier interface {
 	// Every company's tickets for the platform: waiting for an answer first.
 	ListSupportInbox(ctx context.Context, status *string) ([]ListSupportInboxRow, error)
 	ListTenantDocumentKeys(ctx context.Context, tenantID pgtype.UUID) ([]string, error)
-	ListTenantPODMedia(ctx context.Context, tenantID pgtype.UUID) ([]ListTenantPODMediaRow, error)
+	ListTenantPODMedia(ctx context.Context, tenantID pgtype.UUID) ([]string, error)
 	// tenant: none, the usage billing job, across every company.
 	// Companies with a finished month whose texts are not yet settled.
 	ListTenantsForUsageBilling(ctx context.Context, smsBilledMonth pgtype.Date) ([]Tenant, error)

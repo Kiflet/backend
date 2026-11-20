@@ -369,8 +369,8 @@ driver card and the note form are left alone, being forms in use. */}}
       {{if eq .Status "dismissed"}}<div><dt>Dismissed</dt><dd>{{when .ReviewedAt}}{{with .ReviewerName}} by {{.}}{{end}}</dd></div>{{end}}
     </dl>
     <div class="pod-media">
-      {{if .SignatureUrl}}<figure><a href="/app/shipments/{{$id}}/pods/{{$pod}}/media/0" target="_blank" rel="noopener"><img src="/app/shipments/{{$id}}/pods/{{$pod}}/media/0" alt="Recipient's signature" class="signature" loading="lazy"></a><figcaption>Signature</figcaption></figure>{{end}}
-      {{range $i, $p := .PhotoUrls}}<figure><a href="/app/shipments/{{$id}}/pods/{{$pod}}/media/{{add $i 1}}" target="_blank" rel="noopener"><img src="/app/shipments/{{$id}}/pods/{{$pod}}/media/{{add $i 1}}" alt="Delivery photo {{add $i 1}}" loading="lazy"></a><figcaption>Photo {{add $i 1}}</figcaption></figure>{{end}}
+      {{if .HasSignature}}<figure><a href="/app/shipments/{{$id}}/pods/{{$pod}}/media/0" target="_blank" rel="noopener"><img src="/app/shipments/{{$id}}/pods/{{$pod}}/media/0" alt="Recipient's signature" class="signature" loading="lazy"></a><figcaption>Signature</figcaption></figure>{{end}}
+      {{range $n := .Photos}}<figure><a href="/app/shipments/{{$id}}/pods/{{$pod}}/media/{{$n}}" target="_blank" rel="noopener"><img src="/app/shipments/{{$id}}/pods/{{$pod}}/media/{{$n}}" alt="Delivery photo {{$n}}" loading="lazy"></a><figcaption>Photo {{$n}}</figcaption></figure>{{end}}
     </div>
     {{if eq .Status "held"}}
     <div class="actions mt-s">
@@ -395,9 +395,9 @@ driver card and the note form are left alone, being forms in use. */}}
       {{if and .LocationReason (not (bool .LocationVerified))}}<div><dt>Away from the destination because</dt><dd>{{reasonLabel (str .LocationReason)}}</dd></div>{{end}}
     </dl>
     <div class="pod-media">
-      {{if .SignatureUrl}}<figure><a href="/app/shipments/{{$id}}/media/0" target="_blank" rel="noopener"><img src="/app/shipments/{{$id}}/media/0" alt="Recipient's signature" class="signature" loading="lazy"></a><figcaption>Signature</figcaption></figure>{{end}}
-      {{range $i, $p := .PhotoUrls}}<figure><a href="/app/shipments/{{$id}}/media/{{add $i 1}}" target="_blank" rel="noopener"><img src="/app/shipments/{{$id}}/media/{{add $i 1}}" alt="Delivery photo {{add $i 1}}" loading="lazy"></a><figcaption>Photo {{add $i 1}}</figcaption></figure>{{end}}
-      {{if and (not .SignatureUrl) (not .PhotoUrls)}}<p class="muted">No signature or photos — recorded by SMS or by the office.</p>{{end}}
+      {{if .HasSignature}}<figure><a href="/app/shipments/{{$id}}/media/0" target="_blank" rel="noopener"><img src="/app/shipments/{{$id}}/media/0" alt="Recipient's signature" class="signature" loading="lazy"></a><figcaption>Signature</figcaption></figure>{{end}}
+      {{range $n := .Photos}}<figure><a href="/app/shipments/{{$id}}/media/{{$n}}" target="_blank" rel="noopener"><img src="/app/shipments/{{$id}}/media/{{$n}}" alt="Delivery photo {{$n}}" loading="lazy"></a><figcaption>Photo {{$n}}</figcaption></figure>{{end}}
+      {{if and (not .HasSignature) (not .Photos)}}<p class="muted">No signature or photos — recorded by SMS or by the office.</p>{{end}}
     </div>
     {{if $s.CustomerConfirmedAt.Valid}}
     <p class="callout {{if $s.CustomerFeedback}}callout-warn{{else}}callout-good{{end}}">

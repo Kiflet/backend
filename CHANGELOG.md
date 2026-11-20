@@ -218,6 +218,16 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **Delivery media in `pod_media`** (`docs/migration.md`, phase 1, step 6;
+  audit D6). Each stored file of a proof of delivery is a row: the
+  signature at position 0, the photos after it, with its key, type, size
+  and MD5, and when and where it was taken when the app says (the PWA
+  doesn't; Kiflet/mobile's uploads will). Signatures were already files.
+  The shipment page, the review of held proofs, the receiver's
+  confirmation page, the data export, anonymising and company deletion
+  read it; `/media/{n}` keeps its numbering. Existing proofs are filled in
+  by the migration, without size or MD5. `signature_url` and `photo_urls`
+  are still written for a release, for a rollback, and then dropped.
 - **Money in santim** (`docs/migration.md`, phase 1, step 4; audit D4). A
   load's cargo value and its charges are kept in whole santim
   (`cargo_value_santim`, `amount_santim`), as billing is, instead of birr

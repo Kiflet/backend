@@ -178,10 +178,7 @@ func (s *DataService) DeleteCompany(ctx context.Context, p *Principal, id pgtype
 		if err != nil {
 			return err
 		}
-		for _, m := range media {
-			keys = append(keys, m.SignatureKey)
-			keys = append(keys, m.PhotoKeys...)
-		}
+		keys = append(keys, media...)
 		docs, err := q.ListTenantDocumentKeys(ctx, id)
 		if err != nil {
 			return err
@@ -233,16 +230,16 @@ func (s *DataService) AnonymiseFinished(ctx context.Context, before time.Time) (
 			if err != nil {
 				return err
 			}
-			for _, m := range media {
-				keys = append(keys, m.SignatureKey)
-				keys = append(keys, m.PhotoKeys...)
-			}
+			keys = append(keys, media...)
 			docs, err := q.ListDocumentKeysForShipments(ctx, ids)
 			if err != nil {
 				return err
 			}
 			keys = append(keys, docs...)
 			if err := q.DeleteDocumentsForShipments(ctx, ids); err != nil {
+				return err
+			}
+			if err := q.DeletePODMediaForShipments(ctx, ids); err != nil {
 				return err
 			}
 			if err := q.AnonymisePODs(ctx, ids); err != nil {

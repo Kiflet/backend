@@ -164,6 +164,9 @@ func TestRetentionRemovesOldCustomerDetails(t *testing.T) {
 		COALESCE(delivery_notes, '') || '|' || cardinality(photo_urls) FROM proof_of_deliveries WHERE shipment_id = $1`, oldID); got != "Removed||||0" {
 		t.Errorf("old delivery: %q, want the recipient, signature, notes and photos gone", got)
 	}
+	if n := scalar[int64](t, `SELECT count(*) FROM pod_media m JOIN proof_of_deliveries p ON p.tenant_id = m.tenant_id AND p.id = m.pod_id WHERE p.shipment_id = $1`, oldID); n != 0 {
+		t.Errorf("old delivery: %d files still recorded", n)
+	}
 	if files := storedFiles(t, e.files); len(files) != 2 || !strings.Contains(strings.Join(files, " "), recentID) {
 		t.Errorf("stored files %v, want only the recent delivery's", files)
 	}

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"compress/zlib"
 	"context"
+	"crypto/md5" //nolint:gosec // checksums, not security
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -123,8 +125,8 @@ func TestPODStorage_UploadSignature(t *testing.T) {
 		sigData := createTestImage()
 		path, err := pod.UploadSignature(ctx, "shipment-123", sigData)
 		require.NoError(t, err)
-		assert.Contains(t, path, "pod/shipment-123/signature_")
-		assert.Contains(t, path, ".png")
+		assert.Contains(t, path.Key, "pod/shipment-123/signature_")
+		assert.Contains(t, path.Key, ".png")
 	})
 
 	// An SVG can carry script and would be served from the dashboard's
@@ -175,23 +177,23 @@ func TestPODStorage_UploadPhoto(t *testing.T) {
 		photoData := createTestImage()
 		path, err := pod.UploadPhoto(ctx, "shipment-123", photoData, 0)
 		require.NoError(t, err)
-		assert.Contains(t, path, "pod/shipment-123/photo_1_")
-		assert.Contains(t, path, ".jpg")
+		assert.Contains(t, path.Key, "pod/shipment-123/photo_1_")
+		assert.Contains(t, path.Key, ".jpg")
 	})
 
 	t.Run("uploads multiple photos", func(t *testing.T) {
 		photoData := createTestImage()
 		path1, err := pod.UploadPhoto(ctx, "shipment-123", photoData, 0)
 		require.NoError(t, err)
-		assert.Contains(t, path1, "photo_1_")
+		assert.Contains(t, path1.Key, "photo_1_")
 
 		path2, err := pod.UploadPhoto(ctx, "shipment-123", photoData, 1)
 		require.NoError(t, err)
-		assert.Contains(t, path2, "photo_2_")
+		assert.Contains(t, path2.Key, "photo_2_")
 
 		path3, err := pod.UploadPhoto(ctx, "shipment-123", photoData, 2)
 		require.NoError(t, err)
-		assert.Contains(t, path3, "photo_3_")
+		assert.Contains(t, path3.Key, "photo_3_")
 	})
 
 	t.Run("rejects invalid photo index negative", func(t *testing.T) {
@@ -218,7 +220,7 @@ func TestPODStorage_UploadPhoto(t *testing.T) {
 		largePhoto := createLargeTestImage()
 		path, err := pod.UploadPhoto(ctx, "shipment-123", largePhoto, 0)
 		require.NoError(t, err)
-		assert.NotEmpty(t, path)
+		assert.NotEmpty(t, path.Key)
 	})
 }
 
@@ -236,6 +238,14 @@ func TestPODStorage_UploadMultiplePhotos(t *testing.T) {
 		urls, err := pod.UploadMultiplePhotos(ctx, "shipment-123", photos)
 		require.NoError(t, err)
 		assert.Len(t, urls, 3)
+		// Each is described as stored, for pod_media.
+		for _, f := range urls {
+			data := mock.uploads[f.Key]
+			sum := md5.Sum(data) //nolint:gosec // a checksum
+			assert.Equal(t, "image/jpeg", f.ContentType)
+			assert.Equal(t, int64(len(data)), f.Size)
+			assert.Equal(t, hex.EncodeToString(sum[:]), f.MD5)
+		}
 	})
 
 	t.Run("skips empty photos", func(t *testing.T) {

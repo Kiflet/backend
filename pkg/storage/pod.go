@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"crypto/md5" //nolint:gosec // checksums, not security
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -37,6 +38,15 @@ var (
 	ErrImageTooLarge    = errors.New("image too large")
 )
 
+// File is a stored file of a delivery: its key, what it is, its size in
+// bytes and its MD5, in hex, as pod_media keeps them.
+type File struct {
+	Key         string
+	ContentType string
+	Size        int64
+	MD5         string
+}
+
 type PODStorage struct {
 	storage Storage
 }
@@ -45,90 +55,100 @@ func NewPODStorage(storage Storage) *PODStorage {
 	return &PODStorage{storage: storage}
 }
 
-func (p *PODStorage) UploadSignature(ctx context.Context, shipmentID, signatureData string) (string, error) {
+func (p *PODStorage) UploadSignature(ctx context.Context, shipmentID, signatureData string) (File, error) {
 	if signatureData == "" {
-		return "", ErrInvalidSignature
+		return File{}, ErrInvalidSignature
 	}
 
 	// An SVG can carry scripts and links, and would be served from the
 	// dashboard's own origin: signatures are images drawn on the phone, sent
 	// as PNG.
 	if strings.HasPrefix(signatureData, "data:image/svg+xml") {
-		return "", ErrInvalidSignature
+		return File{}, ErrInvalidSignature
 	}
 
 	img, err := p.decodeBase64Image(signatureData)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode signature: %w", err)
+		return File{}, fmt.Errorf("failed to decode signature: %w", err)
 	}
 
 	resized := p.resizeImage(img, SignatureMaxWidth, SignatureMaxHeight)
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, resized); err != nil {
-		return "", fmt.Errorf("failed to encode signature as PNG: %w", err)
+		return File{}, fmt.Errorf("failed to encode signature as PNG: %w", err)
 	}
 
 	path := podPath(shipmentID, "signature", ".png")
 
-	reader := bytes.NewReader(buf.Bytes())
-	if _, err := p.storage.Upload(ctx, path, reader, "image/png"); err != nil {
-		return "", fmt.Errorf("failed to upload signature: %w", err)
+	f, err := p.put(ctx, path, buf.Bytes(), "image/png")
+	if err != nil {
+		return File{}, fmt.Errorf("failed to upload signature: %w", err)
 	}
 
-	return path, nil
+	return f, nil
 }
 
-func (p *PODStorage) UploadPhoto(ctx context.Context, shipmentID, imageData string, photoIndex int) (string, error) {
+func (p *PODStorage) UploadPhoto(ctx context.Context, shipmentID, imageData string, photoIndex int) (File, error) {
 	if photoIndex < 0 || photoIndex >= MaxPhotosPerPOD {
-		return "", ErrTooManyPhotos
+		return File{}, ErrTooManyPhotos
 	}
 
 	if imageData == "" {
-		return "", ErrInvalidImageData
+		return File{}, ErrInvalidImageData
 	}
 
 	img, err := p.decodeBase64Image(imageData)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode photo: %w", err)
+		return File{}, fmt.Errorf("failed to decode photo: %w", err)
 	}
 
 	resized := p.resizeImage(img, MaxPhotoWidth, MaxPhotoHeight)
 
 	compressed, err := p.compressJPEG(resized)
 	if err != nil {
-		return "", fmt.Errorf("failed to compress photo: %w", err)
+		return File{}, fmt.Errorf("failed to compress photo: %w", err)
 	}
 
 	path := podPath(shipmentID, fmt.Sprintf("photo_%d", photoIndex+1), ".jpg")
 
-	reader := bytes.NewReader(compressed)
-	if _, err := p.storage.Upload(ctx, path, reader, "image/jpeg"); err != nil {
-		return "", fmt.Errorf("failed to upload photo: %w", err)
+	f, err := p.put(ctx, path, compressed, "image/jpeg")
+	if err != nil {
+		return File{}, fmt.Errorf("failed to upload photo: %w", err)
 	}
-
-	return path, nil
+	return f, nil
 }
 
-func (p *PODStorage) UploadMultiplePhotos(ctx context.Context, shipmentID string, photos []string) ([]string, error) {
+func (p *PODStorage) UploadMultiplePhotos(ctx context.Context, shipmentID string, photos []string) ([]File, error) {
 	if len(photos) > MaxPhotosPerPOD {
 		return nil, ErrTooManyPhotos
 	}
 
-	urls := make([]string, 0, len(photos))
+	urls := make([]File, 0, len(photos))
 	for i, photo := range photos {
 		if photo == "" {
 			continue
 		}
 		url, err := p.UploadPhoto(ctx, shipmentID, photo, i)
 		if err != nil {
-			p.Delete(context.WithoutCancel(ctx), urls...)
+			for _, f := range urls {
+				p.Delete(context.WithoutCancel(ctx), f.Key)
+			}
 			return nil, fmt.Errorf("failed to upload photo %d: %w", i+1, err)
 		}
 		urls = append(urls, url)
 	}
 
 	return urls, nil
+}
+
+// put stores data and describes what it stored.
+func (p *PODStorage) put(ctx context.Context, key string, data []byte, contentType string) (File, error) {
+	sum := md5.Sum(data) //nolint:gosec // a checksum, as S3's Content-MD5 is, not a secret's hash
+	if _, err := p.storage.Upload(ctx, key, bytes.NewReader(data), contentType); err != nil {
+		return File{}, err
+	}
+	return File{Key: key, ContentType: contentType, Size: int64(len(data)), MD5: hex.EncodeToString(sum[:])}, nil
 }
 
 // Delete removes stored files, ignoring any already gone.
