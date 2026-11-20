@@ -203,6 +203,16 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The tenant in every reference** (`docs/migration.md`, phase 1, step 2;
+  audit D2). Each of the 39 references between companies' tables is now
+  `(tenant_id, x_id) REFERENCES x (tenant_id, id)`, so the database
+  refuses a row pointing at another company's, where before only the code
+  kept them apart. Deletes do as before; a `SET NULL` clears only its
+  column. `broadcast_recipients` gains `tenant_id`. The four references
+  the platform's operators make across companies (the audit log's user,
+  an invoice's maker, a payment's recorder, a support answer's author)
+  stay on the ID. `TestReferencesCarryTheTenant` fails on a new
+  reference without the tenant.
 - **The driver sync reads a change feed** (`docs/migration.md`, phase 1,
   step 1; audit D1). Every change a driver's phone must hear of writes an
   entry in `driver_feed`, in the transaction of the change, numbered in

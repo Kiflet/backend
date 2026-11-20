@@ -119,7 +119,11 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   `<script type="application/json">` blocks or `data-` attributes.
 - Every query is scoped by tenant. Keep it that way in new queries; one
   that is global on purpose says why in a comment above it
-  (`-- tenant: none, <reason>`).
+  (`-- tenant: none, <reason>`). A reference from one company's table to
+  another includes the company: `(tenant_id, x_id) REFERENCES x
+  (tenant_id, id)`, and a `SET NULL` names its column.
+  `TestReferencesCarryTheTenant` checks every reference; the few an
+  operator makes across companies are listed there with the reason.
 - A Go page, or the PWA, is deleted only once the flows its tests cover
   are tested through the modules and the API (`docs/migration.md`,
   section 8): a module's rules by unit tests, its queries by store tests
