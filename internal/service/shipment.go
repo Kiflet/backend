@@ -17,6 +17,7 @@ import (
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/modules/fleet"
 	"github.com/kiflet/backend/internal/modules/shipments"
+	"github.com/kiflet/backend/internal/modules/tenancy"
 	"github.com/kiflet/backend/internal/platform/events"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/platform/phone"
@@ -317,7 +318,7 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 
 	var out shipments.Shipment
 	err = s.tx(ctx, func(q *db.Queries, after *afterCommit) error {
-		tenant, err := s.tenant(ctx, q, a.TenantID)
+		tenant, err := s.tenantIn(ctx, q, after, a.TenantID)
 		if err != nil {
 			return err
 		}
@@ -539,7 +540,7 @@ func (s *ShipmentService) Assign(ctx context.Context, a Actor, id pgtype.UUID, d
 		if !model.CanAssign(cur.Status) {
 			return conflict(fmt.Sprintf("A %s shipment can't be reassigned.", strings.ToLower(model.StatusLabel(cur.Status))))
 		}
-		tenant, err := s.tenant(ctx, q, a.TenantID)
+		tenant, err := s.tenantIn(ctx, q, after, a.TenantID)
 		if err != nil {
 			return err
 		}
@@ -984,6 +985,13 @@ func (s *ShipmentService) DeliveredSince(ctx context.Context, tenantID pgtype.UU
 func (s *ShipmentService) event(ctx context.Context, q *db.Queries, after *afterCommit, a Actor, sh shipments.Shipment, e shipments.Change) bool {
 	if e.OccurredAt.IsZero() {
 		e.OccurredAt = s.now()
+	}
+	// The company rides on the event, read once in the transaction
+	// (audit D9).
+	if !e.Company.ID.Valid {
+		if t, err := s.tenantIn(ctx, q, after, sh.TenantID); err == nil {
+			e.Company = tenancy.Tenant(t)
+		}
 	}
 	recorded, err := s.shipmentData.Record(ctx, eventTx(q, after), a, sh, e)
 	if err != nil {

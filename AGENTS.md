@@ -95,7 +95,10 @@ the plan, not from those.
   published as an event in its transaction; subscribers run `Within` it
   (their writes commit with the change) or `After` it commits (live
   updates, waking workers). With RabbitMQ, each event is also written to
-  `event_outbox`, and `internal/app/relay.go` publishes it.
+  `event_outbox`, and `internal/app/relay.go` publishes it. An event
+  carries what its subscribers read (a shipment's change carries its
+  company, read once per transaction with `tenantIn`), so a subscriber
+  doesn't look it up again inside the transaction.
 - `pkg/broker`: RabbitMQ (exchanges, queues, confirms, retries). The app
   works without RabbitMQ (`RABBITMQ_URL` empty), so keep that path working.
 

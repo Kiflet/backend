@@ -157,9 +157,13 @@ func (s *ShipmentService) notifyFor(ctx context.Context, tx events.Tx, ev events
 		return nil
 	}
 	q, after := db.New(tx.Conn), afterOf(tx)
-	t, err := s.tenant(ctx, q, sh.TenantID)
-	if err != nil {
-		return err
+	// The company comes with the change (audit D9).
+	t := db.Tenant(e.Company)
+	if !t.ID.Valid {
+		var err error
+		if t, err = s.tenant(ctx, q, sh.TenantID); err != nil {
+			return err
+		}
 	}
 	driverText := func(id pgtype.UUID, body, purpose string) {
 		if d, err := s.user(ctx, q, sh.TenantID, id); err == nil && d.Phone != nil {

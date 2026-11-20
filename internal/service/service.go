@@ -432,6 +432,28 @@ func (c *core) tenant(ctx context.Context, q *db.Queries, id pgtype.UUID) (db.Te
 	return db.Tenant(t), err
 }
 
+// tenantKey keeps a company in a transaction's scope.
+type tenantKey pgtype.UUID
+
+// tenantIn is the company, read once in a transaction: what a change reads
+// is what its events carry to their subscribers (audit D9). Only for
+// transactions that don't change the company. Without a transaction it
+// reads the company each time.
+func (c *core) tenantIn(ctx context.Context, q *db.Queries, after *afterCommit, id pgtype.UUID) (db.Tenant, error) {
+	if after == nil || after.scope == nil {
+		return c.tenant(ctx, q, id)
+	}
+	type read struct {
+		t   db.Tenant
+		err error
+	}
+	r := after.scope.Value(tenantKey(id), func() any {
+		t, err := c.tenant(ctx, q, id)
+		return read{t, err}
+	}).(read)
+	return r.t, r.err
+}
+
 // user, userByPhone, userByEmail, staff, createUser and updateProfile reach
 // the identity module's people on q's connection (its transaction, if it
 // has one), as the rest of internal/service knows them until it moves into
