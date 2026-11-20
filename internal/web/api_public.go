@@ -41,7 +41,7 @@ type apiRoute struct {
 // publicAPI is every route of the public API, under /api/v1.
 var publicAPI = []apiRoute{
 	{http.MethodGet, "/shipments", func(s *Server) http.HandlerFunc { return s.apiShipmentList }},
-	{http.MethodPost, "/shipments", func(s *Server) http.HandlerFunc { return s.apiShipmentCreate }},
+	{http.MethodPost, "/shipments", func(s *Server) http.HandlerFunc { return s.idempotent(s.apiShipmentCreate) }},
 	{http.MethodGet, "/shipments/{ref}", func(s *Server) http.HandlerFunc { return s.apiShipmentGet }},
 	{http.MethodPatch, "/shipments/{ref}", func(s *Server) http.HandlerFunc { return s.apiShipmentUpdate }},
 	{http.MethodPost, "/shipments/{ref}/assign", func(s *Server) http.HandlerFunc { return s.apiShipmentAssign }},
@@ -281,7 +281,7 @@ func (s *Server) apiShipmentCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Location", "/api/v1/shipments/"+sh.TrackingNumber)
-	writeJSON(w, http.StatusCreated, s.toAPIShipment(sh))
+	s.writeShipment(w, http.StatusCreated, sh)
 }
 
 func (s *Server) apiShipmentGet(w http.ResponseWriter, r *http.Request) {
@@ -290,7 +290,7 @@ func (s *Server) apiShipmentGet(w http.ResponseWriter, r *http.Request) {
 		s.apiError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.toAPIShipment(sh))
+	s.writeShipment(w, http.StatusOK, sh)
 }
 
 func (s *Server) apiShipmentUpdate(w http.ResponseWriter, r *http.Request) {
@@ -310,12 +310,12 @@ func (s *Server) apiShipmentUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	change := service.InputOf(sh)
 	in.apply(&change)
-	out, err := s.svc.Shipments.Update(r.Context(), apiActor(r), sh.ID, change)
+	out, err := s.svc.Shipments.Update(ifMatch(r), apiActor(r), sh.ID, change)
 	if err != nil {
-		s.apiError(w, r, err)
+		s.apiChangeError(w, r, sh.ID, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.toAPIShipment(out))
+	s.writeShipment(w, http.StatusOK, out)
 }
 
 func (s *Server) apiShipmentAssign(w http.ResponseWriter, r *http.Request) {
@@ -334,15 +334,15 @@ func (s *Server) apiShipmentAssign(w http.ResponseWriter, r *http.Request) {
 	}
 	var out shipments.Shipment
 	if in.DriverID == nil || *in.DriverID == "" {
-		out, err = s.svc.Shipments.Unassign(r.Context(), apiActor(r), sh.ID)
+		out, err = s.svc.Shipments.Unassign(ifMatch(r), apiActor(r), sh.ID)
 	} else {
-		out, err = s.svc.Shipments.Assign(r.Context(), apiActor(r), sh.ID, *in.DriverID, in.VehicleID)
+		out, err = s.svc.Shipments.Assign(ifMatch(r), apiActor(r), sh.ID, *in.DriverID, in.VehicleID)
 	}
 	if err != nil {
-		s.apiError(w, r, err)
+		s.apiChangeError(w, r, sh.ID, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.toAPIShipment(out))
+	s.writeShipment(w, http.StatusOK, out)
 }
 
 func (s *Server) apiShipmentCancel(w http.ResponseWriter, r *http.Request) {
@@ -359,12 +359,12 @@ func (s *Server) apiShipmentCancel(w http.ResponseWriter, r *http.Request) {
 		s.apiError(w, r, err)
 		return
 	}
-	out, err := s.svc.Shipments.Cancel(r.Context(), apiActor(r), sh.ID, in.Reason, in.Note)
+	out, err := s.svc.Shipments.Cancel(ifMatch(r), apiActor(r), sh.ID, in.Reason, in.Note)
 	if err != nil {
-		s.apiError(w, r, err)
+		s.apiChangeError(w, r, sh.ID, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.toAPIShipment(out))
+	s.writeShipment(w, http.StatusOK, out)
 }
 
 type apiPosition struct {

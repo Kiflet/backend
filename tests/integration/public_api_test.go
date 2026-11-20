@@ -150,7 +150,7 @@ func TestPublicAPI(t *testing.T) {
 	if fail.Error.RequestID == "" || fail.Error.RequestID != h.Get("X-Request-Id") {
 		t.Errorf("request_id %q, X-Request-Id %q", fail.Error.RequestID, h.Get("X-Request-Id"))
 	}
-	if n := scalar[int64](t, `SELECT count(*) FROM shipments WHERE customer_phone = $1`, "+251"+customer[1:]); n != 0 {
+	if n := scalar[int64](t, `SELECT count(*) FROM shipments WHERE customer_phone = $1`, customer); n != 0 {
 		t.Fatalf("%d shipments booked by refused requests", n)
 	}
 

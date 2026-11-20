@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -49,6 +50,8 @@ type IdempotentResponse struct {
 	Status      int
 	ContentType string
 	Body        []byte
+	// Headers are the others a replay carries (Location, ETag).
+	Headers map[string]string
 }
 
 // RequestHash is what identifies a request for its key: the method, the
@@ -91,19 +94,28 @@ func (s *IdempotencyService) Begin(ctx context.Context, r IdempotentRequest) (*I
 	case prior.ResponseStatus == nil:
 		return nil, ErrIdempotencyKeyInFlight
 	}
-	return &IdempotentResponse{Status: int(*prior.ResponseStatus), ContentType: prior.ResponseType, Body: prior.ResponseBody}, nil
+	resp := &IdempotentResponse{Status: int(*prior.ResponseStatus), ContentType: prior.ResponseType, Body: prior.ResponseBody}
+	if err := json.Unmarshal(prior.ResponseHeaders, &resp.Headers); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // Finish keeps the response to a request Begin let run, for its replays.
 func (s *IdempotencyService) Finish(ctx context.Context, r IdempotentRequest, resp IdempotentResponse) error {
+	headers, err := json.Marshal(resp.Headers)
+	if err != nil {
+		return err
+	}
 	return s.q.SaveIdempotentResponse(ctx, db.SaveIdempotentResponseParams{
 		TenantID: r.TenantID, CallerID: r.CallerID, Key: r.Key, RequestHash: r.Hash[:],
 		ResponseStatus: new(int16(resp.Status)), ResponseType: &resp.ContentType, ResponseBody: resp.Body,
+		ResponseHeaders: headers,
 	})
 }
 
-// Release gives back the key of a request that failed on our side, so a
-// retry runs instead of replaying the failure.
+// Release gives back the key of a request that didn't succeed, so a retry
+// runs instead of replaying the failure.
 func (s *IdempotencyService) Release(ctx context.Context, r IdempotentRequest) error {
 	return s.q.ReleaseIdempotencyKey(ctx, db.ReleaseIdempotencyKeyParams{
 		TenantID: r.TenantID, CallerID: r.CallerID, Key: r.Key, RequestHash: r.Hash[:],

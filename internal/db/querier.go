@@ -494,7 +494,7 @@ type Querier interface {
 	// tenant: none, the outbound queue, which sends every company's mail.
 	// As ReleaseSMS.
 	ReleaseEmails(ctx context.Context, ids []pgtype.UUID) error
-	// A request that failed on our side gives its key back, so the retry runs.
+	// A request that didn't succeed gives its key back, so the retry runs.
 	ReleaseIdempotencyKey(ctx context.Context, arg ReleaseIdempotencyKeyParams) error
 	// tenant: none, the platform's background jobs, which serve every company.
 	ReleaseJob(ctx context.Context, name string) error

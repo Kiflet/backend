@@ -736,6 +736,9 @@ func (s *ShipmentService) lock(ctx context.Context, q *db.Queries, tenantID, id 
 	if isNoRows(err) {
 		return sh, notFound("Shipment not found.")
 	}
+	if err == nil {
+		err = CheckVersion(ctx, sh.Version)
+	}
 	return sh, err
 }
 

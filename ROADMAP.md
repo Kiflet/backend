@@ -106,8 +106,9 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
       the API tests validated against it.
 - [x] The conventions' errors (lowercase codes, every invalid field,
       the request's ID), `X-Request-Id` on every answer, `Retry-After`.
-- [ ] The conventions' idempotency keys and versions (`ETag`,
-      `If-Match`), then labels, actions and lists with each operation.
+- [x] The conventions' idempotency keys and versions (`ETag`,
+      `If-Match`, `412`), on the public API's shipments.
+- [ ] The conventions' labels, actions and lists, with each operation.
 - [x] The cross-origin check on every request a cookie may authenticate,
       the API's included (A2).
 - [ ] Who is calling: an API key or a driver token by `Authorization`,

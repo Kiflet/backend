@@ -119,5 +119,5 @@ func (s *APIService) Authenticate(ctx context.Context, key string, ci ClientInfo
 	if err := s.q.TouchAPIKey(ctx, k.ID); err != nil {
 		s.log.Warn().Err(err).Msg("record an API key's use")
 	}
-	return Actor{TenantID: k.TenantID, Name: "API: " + k.Name, Source: SourceAPI, IP: ci.IP, UserAgent: ci.UserAgent}, nil
+	return Actor{TenantID: k.TenantID, KeyID: k.ID, Name: "API: " + k.Name, Source: SourceAPI, IP: ci.IP, UserAgent: ci.UserAgent}, nil
 }

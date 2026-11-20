@@ -8,6 +8,8 @@ import (
 
 	chimw "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/kiflet/backend/internal/service"
+
 	"github.com/kiflet/backend/internal/platform/config"
 )
 
@@ -103,5 +105,43 @@ func TestRequestID(t *testing.T) {
 		if c.kept != "" && got != c.kept || c.kept == "" && (got == c.sent || len(got) != 32) {
 			t.Errorf("sent %q: answered %q", c.sent, got)
 		}
+	}
+}
+
+// If-Match names the versions a change may go ahead on: strong tags only,
+// "*" or none for any.
+func TestIfMatch(t *testing.T) {
+	for _, c := range []struct {
+		header  string
+		refuses []int32
+		allows  []int32
+	}{
+		{"", nil, []int32{1, 7}},
+		{"*", nil, []int32{1, 7}},
+		{`"3"`, []int32{2, 4}, []int32{3}},
+		{`"9", "3"`, []int32{2}, []int32{3, 9}},
+		{`W/"3"`, []int32{3}, nil},
+		{`3`, []int32{3}, nil},
+		{`3"`, []int32{3}, nil},
+		{`"three"`, []int32{3}, nil},
+	} {
+		r := httptest.NewRequest(http.MethodPatch, "/api/v1/shipments/x", nil)
+		if c.header != "" {
+			r.Header.Set("If-Match", c.header)
+		}
+		ctx := ifMatch(r)
+		for _, v := range c.allows {
+			if service.CheckVersion(ctx, v) != nil {
+				t.Errorf("If-Match %s refused version %d", c.header, v)
+			}
+		}
+		for _, v := range c.refuses {
+			if service.CheckVersion(ctx, v) == nil {
+				t.Errorf("If-Match %s allowed version %d", c.header, v)
+			}
+		}
+	}
+	if got := etag(12); got != `"12"` {
+		t.Errorf("etag: %s", got)
 	}
 }
