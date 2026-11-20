@@ -40,7 +40,7 @@ func TestProblems(t *testing.T) {
 // The API's codes are lowercase snake case; an error's own code wins.
 func TestCodes(t *testing.T) {
 	for k, want := range map[Kind]string{KindInvalid: "validation_error", KindNotFound: "not_found", KindConflict: "conflict",
-		KindForbidden: "forbidden", KindUnauthorized: "unauthorized", KindLimit: "plan_limit"} {
+		KindForbidden: "forbidden", KindUnauthorized: "unauthorized", KindLimit: "plan_limit", KindPrecondition: "version_mismatch"} {
 		if got := (&Error{Kind: k}).APICode(); got != want {
 			t.Errorf("kind %d: %q, want %q", k, got, want)
 		}

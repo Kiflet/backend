@@ -60,6 +60,9 @@ const (
 	KindForbidden
 	KindUnauthorized
 	KindLimit
+	// KindPrecondition is a change made from a copy that is no longer
+	// current (If-Match).
+	KindPrecondition
 )
 
 // HTTPStatus maps a Kind to a status code.
@@ -75,6 +78,8 @@ func (k Kind) HTTPStatus() int {
 		return http.StatusUnauthorized
 	case KindLimit:
 		return http.StatusPaymentRequired
+	case KindPrecondition:
+		return http.StatusPreconditionFailed
 	default:
 		return http.StatusBadRequest
 	}
@@ -94,6 +99,8 @@ func (k Kind) Code() string {
 		return "unauthorized"
 	case KindLimit:
 		return "plan_limit"
+	case KindPrecondition:
+		return "version_mismatch"
 	default:
 		return "validation_error"
 	}

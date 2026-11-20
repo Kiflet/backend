@@ -139,6 +139,8 @@ paths:
       description: Checked as the booking form checks it, and the customer is texted
         as from the form. With `driver_id`, the shipment is assigned at once. Without
         `estimated_delivery`, the arrival is estimated from the route.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -148,6 +150,9 @@ paths:
       responses:
         '201':
           description: Booked. `Location` is the shipment's address in the API.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -162,6 +167,8 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
         '429':
           $ref: '#/components/responses/Error'
       tags:
@@ -175,6 +182,9 @@ paths:
       responses:
         '200':
           description: The shipment
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -197,6 +207,8 @@ paths:
         `receiver`, `planned_pickup` and `estimated_delivery` can be sent as null
         to remove them; a null `estimated_delivery` goes back to the estimate from
         the route. The driver is changed with `/assign`.'
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
@@ -206,6 +218,9 @@ paths:
       responses:
         '200':
           description: The shipment as changed
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -220,6 +235,8 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+        '412':
+          $ref: '#/components/responses/ShipmentVersionMismatch'
         '429':
           $ref: '#/components/responses/Error'
       tags:
@@ -233,6 +250,8 @@ paths:
       description: The driver is texted as from the dashboard. Without `vehicle_id`,
         the driver's usual vehicle goes. A null or empty `driver_id` takes the shipment
         back to pending, if it hasn't left.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
@@ -252,6 +271,9 @@ paths:
       responses:
         '200':
           description: The shipment as assigned
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -268,6 +290,8 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+        '412':
+          $ref: '#/components/responses/ShipmentVersionMismatch'
         '429':
           $ref: '#/components/responses/Error'
       tags:
@@ -282,6 +306,8 @@ paths:
         address_problem, cargo_unavailable, payment_problem and other. On the road,
         they are recipient_refused, returned_to_origin, cargo_lost_damaged, customer_request,
         address_problem, payment_problem and other.
+      parameters:
+      - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
@@ -310,6 +336,9 @@ paths:
       responses:
         '200':
           description: The shipment, cancelled
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -324,6 +353,8 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+        '412':
+          $ref: '#/components/responses/ShipmentVersionMismatch'
         '429':
           $ref: '#/components/responses/Error'
       tags:
@@ -711,7 +742,26 @@ components:
       type: http
       scheme: bearer
       description: The token from signing in on the driver app, one per device.
+  headers:
+    ETag:
+      description: 'The record''s version, quoted ("3"). Send it back as If-Match to change the record only if no one has since.'
+      schema:
+        type: string
   parameters:
+    IfMatch:
+      name: If-Match
+      in: header
+      description: 'The ETag of the copy the change was made from. When the record has changed since, the change is refused 412 with the record as it is now.'
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: 'A key of the caller''s choosing, one per booking. Sent again within 24 hours with the same request, it gets the first answer without booking again, marked Idempotent-Replayed: true; with another request, 422 idempotency_key_reused; while the first still runs, 409 idempotency_key_in_flight. Only a success is kept.'
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
     Ref:
       name: ref
       in: path
@@ -725,11 +775,27 @@ components:
         no working key (unauthorized). 402: a plan limit (plan_limit). 403: the
         company is suspended or read-only until an invoice is paid (forbidden).
         404: no such shipment for this company (not_found). 409: the shipment is
-        in a status that doesn''t allow it (conflict). 429: too many requests (rate_limited).'
+        in a status that doesn''t allow it (conflict). 429: too many requests (rate_limited). 409 also: the first request with this Idempotency-Key is still running (idempotency_key_in_flight). 412: the shipment changed since the If-Match (version_mismatch). 422: an Idempotency-Key sent again with another request (idempotency_key_reused).'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    ShipmentVersionMismatch:
+      description: 'The shipment has changed since the version in If-Match (version_mismatch). `current` is the shipment as it is now, and the ETag its version.'
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+      content:
+        application/json:
+          schema:
+            allOf:
+            - $ref: '#/components/schemas/Error'
+            - type: object
+              required:
+              - current
+              properties:
+                current:
+                  $ref: '#/components/schemas/Shipment'
     OK:
       description: Done
       content:

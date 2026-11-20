@@ -16,7 +16,7 @@ INSERT INTO idempotency_keys (tenant_id, caller_id, key, request_hash)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (tenant_id, caller_id, key) DO UPDATE
 SET request_hash = EXCLUDED.request_hash, response_status = NULL, response_type = NULL,
-    response_body = NULL, created_at = now(), completed_at = NULL
+    response_body = NULL, response_headers = NULL, created_at = now(), completed_at = NULL
 WHERE idempotency_keys.created_at < $5
    OR (idempotency_keys.completed_at IS NULL AND idempotency_keys.created_at < $6)
 `
@@ -58,7 +58,8 @@ func (q *Queries) DeleteOldIdempotencyKeys(ctx context.Context, before pgtype.Ti
 }
 
 const getIdempotencyKey = `-- name: GetIdempotencyKey :one
-SELECT request_hash, response_status, COALESCE(response_type, '')::text AS response_type, response_body
+SELECT request_hash, response_status, COALESCE(response_type, '')::text AS response_type, response_body,
+       COALESCE(response_headers, '{}')::jsonb AS response_headers
 FROM idempotency_keys
 WHERE tenant_id = $1 AND caller_id = $2 AND key = $3
 `
@@ -70,10 +71,11 @@ type GetIdempotencyKeyParams struct {
 }
 
 type GetIdempotencyKeyRow struct {
-	RequestHash    []byte `db:"request_hash" json:"request_hash"`
-	ResponseStatus *int16 `db:"response_status" json:"response_status"`
-	ResponseType   string `db:"response_type" json:"response_type"`
-	ResponseBody   []byte `db:"response_body" json:"response_body"`
+	RequestHash     []byte `db:"request_hash" json:"request_hash"`
+	ResponseStatus  *int16 `db:"response_status" json:"response_status"`
+	ResponseType    string `db:"response_type" json:"response_type"`
+	ResponseBody    []byte `db:"response_body" json:"response_body"`
+	ResponseHeaders []byte `db:"response_headers" json:"response_headers"`
 }
 
 func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (GetIdempotencyKeyRow, error) {
@@ -84,6 +86,7 @@ func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyPa
 		&i.ResponseStatus,
 		&i.ResponseType,
 		&i.ResponseBody,
+		&i.ResponseHeaders,
 	)
 	return i, err
 }
@@ -101,7 +104,7 @@ type ReleaseIdempotencyKeyParams struct {
 	RequestHash []byte      `db:"request_hash" json:"request_hash"`
 }
 
-// A request that failed on our side gives its key back, so the retry runs.
+// A request that didn't succeed gives its key back, so the retry runs.
 func (q *Queries) ReleaseIdempotencyKey(ctx context.Context, arg ReleaseIdempotencyKeyParams) error {
 	_, err := q.db.Exec(ctx, releaseIdempotencyKey,
 		arg.TenantID,
@@ -115,19 +118,20 @@ func (q *Queries) ReleaseIdempotencyKey(ctx context.Context, arg ReleaseIdempote
 const saveIdempotentResponse = `-- name: SaveIdempotentResponse :exec
 UPDATE idempotency_keys
 SET response_status = $1, response_type = $2,
-    response_body = $3, completed_at = now()
-WHERE tenant_id = $4 AND caller_id = $5 AND key = $6
-  AND request_hash = $7 AND completed_at IS NULL
+    response_body = $3, response_headers = $4, completed_at = now()
+WHERE tenant_id = $5 AND caller_id = $6 AND key = $7
+  AND request_hash = $8 AND completed_at IS NULL
 `
 
 type SaveIdempotentResponseParams struct {
-	ResponseStatus *int16      `db:"response_status" json:"response_status"`
-	ResponseType   *string     `db:"response_type" json:"response_type"`
-	ResponseBody   []byte      `db:"response_body" json:"response_body"`
-	TenantID       pgtype.UUID `db:"tenant_id" json:"tenant_id"`
-	CallerID       pgtype.UUID `db:"caller_id" json:"caller_id"`
-	Key            string      `db:"key" json:"key"`
-	RequestHash    []byte      `db:"request_hash" json:"request_hash"`
+	ResponseStatus  *int16      `db:"response_status" json:"response_status"`
+	ResponseType    *string     `db:"response_type" json:"response_type"`
+	ResponseBody    []byte      `db:"response_body" json:"response_body"`
+	ResponseHeaders []byte      `db:"response_headers" json:"response_headers"`
+	TenantID        pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	CallerID        pgtype.UUID `db:"caller_id" json:"caller_id"`
+	Key             string      `db:"key" json:"key"`
+	RequestHash     []byte      `db:"request_hash" json:"request_hash"`
 }
 
 func (q *Queries) SaveIdempotentResponse(ctx context.Context, arg SaveIdempotentResponseParams) error {
@@ -135,6 +139,7 @@ func (q *Queries) SaveIdempotentResponse(ctx context.Context, arg SaveIdempotent
 		arg.ResponseStatus,
 		arg.ResponseType,
 		arg.ResponseBody,
+		arg.ResponseHeaders,
 		arg.TenantID,
 		arg.CallerID,
 		arg.Key,

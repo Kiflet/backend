@@ -414,6 +414,12 @@ func (e *env) api(method, path, token string, body, out any) int {
 // apiWithHeaders is api, with the answer's headers.
 func (e *env) apiWithHeaders(method, path, token string, body, out any) (int, http.Header) {
 	e.t.Helper()
+	return e.apiSending(method, path, token, nil, body, out)
+}
+
+// apiSending is apiWithHeaders, sending these headers too.
+func (e *env) apiSending(method, path, token string, headers map[string]string, body, out any) (int, http.Header) {
+	e.t.Helper()
 	var r io.Reader
 	if body != nil {
 		buf, _ := json.Marshal(body)
@@ -423,6 +429,9 @@ func (e *env) apiWithHeaders(method, path, token string, body, out any) (int, ht
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

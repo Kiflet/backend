@@ -124,6 +124,16 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Versions and idempotency keys in the public API** (`docs/migration.md`,
+  phase 2, step 4). A shipment's answers carry its version as an `ETag`;
+  a change, assignment or cancellation sent with `If-Match` goes ahead only
+  on that version, checked once the shipment is locked, and is otherwise
+  refused `412 version_mismatch` with the shipment as it is now. A booking
+  sent with an `Idempotency-Key` books once: sent again within 24 hours it
+  gets the first answer, `Location` and `ETag` included, marked
+  `Idempotent-Replayed`; the key with another booking is refused `422
+  idempotency_key_reused`. Only a success is kept, so a refused booking can
+  be corrected and sent with the same key. Each API key has keys of its own.
 - **The code generated from the API's specification, and
   `@kiflet/api`** (`docs/migration.md`, phase 2, step 2; audit A1).
   `make api` generates two things from `api/openapi/v1.yaml`:

@@ -58,7 +58,9 @@ func (p *Principal) Actor(source, ip, userAgent string) Actor {
 
 // Actor is who performed an action and through what channel.
 type Actor struct {
-	UserID    pgtype.UUID
+	UserID pgtype.UUID
+	// KeyID is the API key that acted, when one did.
+	KeyID     pgtype.UUID
 	TenantID  pgtype.UUID
 	Name      string
 	Role      string

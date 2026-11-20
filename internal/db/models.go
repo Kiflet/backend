@@ -163,15 +163,16 @@ type EventOutbox struct {
 }
 
 type IdempotencyKey struct {
-	TenantID       pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
-	CallerID       pgtype.UUID        `db:"caller_id" json:"caller_id"`
-	Key            string             `db:"key" json:"key"`
-	RequestHash    []byte             `db:"request_hash" json:"request_hash"`
-	ResponseStatus *int16             `db:"response_status" json:"response_status"`
-	ResponseType   *string            `db:"response_type" json:"response_type"`
-	ResponseBody   []byte             `db:"response_body" json:"response_body"`
-	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	CompletedAt    pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
+	TenantID        pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	CallerID        pgtype.UUID        `db:"caller_id" json:"caller_id"`
+	Key             string             `db:"key" json:"key"`
+	RequestHash     []byte             `db:"request_hash" json:"request_hash"`
+	ResponseStatus  *int16             `db:"response_status" json:"response_status"`
+	ResponseType    *string            `db:"response_type" json:"response_type"`
+	ResponseBody    []byte             `db:"response_body" json:"response_body"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	CompletedAt     pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
+	ResponseHeaders []byte             `db:"response_headers" json:"response_headers"`
 }
 
 type Invoice struct {

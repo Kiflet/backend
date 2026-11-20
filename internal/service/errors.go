@@ -19,6 +19,7 @@ const (
 	KindForbidden    = apperror.KindForbidden
 	KindUnauthorized = apperror.KindUnauthorized
 	KindLimit        = apperror.KindLimit
+	KindPrecondition = apperror.KindPrecondition
 )
 
 var (

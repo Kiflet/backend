@@ -726,13 +726,25 @@ export interface components {
         };
     };
     responses: {
-        /** @description An error. 400: the request is wrong (validation_error). 401: no working key (unauthorized). 402: a plan limit (plan_limit). 403: the company is suspended or read-only until an invoice is paid (forbidden). 404: no such shipment for this company (not_found). 409: the shipment is in a status that doesn't allow it (conflict). 429: too many requests (rate_limited). */
+        /** @description An error. 400: the request is wrong (validation_error). 401: no working key (unauthorized). 402: a plan limit (plan_limit). 403: the company is suspended or read-only until an invoice is paid (forbidden). 404: no such shipment for this company (not_found). 409: the shipment is in a status that doesn't allow it (conflict). 429: too many requests (rate_limited). 409 also: the first request with this Idempotency-Key is still running (idempotency_key_in_flight). 412: the shipment changed since the If-Match (version_mismatch). 422: an Idempotency-Key sent again with another request (idempotency_key_reused). */
         Error: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
                 "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description The shipment has changed since the version in If-Match (version_mismatch). `current` is the shipment as it is now, and the ETag its version. */
+        ShipmentVersionMismatch: {
+            headers: {
+                ETag: components["headers"]["ETag"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"] & {
+                    current: components["schemas"]["Shipment"];
+                };
             };
         };
         /** @description Done */
@@ -770,11 +782,18 @@ export interface components {
         };
     };
     parameters: {
+        /** @description The ETag of the copy the change was made from. When the record has changed since, the change is refused 412 with the record as it is now. */
+        IfMatch: string;
+        /** @description A key of the caller's choosing, one per booking. Sent again within 24 hours with the same request, it gets the first answer without booking again, marked Idempotent-Replayed: true; with another request, 422 idempotency_key_reused; while the first still runs, 409 idempotency_key_in_flight. Only a success is kept. */
+        IdempotencyKey: string;
         /** @description The shipment's tracking number or its id. */
         Ref: string;
     };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /** @description The record's version, quoted ("3"). Send it back as If-Match to change the record only if no one has since. */
+        ETag: string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -824,7 +843,10 @@ export interface operations {
     createShipment: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description A key of the caller's choosing, one per booking. Sent again within 24 hours with the same request, it gets the first answer without booking again, marked Idempotent-Replayed: true; with another request, 422 idempotency_key_reused; while the first still runs, 409 idempotency_key_in_flight. Only a success is kept. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -837,6 +859,7 @@ export interface operations {
             /** @description Booked. `Location` is the shipment's address in the API. */
             201: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -848,6 +871,7 @@ export interface operations {
             402: components["responses"]["Error"];
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             429: components["responses"]["Error"];
         };
     };
@@ -866,6 +890,7 @@ export interface operations {
             /** @description The shipment */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -881,7 +906,10 @@ export interface operations {
     updateShipment: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The ETag of the copy the change was made from. When the record has changed since, the change is refused 412 with the record as it is now. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description The shipment's tracking number or its id. */
                 ref: components["parameters"]["Ref"];
@@ -897,6 +925,7 @@ export interface operations {
             /** @description The shipment as changed */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -908,13 +937,17 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            412: components["responses"]["ShipmentVersionMismatch"];
             429: components["responses"]["Error"];
         };
     };
     assignShipment: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The ETag of the copy the change was made from. When the record has changed since, the change is refused 412 with the record as it is now. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description The shipment's tracking number or its id. */
                 ref: components["parameters"]["Ref"];
@@ -935,6 +968,7 @@ export interface operations {
             /** @description The shipment as assigned */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -947,13 +981,17 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            412: components["responses"]["ShipmentVersionMismatch"];
             429: components["responses"]["Error"];
         };
     };
     cancelShipment: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The ETag of the copy the change was made from. When the record has changed since, the change is refused 412 with the record as it is now. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description The shipment's tracking number or its id. */
                 ref: components["parameters"]["Ref"];
@@ -973,6 +1011,7 @@ export interface operations {
             /** @description The shipment, cancelled */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -984,6 +1023,7 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            412: components["responses"]["ShipmentVersionMismatch"];
             429: components["responses"]["Error"];
         };
     };
