@@ -71,6 +71,7 @@ const deleteOldProcessedMessages = `-- name: DeleteOldProcessedMessages :exec
 DELETE FROM processed_messages WHERE processed_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteOldProcessedMessages(ctx context.Context, before pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldProcessedMessages, before)
 	return err
@@ -80,6 +81,7 @@ const deleteSentOutboxEvents = `-- name: DeleteSentOutboxEvents :exec
 DELETE FROM event_outbox WHERE sent_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteSentOutboxEvents(ctx context.Context, before pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteSentOutboxEvents, before)
 	return err
@@ -96,6 +98,7 @@ type MarkMessageProcessedParams struct {
 	MessageID pgtype.UUID `db:"message_id" json:"message_id"`
 }
 
+// tenant: none, a consumer's record of messages it handled, across every company.
 // A consumer's record of a message it handled, in the same transaction as
 // its effect. No row: it was handled already, so the handler does nothing.
 func (q *Queries) MarkMessageProcessed(ctx context.Context, arg MarkMessageProcessedParams) (int64, error) {
@@ -118,6 +121,7 @@ type MarkOutboxFailedParams struct {
 	Ids          []pgtype.UUID `db:"ids" json:"ids"`
 }
 
+// tenant: none, the event relay, which publishes every company's events.
 // A publish that failed is tried again after delay.
 func (q *Queries) MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) error {
 	_, err := q.db.Exec(ctx, markOutboxFailed, arg.LastError, arg.DelaySeconds, arg.Ids)
@@ -129,6 +133,7 @@ UPDATE event_outbox SET sent_at = now(), attempts = attempts + 1, last_error = N
 WHERE id = ANY($1::uuid[])
 `
 
+// tenant: none, the event relay, which publishes every company's events.
 func (q *Queries) MarkOutboxSent(ctx context.Context, ids []pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, markOutboxSent, ids)
 	return err
@@ -146,6 +151,7 @@ type OutboxLagRow struct {
 	OldestSeconds float64 `db:"oldest_seconds" json:"oldest_seconds"`
 }
 
+// tenant: none, the event relay, which publishes every company's events.
 // How many events wait, and how long the oldest has, for /metrics.
 func (q *Queries) OutboxLag(ctx context.Context) (OutboxLagRow, error) {
 	row := q.db.QueryRow(ctx, outboxLag)

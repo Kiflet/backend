@@ -26,16 +26,19 @@ SELECT COALESCE(SUM(segments), 0)::bigint FROM sms_messages
 WHERE tenant_id = $1 AND direction = 'outbound' AND status IN ('queued', 'sending', 'sent') AND created_at >= $2;
 
 -- name: CountCodesTextedSince :one
+-- tenant: none, a limit across the platform, on texted codes.
 -- Verification codes queued or sent across the platform, for the daily
 -- budget.
 SELECT COUNT(*) FROM sms_messages
 WHERE purpose = 'otp' AND direction = 'outbound' AND status IN ('queued', 'sending', 'sent') AND created_at >= $1;
 
 -- name: CountSMSToPhoneSince :one
+-- tenant: none, a limit on one phone number, before any company is known.
 SELECT COUNT(*) FROM sms_messages
 WHERE phone = $1 AND purpose = $2 AND direction = 'outbound' AND created_at >= $3;
 
 -- name: ClaimQueuedSMS :many
+-- tenant: none, the outbound queue, which sends every company's texts.
 -- SKIP LOCKED lets several API replicas drain the queue without sending the
 -- same message twice.
 -- The claim is a five-minute lease: next_attempt_at moves to when the row may
@@ -52,6 +55,7 @@ WHERE id IN (
 RETURNING *;
 
 -- name: MarkSMSSent :exec
+-- tenant: none, the outbound queue, which sends every company's texts.
 UPDATE sms_messages
 SET status = 'sent',
     sent_at = NOW(),
@@ -62,6 +66,7 @@ SET status = 'sent',
 WHERE id = sqlc.arg(id);
 
 -- name: RecordSMSDelivery :execrows
+-- tenant: none, a provider's report names its message, not a company.
 -- A provider's delivery report. Its message IDs are unique per provider, so
 -- this finds one company's text. Delivered is final; a text reported
 -- undelivered may still arrive when the network tries again. The error is
@@ -110,11 +115,13 @@ WHERE r.provider = a.provider AND r.provider_message_id = a.provider_message_id;
 DELETE FROM sms_early_reports WHERE received_at < sqlc.arg(before);
 
 -- name: MarkSMSRetry :exec
+-- tenant: none, the outbound queue, which sends every company's texts.
 UPDATE sms_messages
 SET status = 'queued', last_error = $2, next_attempt_at = $3
 WHERE id = $1;
 
 -- name: MarkSMSFailed :exec
+-- tenant: none, the outbound queue, which sends every company's texts.
 UPDATE sms_messages
 SET status = 'failed',
     last_error = $2,
@@ -122,6 +129,7 @@ SET status = 'failed',
 WHERE id = $1;
 
 -- name: MarkSMSSkipped :exec
+-- tenant: none, the outbound queue, which sends every company's texts.
 UPDATE sms_messages
 SET status = 'skipped',
     last_error = $2,
@@ -129,6 +137,7 @@ SET status = 'skipped',
 WHERE id = $1;
 
 -- name: ReleaseSMS :exec
+-- tenant: none, the outbound queue, which sends every company's texts.
 -- Hands back messages claimed but not yet attempted when the process stops,
 -- so the next one sends them at once instead of after the lease.
 UPDATE sms_messages
@@ -136,6 +145,7 @@ SET status = 'queued', attempts = attempts - 1, next_attempt_at = NOW()
 WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND status = 'sending';
 
 -- name: RequeueStuckSMS :exec
+-- tenant: none, the outbound queue, which sends every company's texts.
 -- A process that died mid-send leaves rows in 'sending' past their lease.
 UPDATE sms_messages
 SET status = 'queued'
@@ -158,18 +168,23 @@ SELECT COALESCE(SUM(segments), 0)::bigint FROM sms_messages
 WHERE tenant_id = $1 AND direction = 'outbound' AND status = 'sent' AND sent_at >= $2;
 
 -- name: IsPhoneOptedOut :one
+-- tenant: none, opting out is the phone's, from every company's texts.
 SELECT EXISTS (SELECT 1 FROM sms_opt_outs WHERE phone = $1);
 
 -- name: AddSMSOptOut :exec
+-- tenant: none, opting out is the phone's, from every company's texts.
 INSERT INTO sms_opt_outs (phone) VALUES ($1) ON CONFLICT DO NOTHING;
 
 -- name: RemoveSMSOptOut :exec
+-- tenant: none, opting out is the phone's, from every company's texts.
 DELETE FROM sms_opt_outs WHERE phone = $1;
 
 -- name: DeleteOldSMS :exec
+-- tenant: none, retention, across every company.
 DELETE FROM sms_messages WHERE created_at < $1;
 
 -- name: ClaimSMSByIDs :many
+-- tenant: none, the outbound queue, which sends every company's texts.
 -- ClaimQueuedSMS for the messages RabbitMQ named (notify.sms): those still
 -- queued and due. One sent already, held by another worker or waiting for
 -- a retry is left alone.
@@ -183,6 +198,7 @@ WHERE id IN (
 RETURNING *;
 
 -- name: DueSMSIDs :many
+-- tenant: none, the outbound queue, which sends every company's texts.
 -- Messages due to be sent, for the sweeper to hand to RabbitMQ: retries
 -- whose time has come, and any whose message was lost.
 SELECT id FROM sms_messages

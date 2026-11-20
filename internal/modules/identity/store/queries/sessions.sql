@@ -37,12 +37,14 @@ WHERE s.refresh_token_hash = $1
   AND s.expires_at > NOW();
 
 -- name: TouchSession :exec
+-- tenant: none, a session the caller already holds, by its ID.
 -- Sliding expiry: a session in use is pushed out, never pulled in.
 UPDATE sessions
 SET last_seen_at = NOW(), expires_at = GREATEST(expires_at, sqlc.arg(expires_at))
 WHERE id = sqlc.arg(id);
 
 -- name: ListActiveSessionsByUser :many
+-- tenant: none, the signed-in person's own sessions, by their user ID.
 SELECT * FROM sessions
 WHERE user_id = $1
   AND revoked_at IS NULL
@@ -50,26 +52,31 @@ WHERE user_id = $1
 ORDER BY COALESCE(last_seen_at, created_at) DESC;
 
 -- name: RevokeSession :exec
+-- tenant: none, a session the caller already holds, by its ID.
 UPDATE sessions
 SET revoked_at = NOW()
 WHERE id = $1 AND revoked_at IS NULL;
 
 -- name: RevokeSessionByUser :exec
+-- tenant: none, the signed-in person's own sessions, by their user ID.
 UPDATE sessions
 SET revoked_at = NOW()
 WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL;
 
 -- name: RevokeAllUserSessions :exec
+-- tenant: none, the signed-in person's own sessions, by their user ID.
 UPDATE sessions
 SET revoked_at = NOW()
 WHERE user_id = $1 AND revoked_at IS NULL;
 
 -- name: RevokeOtherUserSessions :exec
+-- tenant: none, the signed-in person's own sessions, by their user ID.
 UPDATE sessions
 SET revoked_at = NOW()
 WHERE user_id = $1 AND id != $2 AND revoked_at IS NULL;
 
 -- name: DeleteExpiredSessions :exec
+-- tenant: none, retention, across every company.
 DELETE FROM sessions WHERE expires_at < NOW() - INTERVAL '7 days'
    OR revoked_at < NOW() - INTERVAL '7 days';
 

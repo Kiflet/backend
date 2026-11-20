@@ -84,7 +84,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] The tenant in every reference between companies' tables (D2).
 - [x] The per-driver load limit counted under a lock (D3).
 - [ ] Charges and cargo values in santim (D4).
-- [ ] Every query without `tenant_id` says why, checked in CI (D5).
+- [x] Every query without `tenant_id` says why, checked in CI (D5).
 - [ ] `pod_media`, and signatures stored as files (D6).
 - [ ] A `version` on every edited record, and `idempotency_keys` (D7).
 - [ ] One catalogue of the words for codes, for the office, customers and

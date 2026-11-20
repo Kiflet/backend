@@ -59,15 +59,18 @@ WHERE tenant_id = sqlc.arg(tenant_id) AND shipment_id = sqlc.arg(shipment_id) AN
   AND alert_type = ANY(sqlc.arg(alert_types)::text[]);
 
 -- name: DeleteOldAlerts :exec
+-- tenant: none, retention, across every company.
 DELETE FROM alerts WHERE created_at < $1;
 
 -- name: AcknowledgeDriverAlerts :exec
+-- tenant: none, the driver's own alerts, by the driver's ID, which belongs to one company.
 -- A driver who syncs again is no longer offline.
 UPDATE alerts
 SET acknowledged_at = NOW(), read_at = COALESCE(read_at, NOW())
 WHERE driver_id = $1 AND alert_type = $2 AND acknowledged_at IS NULL;
 
 -- name: AcknowledgeStaleETAAlerts :exec
+-- tenant: none, the alerts job, across every company; each alert is matched to its own load.
 -- A "past ETA" alert is moot once its shipment has a new ETA, is no longer on
 -- the road, or is no longer late.
 UPDATE alerts a
@@ -82,6 +85,7 @@ WHERE a.shipment_id = s.id
        OR a.episode IS DISTINCT FROM floor(extract(epoch FROM s.estimated_delivery))::bigint::text);
 
 -- name: AcknowledgeStalePickupAlerts :exec
+-- tenant: none, the alerts job, across every company; each alert is matched to its own load.
 -- Likewise a "not collected" alert once the load has left or been rescheduled.
 UPDATE alerts a
 SET acknowledged_at = NOW(), read_at = COALESCE(a.read_at, NOW())
@@ -102,6 +106,7 @@ WHERE tenant_id = sqlc.arg(tenant_id) AND alert_type = sqlc.arg(alert_type) AND 
   AND episode IS DISTINCT FROM sqlc.narg(keep_episode);
 
 -- name: AcknowledgeMovedStops :exec
+-- tenant: none, the alerts job, across every company; each alert is matched to its own load.
 -- A truck that has moved on is no longer on a long stop.
 UPDATE alerts
 SET acknowledged_at = NOW(), read_at = COALESCE(read_at, NOW())

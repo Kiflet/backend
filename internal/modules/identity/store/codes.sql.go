@@ -15,6 +15,7 @@ const consumeVerificationCode = `-- name: ConsumeVerificationCode :execrows
 UPDATE verification_codes SET consumed_at = NOW() WHERE id = $1 AND consumed_at IS NULL
 `
 
+// tenant: none, codes are sent to a phone before any company is known (sign-in, sign-up).
 func (q *Queries) ConsumeVerificationCode(ctx context.Context, id pgtype.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, consumeVerificationCode, id)
 	if err != nil {
@@ -34,6 +35,7 @@ type CountVerificationAttemptParams struct {
 	MaxAttempts int32       `db:"max_attempts" json:"max_attempts"`
 }
 
+// tenant: none, codes are sent to a phone before any company is known (sign-in, sign-up).
 // Counts a try at a code, unless it has had all its tries: then no row.
 func (q *Queries) CountVerificationAttempt(ctx context.Context, arg CountVerificationAttemptParams) (int32, error) {
 	row := q.db.QueryRow(ctx, countVerificationAttempt, arg.ID, arg.MaxAttempts)
@@ -53,6 +55,7 @@ type CountVerificationCodesSinceParams struct {
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+// tenant: none, codes are sent to a phone before any company is known (sign-in, sign-up).
 func (q *Queries) CountVerificationCodesSince(ctx context.Context, arg CountVerificationCodesSinceParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countVerificationCodesSince, arg.Phone, arg.Purpose, arg.CreatedAt)
 	var count int64
@@ -73,6 +76,7 @@ type CreateVerificationCodeParams struct {
 	ExpiresAt pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 }
 
+// tenant: none, codes are sent to a phone before any company is known (sign-in, sign-up).
 func (q *Queries) CreateVerificationCode(ctx context.Context, arg CreateVerificationCodeParams) (VerificationCode, error) {
 	row := q.db.QueryRow(ctx, createVerificationCode,
 		arg.Phone,
@@ -98,6 +102,7 @@ const deleteExpiredVerificationCodes = `-- name: DeleteExpiredVerificationCodes 
 DELETE FROM verification_codes WHERE expires_at < NOW() - INTERVAL '1 day'
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteExpiredVerificationCodes(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteExpiredVerificationCodes)
 	return err
@@ -115,6 +120,7 @@ type GetActiveVerificationCodeParams struct {
 	Purpose string `db:"purpose" json:"purpose"`
 }
 
+// tenant: none, codes are sent to a phone before any company is known (sign-in, sign-up).
 func (q *Queries) GetActiveVerificationCode(ctx context.Context, arg GetActiveVerificationCodeParams) (VerificationCode, error) {
 	row := q.db.QueryRow(ctx, getActiveVerificationCode, arg.Phone, arg.Purpose)
 	var i VerificationCode
@@ -135,6 +141,7 @@ const lockVerificationSubject = `-- name: LockVerificationSubject :exec
 SELECT pg_advisory_xact_lock(hashtext($1::text))
 `
 
+// tenant: none, codes are sent to a phone before any company is known (sign-in, sign-up).
 // Held until the transaction ends: requests for one number and purpose
 // take turns.
 func (q *Queries) LockVerificationSubject(ctx context.Context, subject string) error {

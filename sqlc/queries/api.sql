@@ -19,6 +19,7 @@ JOIN tenants t ON t.id = k.tenant_id
 WHERE k.key_hash = $1 AND k.revoked_at IS NULL;
 
 -- name: TouchAPIKey :exec
+-- tenant: none, the key that was just authenticated, by its ID.
 -- At most one write a minute, however busy the key.
 UPDATE api_keys SET last_used_at = NOW()
 WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < NOW() - INTERVAL '1 minute');

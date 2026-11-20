@@ -155,6 +155,7 @@ UPDATE api_keys SET last_used_at = NOW()
 WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < NOW() - INTERVAL '1 minute')
 `
 
+// tenant: none, the key that was just authenticated, by its ID.
 // At most one write a minute, however busy the key.
 func (q *Queries) TouchAPIKey(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, touchAPIKey, id)

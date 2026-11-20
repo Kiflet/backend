@@ -22,6 +22,7 @@ WHERE id IN (
 RETURNING id, tenant_id, to_address, subject, body, purpose, sensitive, status, attempts, last_error, provider, next_attempt_at, sent_at, created_at
 `
 
+// tenant: none, the outbound queue, which sends every company's mail.
 // As ClaimSMSByIDs (notify.email).
 func (q *Queries) ClaimEmailsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Email, error) {
 	rows, err := q.db.Query(ctx, claimEmailsByIDs, ids)
@@ -71,6 +72,7 @@ WHERE id IN (
 RETURNING id, tenant_id, to_address, subject, body, purpose, sensitive, status, attempts, last_error, provider, next_attempt_at, sent_at, created_at
 `
 
+// tenant: none, the outbound queue, which sends every company's mail.
 // The same five-minute lease as ClaimQueuedSMS.
 func (q *Queries) ClaimQueuedEmails(ctx context.Context, limit int32) ([]Email, error) {
 	rows, err := q.db.Query(ctx, claimQueuedEmails, limit)
@@ -111,6 +113,7 @@ const deleteOldEmails = `-- name: DeleteOldEmails :exec
 DELETE FROM emails WHERE created_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteOldEmails(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldEmails, createdAt)
 	return err
@@ -123,6 +126,7 @@ ORDER BY next_attempt_at
 LIMIT $1
 `
 
+// tenant: none, the outbound queue, which sends every company's mail.
 func (q *Queries) DueEmailIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, dueEmailIDs, maxMessages)
 	if err != nil {
@@ -200,6 +204,7 @@ type MarkEmailFailedParams struct {
 	LastError *string     `db:"last_error" json:"last_error"`
 }
 
+// tenant: none, the outbound queue, which sends every company's mail.
 func (q *Queries) MarkEmailFailed(ctx context.Context, arg MarkEmailFailedParams) error {
 	_, err := q.db.Exec(ctx, markEmailFailed, arg.ID, arg.LastError)
 	return err
@@ -217,6 +222,7 @@ type MarkEmailRetryParams struct {
 	NextAttemptAt pgtype.Timestamptz `db:"next_attempt_at" json:"next_attempt_at"`
 }
 
+// tenant: none, the outbound queue, which sends every company's mail.
 func (q *Queries) MarkEmailRetry(ctx context.Context, arg MarkEmailRetryParams) error {
 	_, err := q.db.Exec(ctx, markEmailRetry, arg.ID, arg.LastError, arg.NextAttemptAt)
 	return err
@@ -237,6 +243,7 @@ type MarkEmailSentParams struct {
 	Provider *string     `db:"provider" json:"provider"`
 }
 
+// tenant: none, the outbound queue, which sends every company's mail.
 func (q *Queries) MarkEmailSent(ctx context.Context, arg MarkEmailSentParams) error {
 	_, err := q.db.Exec(ctx, markEmailSent, arg.ID, arg.Provider)
 	return err
@@ -248,6 +255,7 @@ SET status = 'queued', attempts = attempts - 1, next_attempt_at = NOW()
 WHERE id = ANY($1::uuid[]) AND status = 'sending'
 `
 
+// tenant: none, the outbound queue, which sends every company's mail.
 // As ReleaseSMS.
 func (q *Queries) ReleaseEmails(ctx context.Context, ids []pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, releaseEmails, ids)
@@ -260,6 +268,7 @@ SET status = 'queued'
 WHERE status = 'sending' AND next_attempt_at < NOW()
 `
 
+// tenant: none, the outbound queue, which sends every company's mail.
 func (q *Queries) RequeueStuckEmails(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, requeueStuckEmails)
 	return err

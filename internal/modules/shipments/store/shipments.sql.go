@@ -233,6 +233,7 @@ SELECT id, tenant_id, tracking_number, origin_address, destination_address, cust
 WHERE confirm_token = $1
 `
 
+// tenant: none, the receiver's confirmation link: a load found by its token.
 func (q *Queries) GetShipmentByConfirmToken(ctx context.Context, confirmToken *string) (Shipment, error) {
 	row := q.db.QueryRow(ctx, getShipmentByConfirmToken, confirmToken)
 	var i Shipment
@@ -411,6 +412,7 @@ SELECT id, tenant_id, tracking_number, origin_address, destination_address, cust
 WHERE tracking_number = $1
 `
 
+// tenant: none, the public tracking page: a load found by its tracking number.
 func (q *Queries) GetShipmentByTrackingNumber(ctx context.Context, trackingNumber string) (Shipment, error) {
 	row := q.db.QueryRow(ctx, getShipmentByTrackingNumber, trackingNumber)
 	var i Shipment

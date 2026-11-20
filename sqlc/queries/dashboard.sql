@@ -65,6 +65,7 @@ ORDER BY b.created_at DESC
 LIMIT sqlc.arg(max_messages);
 
 -- name: DeleteOldBroadcasts :exec
+-- tenant: none, retention, across every company.
 DELETE FROM broadcasts WHERE created_at < $1;
 
 -- name: ListAlertEmailRecipients :many

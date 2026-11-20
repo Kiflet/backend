@@ -60,14 +60,17 @@ LEFT JOIN users u ON u.id = t.opened_by
 WHERE t.id = $1;
 
 -- name: CountWaitingTickets :one
+-- tenant: none, the platform's own page, for operators.
 SELECT COUNT(*) FROM support_tickets WHERE status = 'open';
 
 -- name: ListPlatformAdmins :many
+-- tenant: none, the platform's own page, for operators.
 SELECT full_name, email::text AS email FROM users
 WHERE role = 'platform_admin' AND is_active AND email IS NOT NULL
 ORDER BY created_at;
 
 -- name: RecordJobRun :exec
+-- tenant: none, the platform's background jobs, which serve every company.
 INSERT INTO job_runs (name, started_at, duration_ms, error, last_ok_at, runs, failures)
 VALUES (sqlc.arg(name), sqlc.arg(started_at), sqlc.arg(duration_ms), sqlc.narg(error),
         CASE WHEN sqlc.narg(error)::text IS NULL THEN sqlc.arg(started_at)::timestamptz END, 1,
@@ -78,9 +81,11 @@ SET started_at = EXCLUDED.started_at, duration_ms = EXCLUDED.duration_ms, error 
     runs = job_runs.runs + 1, failures = job_runs.failures + EXCLUDED.failures;
 
 -- name: ListJobRuns :many
+-- tenant: none, the platform's own page, for operators.
 SELECT * FROM job_runs ORDER BY name;
 
 -- name: OutboxHealth :many
+-- tenant: none, the platform's own page, for operators.
 -- Texts and emails waiting, and those sent or failed in the last day.
 SELECT 'sms'::text AS channel, status, COUNT(*)::bigint AS messages, MIN(created_at)::timestamptz AS oldest
 FROM sms_messages
@@ -94,6 +99,7 @@ GROUP BY status
 ORDER BY 1, 2;
 
 -- name: OutboxWaiting :many
+-- tenant: none, the platform's own page, for operators.
 -- Texts and emails waiting to be sent, for /metrics. Read off the partial
 -- queue indexes, so it is cheap to run every minute.
 SELECT 'sms'::text AS channel, COUNT(*)::bigint AS waiting, MIN(created_at)::timestamptz AS oldest
@@ -103,6 +109,7 @@ SELECT 'email'::text, COUNT(*)::bigint, MIN(created_at)::timestamptz
 FROM emails WHERE status = 'queued';
 
 -- name: LeaseJob :one
+-- tenant: none, the platform's background jobs, which serve every company.
 -- Takes a timed job's lease unless another worker holds it. true when
 -- taken.
 INSERT INTO job_leases (name, until) VALUES (sqlc.arg(name), NOW() + sqlc.arg(lease)::interval)
@@ -110,4 +117,5 @@ ON CONFLICT (name) DO UPDATE SET until = EXCLUDED.until WHERE job_leases.until <
 RETURNING true AS taken;
 
 -- name: ReleaseJob :exec
+-- tenant: none, the platform's background jobs, which serve every company.
 UPDATE job_leases SET until = NOW() WHERE name = sqlc.arg(name);

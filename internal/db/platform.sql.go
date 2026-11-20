@@ -53,6 +53,7 @@ const countWaitingTickets = `-- name: CountWaitingTickets :one
 SELECT COUNT(*) FROM support_tickets WHERE status = 'open'
 `
 
+// tenant: none, the platform's own page, for operators.
 func (q *Queries) CountWaitingTickets(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, countWaitingTickets)
 	var count int64
@@ -193,6 +194,7 @@ type LeaseJobParams struct {
 	Lease pgtype.Interval `db:"lease" json:"lease"`
 }
 
+// tenant: none, the platform's background jobs, which serve every company.
 // Takes a timed job's lease unless another worker holds it. true when
 // taken.
 func (q *Queries) LeaseJob(ctx context.Context, arg LeaseJobParams) (bool, error) {
@@ -259,6 +261,7 @@ const listJobRuns = `-- name: ListJobRuns :many
 SELECT name, started_at, duration_ms, error, last_ok_at, runs, failures FROM job_runs ORDER BY name
 `
 
+// tenant: none, the platform's own page, for operators.
 func (q *Queries) ListJobRuns(ctx context.Context) ([]JobRun, error) {
 	rows, err := q.db.Query(ctx, listJobRuns)
 	if err != nil {
@@ -298,6 +301,7 @@ type ListPlatformAdminsRow struct {
 	Email    string `db:"email" json:"email"`
 }
 
+// tenant: none, the platform's own page, for operators.
 func (q *Queries) ListPlatformAdmins(ctx context.Context) ([]ListPlatformAdminsRow, error) {
 	rows, err := q.db.Query(ctx, listPlatformAdmins)
 	if err != nil {
@@ -435,6 +439,7 @@ type OutboxHealthRow struct {
 	Oldest   pgtype.Timestamptz `db:"oldest" json:"oldest"`
 }
 
+// tenant: none, the platform's own page, for operators.
 // Texts and emails waiting, and those sent or failed in the last day.
 func (q *Queries) OutboxHealth(ctx context.Context) ([]OutboxHealthRow, error) {
 	rows, err := q.db.Query(ctx, outboxHealth)
@@ -475,6 +480,7 @@ type OutboxWaitingRow struct {
 	Oldest  pgtype.Timestamptz `db:"oldest" json:"oldest"`
 }
 
+// tenant: none, the platform's own page, for operators.
 // Texts and emails waiting to be sent, for /metrics. Read off the partial
 // queue indexes, so it is cheap to run every minute.
 func (q *Queries) OutboxWaiting(ctx context.Context) ([]OutboxWaitingRow, error) {
@@ -515,6 +521,7 @@ type RecordJobRunParams struct {
 	Error      *string            `db:"error" json:"error"`
 }
 
+// tenant: none, the platform's background jobs, which serve every company.
 func (q *Queries) RecordJobRun(ctx context.Context, arg RecordJobRunParams) error {
 	_, err := q.db.Exec(ctx, recordJobRun,
 		arg.Name,
@@ -529,6 +536,7 @@ const releaseJob = `-- name: ReleaseJob :exec
 UPDATE job_leases SET until = NOW() WHERE name = $1
 `
 
+// tenant: none, the platform's background jobs, which serve every company.
 func (q *Queries) ReleaseJob(ctx context.Context, name string) error {
 	_, err := q.db.Exec(ctx, releaseJob, name)
 	return err

@@ -98,6 +98,7 @@ const dropOldTrackingPartitions = `-- name: DropOldTrackingPartitions :one
 SELECT tracking_events_drop_partitions($1::timestamptz)::int AS dropped
 `
 
+// tenant: none, tracking partitions are shared by every company.
 // Retention: drops each day's partition that ends before the cut-off, and
 // deletes older rows from the default partition. Returns how many days.
 func (q *Queries) DropOldTrackingPartitions(ctx context.Context, before pgtype.Timestamptz) (int32, error) {
@@ -349,6 +350,7 @@ type MaintainTrackingPartitionsParams struct {
 	KeepDays  int32 `db:"keep_days" json:"keep_days"`
 }
 
+// tenant: none, tracking partitions are shared by every company.
 // Makes the partitions of the days ahead, and those of recent days whose
 // positions wait in the default partition. Returns how many it made.
 func (q *Queries) MaintainTrackingPartitions(ctx context.Context, arg MaintainTrackingPartitionsParams) (int32, error) {

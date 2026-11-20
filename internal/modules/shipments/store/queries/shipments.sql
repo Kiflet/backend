@@ -13,10 +13,12 @@ WHERE id = $1 AND tenant_id = $2
 FOR UPDATE;
 
 -- name: GetShipmentByTrackingNumber :one
+-- tenant: none, the public tracking page: a load found by its tracking number.
 SELECT * FROM shipments
 WHERE tracking_number = $1;
 
 -- name: GetShipmentByConfirmToken :one
+-- tenant: none, the receiver's confirmation link: a load found by its token.
 SELECT * FROM shipments
 WHERE confirm_token = $1;
 

@@ -97,6 +97,7 @@ const getSyncMetadata = `-- name: GetSyncMetadata :one
 SELECT id, driver_id, last_sync_at, last_event_id, pending_sync_count, storage_used_kb, updated_at, device_id, app_version, battery_level, clock_offset_seconds, tracking_paused, power_saving FROM sync_metadata WHERE driver_id = $1
 `
 
+// tenant: none, sync_metadata has no tenant_id: a row per driver, by the driver's ID, which belongs to one company.
 func (q *Queries) GetSyncMetadata(ctx context.Context, driverID pgtype.UUID) (SyncMetadatum, error) {
 	row := q.db.QueryRow(ctx, getSyncMetadata, driverID)
 	var i SyncMetadatum
@@ -206,6 +207,7 @@ type UpsertSyncMetadataParams struct {
 	PowerSaving        bool        `db:"power_saving" json:"power_saving"`
 }
 
+// tenant: none, sync_metadata has no tenant_id: a row per driver, by the driver's ID, which belongs to one company.
 func (q *Queries) UpsertSyncMetadata(ctx context.Context, arg UpsertSyncMetadataParams) error {
 	_, err := q.db.Exec(ctx, upsertSyncMetadata,
 		arg.DriverID,

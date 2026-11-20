@@ -48,6 +48,7 @@ type AcknowledgeDriverAlertsParams struct {
 	AlertType string      `db:"alert_type" json:"alert_type"`
 }
 
+// tenant: none, the driver's own alerts, by the driver's ID, which belongs to one company.
 // A driver who syncs again is no longer offline.
 func (q *Queries) AcknowledgeDriverAlerts(ctx context.Context, arg AcknowledgeDriverAlertsParams) error {
 	_, err := q.db.Exec(ctx, acknowledgeDriverAlerts, arg.DriverID, arg.AlertType)
@@ -61,6 +62,7 @@ WHERE alert_type = 'long_stop' AND acknowledged_at IS NULL
   AND NOT (shipment_id = ANY($1::uuid[]))
 `
 
+// tenant: none, the alerts job, across every company; each alert is matched to its own load.
 // A truck that has moved on is no longer on a long stop.
 func (q *Queries) AcknowledgeMovedStops(ctx context.Context, stillStopped []pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, acknowledgeMovedStops, stillStopped)
@@ -127,6 +129,7 @@ WHERE a.shipment_id = s.id
        OR a.episode IS DISTINCT FROM floor(extract(epoch FROM s.estimated_delivery))::bigint::text)
 `
 
+// tenant: none, the alerts job, across every company; each alert is matched to its own load.
 // A "past ETA" alert is moot once its shipment has a new ETA, is no longer on
 // the road, or is no longer late.
 func (q *Queries) AcknowledgeStaleETAAlerts(ctx context.Context) error {
@@ -146,6 +149,7 @@ WHERE a.shipment_id = s.id
        OR a.episode IS DISTINCT FROM floor(extract(epoch FROM s.planned_pickup_at))::bigint::text)
 `
 
+// tenant: none, the alerts job, across every company; each alert is matched to its own load.
 // Likewise a "not collected" alert once the load has left or been rescheduled.
 func (q *Queries) AcknowledgeStalePickupAlerts(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, acknowledgeStalePickupAlerts)
@@ -259,6 +263,7 @@ const deleteOldAlerts = `-- name: DeleteOldAlerts :exec
 DELETE FROM alerts WHERE created_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteOldAlerts(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldAlerts, createdAt)
 	return err

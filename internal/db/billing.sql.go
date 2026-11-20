@@ -43,6 +43,7 @@ type ClaimPaymentCheckParams struct {
 	CheckedBefore pgtype.Timestamptz `db:"checked_before" json:"checked_before"`
 }
 
+// tenant: none, a payment the caller has already found, by its ID.
 // Notes that the provider is being asked how a payment ended, unless it was
 // asked since checked_before. No row means another check is under way or
 // was recent.
@@ -257,6 +258,7 @@ UPDATE payments SET status = 'expired', completed_at = NOW()
 WHERE status = 'pending' AND created_at < $1
 `
 
+// tenant: none, retention, across every company.
 // A prompt nobody answered. A late approval is still honoured.
 func (q *Queries) ExpirePendingPayments(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, expirePendingPayments, createdAt)
@@ -281,6 +283,7 @@ type FinishPaymentParams struct {
 	ID          pgtype.UUID `db:"id" json:"id"`
 }
 
+// tenant: none, a payment the caller has already found, by its ID.
 func (q *Queries) FinishPayment(ctx context.Context, arg FinishPaymentParams) error {
 	_, err := q.db.Exec(ctx, finishPayment,
 		arg.Status,
@@ -301,6 +304,7 @@ type FlagRefundDueParams struct {
 	Note *string     `db:"note" json:"note"`
 }
 
+// tenant: none, a payment the caller has already found, by its ID.
 func (q *Queries) FlagRefundDue(ctx context.Context, arg FlagRefundDueParams) error {
 	_, err := q.db.Exec(ctx, flagRefundDue, arg.ID, arg.Note)
 	return err
@@ -416,6 +420,7 @@ const getInvoiceByNumber = `-- name: GetInvoiceByNumber :one
 SELECT id, tenant_id, number, kind, plan, billing_cycle, period_start, period_end, lines, usage, subtotal_santim, vat_santim, total_santim, status, issued_at, due_at, paid_at, voided_at, customer_name, customer_tin, customer_city, created_by FROM invoices WHERE number = $1
 `
 
+// tenant: none, a provider quotes the invoice by its number, which is unique across companies; the invoice carries its company.
 // A payer quotes the number to a provider, which asks us about it. Numbers
 // are the platform's and unique, so this finds one company's invoice.
 func (q *Queries) GetInvoiceByNumber(ctx context.Context, number string) (Invoice, error) {
@@ -685,6 +690,7 @@ SELECT id, name, slug, plan, max_drivers, is_active, created_at, updated_at, con
 `
 
 // Subscriptions, invoices and payments (FR-043 to FR-045).
+// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 func (q *Queries) GetTenantForUpdate(ctx context.Context, id pgtype.UUID) (Tenant, error) {
 	row := q.db.QueryRow(ctx, getTenantForUpdate, id)
 	var i Tenant
@@ -1018,6 +1024,7 @@ type ListPaymentsToCheckParams struct {
 	CheckedBefore pgtype.Timestamptz `db:"checked_before" json:"checked_before"`
 }
 
+// tenant: none, the payment checker, across every company.
 // Payments a provider may have finished without its notification reaching
 // us: open a minute or more, a few hours old at most, and not asked about
 // recently. Across companies, for the billing job.
@@ -1215,6 +1222,7 @@ const listTenantsForUsageBilling = `-- name: ListTenantsForUsageBilling :many
 SELECT id, name, slug, plan, max_drivers, is_active, created_at, updated_at, contact_phone, contact_email, region_city, max_active_per_driver, sms_on_created, sms_on_dispatched, sms_on_arrived, sms_on_delivered, sms_on_cancelled, sms_on_delayed, sms_driver_on_assign, trial_ends_at, billing_cycle, period_start, period_end, pending_plan, pending_cycle, enterprise_price_santim, enterprise_max_drivers, enterprise_sms_quota, subscribed_at, sms_quota, sms_month_quota, sms_billed_month, tin, alert_on_delivery, billing_anchor_day, renewal_cancelled_at, customer_language FROM tenants WHERE sms_billed_month IS NULL OR sms_billed_month < $1
 `
 
+// tenant: none, the usage billing job, across every company.
 // Companies with a finished month whose texts are not yet settled.
 func (q *Queries) ListTenantsForUsageBilling(ctx context.Context, smsBilledMonth pgtype.Date) ([]Tenant, error) {
 	rows, err := q.db.Query(ctx, listTenantsForUsageBilling, smsBilledMonth)
@@ -1516,6 +1524,7 @@ const lockInvoiceByNumber = `-- name: LockInvoiceByNumber :one
 SELECT id, tenant_id, number, kind, plan, billing_cycle, period_start, period_end, lines, usage, subtotal_santim, vat_santim, total_santim, status, issued_at, due_at, paid_at, voided_at, customer_name, customer_tin, customer_city, created_by FROM invoices WHERE number = $1 FOR UPDATE
 `
 
+// tenant: none, a provider quotes the invoice by its number, which is unique across companies; the invoice carries its company.
 func (q *Queries) LockInvoiceByNumber(ctx context.Context, number string) (Invoice, error) {
 	row := q.db.QueryRow(ctx, lockInvoiceByNumber, number)
 	var i Invoice
@@ -1576,6 +1585,7 @@ type LockPaymentRow struct {
 	InvoiceTotal    int64              `db:"invoice_total" json:"invoice_total"`
 }
 
+// tenant: none, an operator's action on any company's payment.
 func (q *Queries) LockPayment(ctx context.Context, id pgtype.UUID) (LockPaymentRow, error) {
 	row := q.db.QueryRow(ctx, lockPayment, id)
 	var i LockPaymentRow
@@ -1608,6 +1618,7 @@ const lockPaymentByReference = `-- name: LockPaymentByReference :one
 SELECT id, tenant_id, invoice_id, provider, reference, provider_ref, payer_phone, amount_santim, status, raw, note, refund_due, refunded_at, refund_reference, recorded_by, created_at, completed_at, checked_at FROM payments WHERE reference = $1 FOR UPDATE
 `
 
+// tenant: none, a payment found by the provider's reference, unique across companies; the payment carries its company.
 // A provider's notification carries only our reference. References are
 // random and unique, so this finds one company's payment.
 func (q *Queries) LockPaymentByReference(ctx context.Context, reference string) (Payment, error) {
@@ -1679,6 +1690,7 @@ type MarkPaymentRefundedParams struct {
 	ID              pgtype.UUID `db:"id" json:"id"`
 }
 
+// tenant: none, an operator's action on any company's payment.
 func (q *Queries) MarkPaymentRefunded(ctx context.Context, arg MarkPaymentRefundedParams) error {
 	_, err := q.db.Exec(ctx, markPaymentRefunded, arg.RefundReference, arg.Note, arg.ID)
 	return err
@@ -1690,6 +1702,7 @@ ON CONFLICT (year) DO UPDATE SET last = invoice_counters.last + 1
 RETURNING last
 `
 
+// tenant: none, invoice numbers are the platform's, one sequence for every company.
 // Moves the year's counter within the caller's transaction, so numbers have
 // no gaps.
 func (q *Queries) NextInvoiceNumber(ctx context.Context, year int32) (int32, error) {
@@ -1732,6 +1745,7 @@ type SaveSubscriptionParams struct {
 	ID                 pgtype.UUID        `db:"id" json:"id"`
 }
 
+// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 // Writes a company's subscription as the billing service decided it. The
 // month's text allowance only ever rises until the month ends.
 func (q *Queries) SaveSubscription(ctx context.Context, arg SaveSubscriptionParams) error {
@@ -1768,6 +1782,7 @@ type SetEnterpriseOfferParams struct {
 	ID          pgtype.UUID `db:"id" json:"id"`
 }
 
+// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 func (q *Queries) SetEnterpriseOffer(ctx context.Context, arg SetEnterpriseOfferParams) error {
 	_, err := q.db.Exec(ctx, setEnterpriseOffer,
 		arg.PriceSantim,
@@ -1787,6 +1802,7 @@ type SetPaymentProviderRefParams struct {
 	ProviderRef *string     `db:"provider_ref" json:"provider_ref"`
 }
 
+// tenant: none, a payment the caller has already found, by its ID.
 func (q *Queries) SetPaymentProviderRef(ctx context.Context, arg SetPaymentProviderRefParams) error {
 	_, err := q.db.Exec(ctx, setPaymentProviderRef, arg.ID, arg.ProviderRef)
 	return err
@@ -1801,6 +1817,7 @@ type SetSMSBilledMonthParams struct {
 	SmsBilledMonth pgtype.Date `db:"sms_billed_month" json:"sms_billed_month"`
 }
 
+// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 // The month is settled: the next one starts with the current allowance.
 func (q *Queries) SetSMSBilledMonth(ctx context.Context, arg SetSMSBilledMonthParams) error {
 	_, err := q.db.Exec(ctx, setSMSBilledMonth, arg.ID, arg.SmsBilledMonth)
@@ -1816,6 +1833,7 @@ type SetTrialEndParams struct {
 	TrialEndsAt pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
 }
 
+// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 func (q *Queries) SetTrialEnd(ctx context.Context, arg SetTrialEndParams) error {
 	_, err := q.db.Exec(ctx, setTrialEnd, arg.ID, arg.TrialEndsAt)
 	return err
@@ -1825,6 +1843,7 @@ const sumPaidSince = `-- name: SumPaidSince :one
 SELECT COALESCE(SUM(amount_santim), 0)::bigint FROM payments WHERE status = 'paid' AND completed_at >= $1
 `
 
+// tenant: none, the platform's revenue, across every company, for operators.
 func (q *Queries) SumPaidSince(ctx context.Context, completedAt pgtype.Timestamptz) (int64, error) {
 	row := q.db.QueryRow(ctx, sumPaidSince, completedAt)
 	var column_1 int64

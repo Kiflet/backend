@@ -15,6 +15,7 @@ const allowLogRewrite = `-- name: AllowLogRewrite :exec
 SELECT set_config('kiflet.purge', 'on', true)
 `
 
+// tenant: none, a setting for this transaction, not a table.
 // Lets this transaction change the append-only audit log and shipment
 // timeline (see the append_only trigger).
 func (q *Queries) AllowLogRewrite(ctx context.Context) error {
@@ -45,6 +46,7 @@ SET recipient_name = 'Removed', recipient_phone = NULL, signature_data = NULL, s
 WHERE shipment_id = ANY($1::uuid[])
 `
 
+// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 func (q *Queries) AnonymisePODs(ctx context.Context, ids []pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, anonymisePODs, ids)
 	return err
@@ -57,6 +59,7 @@ SET note = NULL, details = NULL, latitude = NULL, longitude = NULL,
 WHERE shipment_id = ANY($1::uuid[])
 `
 
+// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 // Notes, positions and details may name the recipient; a customer's own
 // confirmation carries their name.
 func (q *Queries) AnonymiseShipmentEvents(ctx context.Context, ids []pgtype.UUID) error {
@@ -74,6 +77,7 @@ SET customer_name = 'Former customer', customer_phone = '', consignee_name = NUL
 WHERE id = ANY($1::uuid[])
 `
 
+// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 // What reports count stays: dates, statuses, reasons, cities, driver,
 // vehicle and cargo.
 func (q *Queries) AnonymiseShipments(ctx context.Context, ids []pgtype.UUID) error {
@@ -125,6 +129,7 @@ const deleteDocumentsForShipments = `-- name: DeleteDocumentsForShipments :exec
 DELETE FROM shipment_documents WHERE shipment_id = ANY($1::uuid[])
 `
 
+// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 func (q *Queries) DeleteDocumentsForShipments(ctx context.Context, ids []pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteDocumentsForShipments, ids)
 	return err
@@ -153,6 +158,7 @@ const deletePersonDeviceData = `-- name: DeletePersonDeviceData :exec
 DELETE FROM sync_metadata WHERE driver_id = $1
 `
 
+// tenant: none, a person being removed, by the user ID the caller found in their company.
 func (q *Queries) DeletePersonDeviceData(ctx context.Context, driverID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deletePersonDeviceData, driverID)
 	return err
@@ -162,6 +168,7 @@ const deleteShipmentTexts = `-- name: DeleteShipmentTexts :exec
 DELETE FROM sms_messages WHERE shipment_id = ANY($1::uuid[])
 `
 
+// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 func (q *Queries) DeleteShipmentTexts(ctx context.Context, ids []pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteShipmentTexts, ids)
 	return err
@@ -171,6 +178,7 @@ const deleteTenant = `-- name: DeleteTenant :exec
 DELETE FROM tenants WHERE id = $1
 `
 
+// tenant: none, deleting the company itself, by its ID, inside purgeTx.
 func (q *Queries) DeleteTenant(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteTenant, id)
 	return err
@@ -598,6 +606,7 @@ const listDocumentKeysForShipments = `-- name: ListDocumentKeysForShipments :man
 SELECT storage_key FROM shipment_documents WHERE shipment_id = ANY($1::uuid[])
 `
 
+// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 func (q *Queries) ListDocumentKeysForShipments(ctx context.Context, ids []pgtype.UUID) ([]string, error) {
 	rows, err := q.db.Query(ctx, listDocumentKeysForShipments, ids)
 	if err != nil {
@@ -629,6 +638,7 @@ type ListPODMediaForShipmentsRow struct {
 	PhotoKeys    []string `db:"photo_keys" json:"photo_keys"`
 }
 
+// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 func (q *Queries) ListPODMediaForShipments(ctx context.Context, ids []pgtype.UUID) ([]ListPODMediaForShipmentsRow, error) {
 	rows, err := q.db.Query(ctx, listPODMediaForShipments, ids)
 	if err != nil {
@@ -662,6 +672,7 @@ type ListShipmentsToAnonymiseParams struct {
 	MaxRows int32              `db:"max_rows" json:"max_rows"`
 }
 
+// tenant: none, anonymising, across every company, loads past retention.
 // Shipments that finished before the keeping period ended and still hold
 // customer and delivery details (AC-041.2, AC-041.3). Across companies: the
 // retention job runs for all of them.

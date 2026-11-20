@@ -204,6 +204,7 @@ type ListPublicShipmentEventsRow struct {
 	Longitude  *float64           `db:"longitude" json:"longitude"`
 }
 
+// tenant: none, the public tracking page: a load found by its tracking number.
 func (q *Queries) ListPublicShipmentEvents(ctx context.Context, shipmentID pgtype.UUID) ([]ListPublicShipmentEventsRow, error) {
 	rows, err := q.db.Query(ctx, listPublicShipmentEvents, shipmentID)
 	if err != nil {

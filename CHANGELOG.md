@@ -109,6 +109,13 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Every query's company checked** (`docs/migration.md`, phase 1, step 5;
+  audit D5). `TestEveryQueryIsScopedByTenant` (`sqlc/`) reads every
+  queries file and fails on a query that neither names `tenant_id` nor
+  says why on the line after its name (`-- tenant: none, <reason>`). The
+  124 global queries (queue workers, retention, sign-in, public look-ups,
+  the company's own row) now say why; reading their callers found none
+  that should have been scoped.
 - **gosec in `make lint`** (audit P2). Its findings were checked one by
   one: none was a vulnerability. The exceptions are in `.golangci.yml`,
   or beside the line, each with its reason.

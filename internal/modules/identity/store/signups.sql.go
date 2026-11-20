@@ -31,6 +31,7 @@ type CreatePendingSignupParams struct {
 }
 
 // Sign-ups waiting for their SMS code.
+// tenant: none, a sign-up has no company until it is verified.
 func (q *Queries) CreatePendingSignup(ctx context.Context, arg CreatePendingSignupParams) error {
 	_, err := q.db.Exec(ctx, createPendingSignup,
 		arg.TokenHash,
@@ -51,6 +52,7 @@ const deleteExpiredPendingSignups = `-- name: DeleteExpiredPendingSignups :exec
 DELETE FROM pending_signups WHERE expires_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteExpiredPendingSignups(ctx context.Context, expiresAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteExpiredPendingSignups, expiresAt)
 	return err
@@ -60,6 +62,7 @@ const deletePendingSignup = `-- name: DeletePendingSignup :exec
 DELETE FROM pending_signups WHERE id = $1
 `
 
+// tenant: none, a sign-up has no company until it is verified.
 func (q *Queries) DeletePendingSignup(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deletePendingSignup, id)
 	return err
@@ -70,6 +73,7 @@ SELECT id, token_hash, company, city, full_name, email, phone, password_hash, pl
 FOR UPDATE
 `
 
+// tenant: none, a sign-up has no company until it is verified.
 func (q *Queries) GetPendingSignup(ctx context.Context, tokenHash string) (PendingSignup, error) {
 	row := q.db.QueryRow(ctx, getPendingSignup, tokenHash)
 	var i PendingSignup

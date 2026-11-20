@@ -25,6 +25,7 @@ WHERE id IN (
 RETURNING id, tenant_id, endpoint_id, event_id, event_type, shipment_id, payload, status, attempts, next_attempt_at, response_status, response_body, last_error, duration_ms, created_at, delivered_at
 `
 
+// tenant: none, the webhook queue, which delivers every company's events.
 // The five-minute lease of ClaimQueuedEmails. A paused endpoint's messages
 // wait for it.
 func (q *Queries) ClaimQueuedWebhooks(ctx context.Context, limit int32) ([]WebhookDelivery, error) {
@@ -76,6 +77,7 @@ WHERE id IN (
 RETURNING id, tenant_id, endpoint_id, event_id, event_type, shipment_id, payload, status, attempts, next_attempt_at, response_status, response_body, last_error, duration_ms, created_at, delivered_at
 `
 
+// tenant: none, the webhook queue, which delivers every company's events.
 // As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
 func (q *Queries) ClaimWebhooksByIDs(ctx context.Context, ids []pgtype.UUID) ([]WebhookDelivery, error) {
 	rows, err := q.db.Query(ctx, claimWebhooksByIDs, ids)
@@ -168,6 +170,7 @@ const deleteOldWebhookDeliveries = `-- name: DeleteOldWebhookDeliveries :exec
 DELETE FROM webhook_deliveries WHERE created_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteOldWebhookDeliveries(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldWebhookDeliveries, createdAt)
 	return err
@@ -207,6 +210,7 @@ ORDER BY d.next_attempt_at
 LIMIT $1
 `
 
+// tenant: none, the webhook queue, which delivers every company's events.
 // Not a paused endpoint's: they would go round until it is resumed.
 func (q *Queries) DueWebhookIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, dueWebhookIDs, maxMessages)
@@ -352,6 +356,7 @@ type GetWebhookTargetRow struct {
 	Active bool   `db:"active" json:"active"`
 }
 
+// tenant: none, the webhook queue, which delivers every company's events.
 // Where a claimed message goes, read as it is sent: a changed address or
 // secret applies to messages still waiting.
 func (q *Queries) GetWebhookTarget(ctx context.Context, id pgtype.UUID) (GetWebhookTargetRow, error) {
@@ -507,6 +512,7 @@ type MarkWebhookDeliveredParams struct {
 	DurationMs     *int32      `db:"duration_ms" json:"duration_ms"`
 }
 
+// tenant: none, the webhook queue, which delivers every company's events.
 func (q *Queries) MarkWebhookDelivered(ctx context.Context, arg MarkWebhookDeliveredParams) error {
 	_, err := q.db.Exec(ctx, markWebhookDelivered,
 		arg.ID,
@@ -531,6 +537,7 @@ type MarkWebhookFailedParams struct {
 	LastError      *string     `db:"last_error" json:"last_error"`
 }
 
+// tenant: none, the webhook queue, which delivers every company's events.
 func (q *Queries) MarkWebhookFailed(ctx context.Context, arg MarkWebhookFailedParams) error {
 	_, err := q.db.Exec(ctx, markWebhookFailed,
 		arg.ID,
@@ -557,6 +564,7 @@ type MarkWebhookRetryParams struct {
 	NextAttemptAt  pgtype.Timestamptz `db:"next_attempt_at" json:"next_attempt_at"`
 }
 
+// tenant: none, the webhook queue, which delivers every company's events.
 func (q *Queries) MarkWebhookRetry(ctx context.Context, arg MarkWebhookRetryParams) error {
 	_, err := q.db.Exec(ctx, markWebhookRetry,
 		arg.ID,
@@ -575,6 +583,7 @@ SET status = 'queued', attempts = attempts - 1, next_attempt_at = NOW()
 WHERE id = ANY($1::uuid[]) AND status = 'sending'
 `
 
+// tenant: none, the webhook queue, which delivers every company's events.
 // As ReleaseEmails.
 func (q *Queries) ReleaseWebhooks(ctx context.Context, ids []pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, releaseWebhooks, ids)
@@ -587,6 +596,7 @@ SET status = 'queued'
 WHERE status = 'sending' AND next_attempt_at < NOW()
 `
 
+// tenant: none, the webhook queue, which delivers every company's events.
 func (q *Queries) RequeueStuckWebhooks(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, requeueStuckWebhooks)
 	return err
