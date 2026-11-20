@@ -99,7 +99,7 @@ var ImportColumns = []importColumn{
 	{Name: "Weight (kg)", aliases: []string{"weight", "cargoweight"},
 		set: amount("The weight", func(in *ShipmentInput, f float64) { in.CargoWeightKg = f })},
 	{Name: "Value (ETB)", aliases: []string{"value", "cargovalue"},
-		set: amount("The value", func(in *ShipmentInput, f float64) { in.CargoValueETB = f })},
+		set: words(func(in *ShipmentInput, v string) { in.CargoValue = v })},
 	{Name: "Priority", Help: "normal, high or urgent; normal when empty",
 		set: words(func(in *ShipmentInput, v string) { in.Priority = strings.ToLower(v) })},
 	{Name: "Pickup", Help: "When the load is collected, as 2026-11-20 08:00", aliases: []string{"plannedpickup"},

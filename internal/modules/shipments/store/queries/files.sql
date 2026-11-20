@@ -28,7 +28,7 @@ WHERE tenant_id = $1 AND shipment_id = $2
 ORDER BY created_at, id;
 
 -- name: CreateShipmentCharge :one
-INSERT INTO shipment_charges (tenant_id, shipment_id, description, amount, created_by)
+INSERT INTO shipment_charges (tenant_id, shipment_id, description, amount_santim, created_by)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 

@@ -28,7 +28,7 @@ INSERT INTO shipments (
     origin_city, origin_address, origin_lat, origin_lng,
     destination_city, destination_address, destination_lat, destination_lng, destination_precise,
     customer_name, customer_phone,
-    cargo_description, cargo_weight, cargo_value, special_instructions,
+    cargo_description, cargo_weight, cargo_value_santim, special_instructions,
     driver_id, vehicle_id, status, estimated_delivery, eta_manual, created_by, status_changed_at,
     planned_pickup_at, consignee_name, consignee_phone, cargo_pieces, cargo_unit
 ) VALUES (
@@ -59,7 +59,7 @@ SET priority = $3,
     customer_phone = $14,
     cargo_description = $15,
     cargo_weight = $16,
-    cargo_value = $17,
+    cargo_value_santim = $17,
     special_instructions = $18,
     estimated_delivery = $19,
     eta_manual = $20,

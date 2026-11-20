@@ -57,7 +57,7 @@ type Files interface {
 	Charges(ctx context.Context, conn database.Conn, tenantID, shipmentID pgtype.UUID) ([]Charge, error)
 	// AddCharge checks a charge (domain.CheckCharge) and adds it, up to
 	// domain.MaxChargesPerShipment.
-	AddCharge(ctx context.Context, conn database.Conn, tenantID, shipmentID, by pgtype.UUID, description string, amount float64) error
+	AddCharge(ctx context.Context, conn database.Conn, tenantID, shipmentID, by pgtype.UUID, description string, santim int64) error
 	// RemoveCharge removes one; one not there is ErrNoCharge.
 	RemoveCharge(ctx context.Context, conn database.Conn, tenantID, shipmentID, id pgtype.UUID) error
 }

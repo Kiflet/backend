@@ -84,7 +84,7 @@ func TestAnotherCompanysRowsAreRefused(t *testing.T) {
 	crossCompany(t, "a load given another company's truck",
 		`UPDATE shipments SET vehicle_id = $2 WHERE id = $1`, load, theirTruck)
 	crossCompany(t, "a charge on another company's load",
-		`INSERT INTO shipment_charges (tenant_id, shipment_id, description, amount) VALUES ($1, $2, 'Freight', 100)`, tenant, theirLoad)
+		`INSERT INTO shipment_charges (tenant_id, shipment_id, description, amount_santim) VALUES ($1, $2, 'Freight', 10000)`, tenant, theirLoad)
 	crossCompany(t, "an alert about another company's driver",
 		`INSERT INTO alerts (tenant_id, driver_id, alert_type, message) VALUES ($1, $2, 'driver_offline', 'Offline')`, tenant, theirDriver)
 

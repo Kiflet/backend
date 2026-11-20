@@ -2,7 +2,6 @@ package domain
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"path"
 	"strings"
@@ -110,21 +109,25 @@ func DocumentName(name, ext string) string {
 	return name + ext
 }
 
-// CheckCharge checks a line of what the customer is charged, and returns
-// it tidied, the amount to the cent. A negative amount is a discount.
-func CheckCharge(description string, amount float64) (string, float64, error) {
+// MaxCharge is the largest charge or discount, in santim: under a trillion
+// birr.
+const MaxCharge = 100_000_000_000_000
+
+// CheckCharge checks a line of what the customer is charged, its amount in
+// santim, and returns the description tidied. A negative amount is a
+// discount.
+func CheckCharge(description string, santim int64) (string, error) {
 	description = strings.TrimSpace(description)
 	if description == "" {
-		return "", 0, apperror.Invalid("description", "Say what the charge is for.")
+		return "", apperror.Invalid("description", "Say what the charge is for.")
 	}
 	if utf8.RuneCountInString(description) > 120 {
-		return "", 0, apperror.Invalid("description", "Describe the charge in 120 letters or fewer.")
+		return "", apperror.Invalid("description", "Describe the charge in 120 letters or fewer.")
 	}
-	amount = math.Round(amount*100) / 100
-	if amount == 0 || math.IsNaN(amount) || math.Abs(amount) >= 1e12 {
-		return "", 0, apperror.Invalid("amount", "Enter an amount in birr; a discount is negative.")
+	if santim == 0 || santim >= MaxCharge || santim <= -MaxCharge {
+		return "", apperror.Invalid("amount", "Enter an amount in birr; a discount is negative.")
 	}
-	return description, amount, nil
+	return description, nil
 }
 
 // ErrTooManyCharges is a shipment that holds all the charges it may.

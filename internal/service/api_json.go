@@ -30,7 +30,8 @@ type PartyJSON struct {
 type CargoJSON struct {
 	Description string  `json:"description"`
 	WeightKg    float64 `json:"weight_kg"`
-	ValueETB    float64 `json:"value_etb"`
+	// ValueSantim is what the cargo is worth, in santim; 0 when not given.
+	ValueSantim int64 `json:"value_santim"`
 	// Pieces is how many pieces the load is, 0 when not counted, and Unit
 	// what they are ("bales").
 	Pieces int    `json:"pieces"`
@@ -84,7 +85,7 @@ func AsJSON(sh shipments.Shipment, baseURL string) ShipmentJSON {
 		Origin:      PlaceJSON{City: deref(sh.OriginCity), Address: sh.OriginAddress, Lat: sh.OriginLat, Lng: sh.OriginLng},
 		Destination: PlaceJSON{City: deref(sh.DestinationCity), Address: sh.DestinationAddress, Lat: sh.DestinationLat, Lng: sh.DestinationLng},
 		Customer:    PartyJSON{Name: sh.CustomerName, Phone: sh.CustomerPhone},
-		Cargo: CargoJSON{Description: deref(sh.CargoDescription), WeightKg: numericOr(sh.CargoWeight), ValueETB: numericOr(sh.CargoValue),
+		Cargo: CargoJSON{Description: deref(sh.CargoDescription), WeightKg: numericOr(sh.CargoWeight), ValueSantim: sh.CargoValueSantim,
 			Pieces: int(derefInt(sh.CargoPieces)), Unit: deref(sh.CargoUnit)},
 		Instructions: deref(sh.SpecialInstructions), DriverID: uuidJSON(sh.DriverID), VehicleID: uuidJSON(sh.VehicleID),
 		PlannedPickup: utcJSON(sh.PlannedPickupAt), EstimatedDelivery: utcJSON(sh.EstimatedDelivery),

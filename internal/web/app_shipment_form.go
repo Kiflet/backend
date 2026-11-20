@@ -53,7 +53,7 @@ func shipmentFormValues(sh shipments.Shipment, loc *time.Location) url.Values {
 		"consignee_phone":      {deref(sh.ConsigneePhone)},
 		"cargo_description":    {deref(sh.CargoDescription)},
 		"cargo_weight":         {numStr(toFloat(sh.CargoWeight))},
-		"cargo_value":          {numStr(toFloat(sh.CargoValue))},
+		"cargo_value":          {service.BirrText(sh.CargoValueSantim)},
 		"cargo_pieces":         {service.FormatPieces(sh.CargoPieces, sh.CargoUnit)},
 		"special_instructions": {deref(sh.SpecialInstructions)},
 	}
@@ -129,7 +129,7 @@ func (s *Server) shipmentInput(r *http.Request) service.ShipmentInput {
 		ConsigneePhone:      r.PostFormValue("consignee_phone"),
 		CargoDescription:    r.PostFormValue("cargo_description"),
 		CargoWeightKg:       num("cargo_weight"),
-		CargoValueETB:       num("cargo_value"),
+		CargoValue:          r.PostFormValue("cargo_value"),
 		CargoPiecesText:     r.PostFormValue("cargo_pieces"),
 		SpecialInstructions: r.PostFormValue("special_instructions"),
 		DriverID:            r.PostFormValue("driver_id"),
