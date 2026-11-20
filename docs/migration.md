@@ -317,7 +317,8 @@ removes what the clients replaced.
    the short form matters in SMS), `api.kiflet.et` (the same API, for
    companies' systems), `files.kiflet.et` (Garage), `tiles.kiflet.et` (map
    tiles). Tracking links already sent by SMS keep working (redirects).
-4. **Published for the clients:** images to `ghcr.io/kiflet/backend` and
+4. **Published for the clients** (done: `.github/workflows/images.yml`,
+   `deployments/clients/compose.yml`): images to `ghcr.io/kiflet/backend` and
    `ghcr.io/kiflet/sandbox` on every merge to `main`, tagged with the
    commit, and on release tags; a compose file that starts the backend at a
    given tag with the demo data and the provider sandbox, which both

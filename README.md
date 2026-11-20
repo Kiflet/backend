@@ -285,6 +285,17 @@ Dependabot proposes dependency updates weekly. Go
 fixes security issues only in its two newest releases, so CI and the
 Dockerfile stay on the newer one, together.
 
+`.github/workflows/images.yml` builds the images on every merge to main
+and every release tag, checks them with `scripts/clients-check.sh`, and
+pushes them to `ghcr.io/kiflet/backend` and `ghcr.io/kiflet/sandbox`
+(tagged `sha-<commit>`, `main` and the version). Kiflet/web's and
+Kiflet/mobile's tests start them, with the demo company and the provider
+sandbox, from `deployments/clients/compose.yml`:
+
+```bash
+docker compose -f deployments/clients/compose.yml up -d --wait   # http://localhost:8080
+```
+
 ## Deploy
 
 One machine with Docker runs it: the app, PostGIS, and Caddy, which gets a
