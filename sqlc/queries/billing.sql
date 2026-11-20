@@ -1,9 +1,11 @@
 -- Subscriptions, invoices and payments (FR-043 to FR-045).
 
 -- name: GetTenantForUpdate :one
+-- tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 SELECT * FROM tenants WHERE id = $1 FOR UPDATE;
 
 -- name: SaveSubscription :exec
+-- tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 -- Writes a company's subscription as the billing service decided it. The
 -- month's text allowance only ever rises until the month ends.
 UPDATE tenants
@@ -23,6 +25,7 @@ SET plan = sqlc.arg(plan),
 WHERE id = sqlc.arg(id);
 
 -- name: SetEnterpriseOffer :exec
+-- tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 UPDATE tenants
 SET enterprise_price_santim = sqlc.narg(price_santim),
     enterprise_max_drivers = sqlc.narg(max_drivers),
@@ -31,13 +34,16 @@ SET enterprise_price_santim = sqlc.narg(price_santim),
 WHERE id = sqlc.arg(id);
 
 -- name: SetTrialEnd :exec
+-- tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 UPDATE tenants SET trial_ends_at = $2, updated_at = NOW() WHERE id = $1 AND plan = 'trial';
 
 -- name: SetSMSBilledMonth :exec
+-- tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 -- The month is settled: the next one starts with the current allowance.
 UPDATE tenants SET sms_billed_month = $2, sms_month_quota = sms_quota WHERE id = $1;
 
 -- name: NextInvoiceNumber :one
+-- tenant: none, invoice numbers are the platform's, one sequence for every company.
 -- Moves the year's counter within the caller's transaction, so numbers have
 -- no gaps.
 INSERT INTO invoice_counters (year, last) VALUES ($1, 1)
@@ -64,11 +70,13 @@ SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2;
 SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE;
 
 -- name: GetInvoiceByNumber :one
+-- tenant: none, a provider quotes the invoice by its number, which is unique across companies; the invoice carries its company.
 -- A payer quotes the number to a provider, which asks us about it. Numbers
 -- are the platform's and unique, so this finds one company's invoice.
 SELECT * FROM invoices WHERE number = $1;
 
 -- name: LockInvoiceByNumber :one
+-- tenant: none, a provider quotes the invoice by its number, which is unique across companies; the invoice carries its company.
 SELECT * FROM invoices WHERE number = $1 FOR UPDATE;
 
 -- name: ListInvoices :many
@@ -132,9 +140,11 @@ INSERT INTO payments (
 ) RETURNING *;
 
 -- name: SetPaymentProviderRef :exec
+-- tenant: none, a payment the caller has already found, by its ID.
 UPDATE payments SET provider_ref = $2 WHERE id = $1;
 
 -- name: LockPaymentByReference :one
+-- tenant: none, a payment found by the provider's reference, unique across companies; the payment carries its company.
 -- A provider's notification carries only our reference. References are
 -- random and unique, so this finds one company's payment.
 SELECT * FROM payments WHERE reference = $1 FOR UPDATE;
@@ -145,6 +155,7 @@ FROM payments p JOIN invoices i ON i.id = p.invoice_id
 WHERE p.id = $1 AND p.tenant_id = $2;
 
 -- name: FinishPayment :exec
+-- tenant: none, a payment the caller has already found, by its ID.
 UPDATE payments
 SET status = sqlc.arg(status),
     provider_ref = COALESCE(sqlc.narg(provider_ref), provider_ref),
@@ -154,21 +165,25 @@ SET status = sqlc.arg(status),
 WHERE id = sqlc.arg(id);
 
 -- name: FlagRefundDue :exec
+-- tenant: none, a payment the caller has already found, by its ID.
 UPDATE payments SET refund_due = true, note = $2 WHERE id = $1;
 
 -- name: LockPayment :one
+-- tenant: none, an operator's action on any company's payment.
 SELECT p.*, i.number AS invoice_number, i.total_santim AS invoice_total
 FROM payments p JOIN invoices i ON i.id = p.invoice_id
 WHERE p.id = $1
 FOR UPDATE OF p;
 
 -- name: MarkPaymentRefunded :exec
+-- tenant: none, an operator's action on any company's payment.
 UPDATE payments
 SET status = 'refunded', refund_due = false, refunded_at = NOW(),
     refund_reference = sqlc.arg(refund_reference), note = sqlc.arg(note)
 WHERE id = sqlc.arg(id);
 
 -- name: ClaimPaymentCheck :one
+-- tenant: none, a payment the caller has already found, by its ID.
 -- Notes that the provider is being asked how a payment ended, unless it was
 -- asked since checked_before. No row means another check is under way or
 -- was recent.
@@ -178,6 +193,7 @@ WHERE id = sqlc.arg(id) AND status IN ('pending', 'expired')
 RETURNING *;
 
 -- name: ListPaymentsToCheck :many
+-- tenant: none, the payment checker, across every company.
 -- Payments a provider may have finished without its notification reaching
 -- us: open a minute or more, a few hours old at most, and not asked about
 -- recently. Across companies, for the billing job.
@@ -189,6 +205,7 @@ ORDER BY created_at
 LIMIT 50;
 
 -- name: ExpirePendingPayments :exec
+-- tenant: none, retention, across every company.
 -- A prompt nobody answered. A late approval is still honoured.
 UPDATE payments SET status = 'expired', completed_at = NOW()
 WHERE status = 'pending' AND created_at < $1;
@@ -226,6 +243,7 @@ WHERE t.is_active AND t.plan <> 'trial' AND t.period_end IS NOT NULL AND t.perio
   AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.tenant_id = t.id AND i.status = 'open' AND i.kind = 'renewal');
 
 -- name: ListTenantsForUsageBilling :many
+-- tenant: none, the usage billing job, across every company.
 -- Companies with a finished month whose texts are not yet settled.
 SELECT * FROM tenants WHERE sms_billed_month IS NULL OR sms_billed_month < $1;
 
@@ -309,4 +327,5 @@ WHERE p.refund_due
 ORDER BY p.created_at;
 
 -- name: SumPaidSince :one
+-- tenant: none, the platform's revenue, across every company, for operators.
 SELECT COALESCE(SUM(amount_santim), 0)::bigint FROM payments WHERE status = 'paid' AND completed_at >= $1;

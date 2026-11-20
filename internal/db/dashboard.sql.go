@@ -86,6 +86,7 @@ const deleteOldBroadcasts = `-- name: DeleteOldBroadcasts :exec
 DELETE FROM broadcasts WHERE created_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteOldBroadcasts(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldBroadcasts, createdAt)
 	return err

@@ -12,31 +12,40 @@ import (
 
 type Querier interface {
 	AcknowledgeAlert(ctx context.Context, arg AcknowledgeAlertParams) error
+	// tenant: none, the driver's own alerts, by the driver's ID, which belongs to one company.
 	// A driver who syncs again is no longer offline.
 	AcknowledgeDriverAlerts(ctx context.Context, arg AcknowledgeDriverAlertsParams) error
+	// tenant: none, the alerts job, across every company; each alert is matched to its own load.
 	// A truck that has moved on is no longer on a long stop.
 	AcknowledgeMovedStops(ctx context.Context, stillStopped []pgtype.UUID) error
 	// Papers renewed: what was open about the old date is resolved.
 	AcknowledgePapersAlerts(ctx context.Context, arg AcknowledgePapersAlertsParams) error
 	// A shipment that reaches a final state resolves whatever was open on it.
 	AcknowledgeShipmentAlerts(ctx context.Context, arg AcknowledgeShipmentAlertsParams) error
+	// tenant: none, the alerts job, across every company; each alert is matched to its own load.
 	// A "past ETA" alert is moot once its shipment has a new ETA, is no longer on
 	// the road, or is no longer late.
 	AcknowledgeStaleETAAlerts(ctx context.Context) error
+	// tenant: none, the alerts job, across every company; each alert is matched to its own load.
 	// Likewise a "not collected" alert once the load has left or been rescheduled.
 	AcknowledgeStalePickupAlerts(ctx context.Context) error
 	AddBillingNotice(ctx context.Context, arg AddBillingNoticeParams) (int64, error)
 	AddBroadcastRecipient(ctx context.Context, arg AddBroadcastRecipientParams) error
+	// tenant: none, opting out is the phone's, from every company's texts.
 	AddSMSOptOut(ctx context.Context, phone string) error
 	AddSupportMessage(ctx context.Context, arg AddSupportMessageParams) (SupportMessage, error)
+	// tenant: none, a setting for this transaction, not a table.
 	// Lets this transaction change the append-only audit log and shipment
 	// timeline (see the append_only trigger).
 	AllowLogRewrite(ctx context.Context) error
 	AnonymiseActorName(ctx context.Context, arg AnonymiseActorNameParams) error
+	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 	AnonymisePODs(ctx context.Context, ids []pgtype.UUID) error
+	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 	// Notes, positions and details may name the recipient; a customer's own
 	// confirmation carries their name.
 	AnonymiseShipmentEvents(ctx context.Context, ids []pgtype.UUID) error
+	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 	// What reports count stays: dates, statuses, reasons, cities, driver,
 	// vehicle and cargo.
 	AnonymiseShipments(ctx context.Context, ids []pgtype.UUID) error
@@ -48,34 +57,42 @@ type Querier interface {
 	// The kept reports whose texts are now recorded as sent: applied as
 	// RecordSMSDelivery would have, then deleted.
 	ApplyEarlySMSReports(ctx context.Context) (int64, error)
+	// tenant: none, the outbound queue, which sends every company's mail.
 	// As ClaimSMSByIDs (notify.email).
 	ClaimEmailsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Email, error)
 	// The next events to publish, oldest first. Run in a transaction that
 	// marks them sent or failed before it commits; SKIP LOCKED lets a second
 	// relay take others instead of waiting.
 	ClaimOutboxEvents(ctx context.Context, maxEvents int32) ([]ClaimOutboxEventsRow, error)
+	// tenant: none, a payment the caller has already found, by its ID.
 	// Notes that the provider is being asked how a payment ended, unless it was
 	// asked since checked_before. No row means another check is under way or
 	// was recent.
 	ClaimPaymentCheck(ctx context.Context, arg ClaimPaymentCheckParams) (Payment, error)
+	// tenant: none, the outbound queue, which sends every company's mail.
 	// The same five-minute lease as ClaimQueuedSMS.
 	ClaimQueuedEmails(ctx context.Context, limit int32) ([]Email, error)
+	// tenant: none, the outbound queue, which sends every company's texts.
 	// SKIP LOCKED lets several API replicas drain the queue without sending the
 	// same message twice.
 	// The claim is a five-minute lease: next_attempt_at moves to when the row may
 	// be reclaimed if this process dies before recording the outcome.
 	ClaimQueuedSMS(ctx context.Context, limit int32) ([]SmsMessage, error)
+	// tenant: none, the webhook queue, which delivers every company's events.
 	// The five-minute lease of ClaimQueuedEmails. A paused endpoint's messages
 	// wait for it.
 	ClaimQueuedWebhooks(ctx context.Context, limit int32) ([]WebhookDelivery, error)
+	// tenant: none, the outbound queue, which sends every company's texts.
 	// ClaimQueuedSMS for the messages RabbitMQ named (notify.sms): those still
 	// queued and due. One sent already, held by another worker or waiting for
 	// a retry is left alone.
 	ClaimSMSByIDs(ctx context.Context, ids []pgtype.UUID) ([]SmsMessage, error)
+	// tenant: none, the webhook queue, which delivers every company's events.
 	// As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
 	ClaimWebhooksByIDs(ctx context.Context, ids []pgtype.UUID) ([]WebhookDelivery, error)
 	CountActiveAPIKeys(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	CountAlerts(ctx context.Context, arg CountAlertsParams) (int64, error)
+	// tenant: none, a limit across the platform, on texted codes.
 	// Verification codes queued or sent across the platform, for the daily
 	// budget.
 	CountCodesTextedSince(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
@@ -86,6 +103,7 @@ type Querier interface {
 	CountSMSSentBetween(ctx context.Context, arg CountSMSSentBetweenParams) (int64, error)
 	// In SMS parts: a long text counts as several.
 	CountSMSSentSince(ctx context.Context, arg CountSMSSentSinceParams) (int64, error)
+	// tenant: none, a limit on one phone number, before any company is known.
 	CountSMSToPhoneSince(ctx context.Context, arg CountSMSToPhoneSinceParams) (int64, error)
 	CountSavedFilters(ctx context.Context, arg CountSavedFiltersParams) (int64, error)
 	CountShipments(ctx context.Context, arg CountShipmentsParams) (int64, error)
@@ -95,6 +113,7 @@ type Querier interface {
 	CountTrackingEventsByShipment(ctx context.Context, arg CountTrackingEventsByShipmentParams) (int64, error)
 	// One person's badge: open alerts raised since they last opened the list.
 	CountUnreadAlerts(ctx context.Context, arg CountUnreadAlertsParams) (int64, error)
+	// tenant: none, the platform's own page, for operators.
 	CountWaitingTickets(ctx context.Context) (int64, error)
 	CountWebhookEndpoints(ctx context.Context, tenantID pgtype.UUID) (int64, error)
 	// The public API's keys (FR-046).
@@ -123,30 +142,45 @@ type Querier interface {
 	// Webhooks (FR-047): a company's endpoints, and the outbox of messages to
 	// them.
 	CreateWebhookEndpoint(ctx context.Context, arg CreateWebhookEndpointParams) (WebhookEndpoint, error)
+	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 	DeleteDocumentsForShipments(ctx context.Context, ids []pgtype.UUID) error
 	// Texts and emails that went to the person, with their number or address.
 	DeleteMessagesToPerson(ctx context.Context, arg DeleteMessagesToPersonParams) error
+	// tenant: none, retention, across every company.
 	DeleteOldAlerts(ctx context.Context, createdAt pgtype.Timestamptz) error
+	// tenant: none, retention, across every company.
 	DeleteOldBroadcasts(ctx context.Context, createdAt pgtype.Timestamptz) error
 	// tenant: none, retention of the platform's own table.
 	DeleteOldEarlySMSReports(ctx context.Context, before pgtype.Timestamptz) error
+	// tenant: none, retention, across every company.
 	DeleteOldEmails(ctx context.Context, createdAt pgtype.Timestamptz) error
+	// tenant: none, retention, across every company.
 	DeleteOldProcessedMessages(ctx context.Context, before pgtype.Timestamptz) error
+	// tenant: none, retention, across every company.
 	DeleteOldSMS(ctx context.Context, createdAt pgtype.Timestamptz) error
+	// tenant: none, retention, across every company.
 	DeleteOldWebhookDeliveries(ctx context.Context, createdAt pgtype.Timestamptz) error
+	// tenant: none, a person being removed, by the user ID the caller found in their company.
 	DeletePersonDeviceData(ctx context.Context, driverID pgtype.UUID) error
 	DeleteSavedFilter(ctx context.Context, arg DeleteSavedFilterParams) (int64, error)
+	// tenant: none, retention, across every company.
 	DeleteSentOutboxEvents(ctx context.Context, before pgtype.Timestamptz) error
+	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 	DeleteShipmentTexts(ctx context.Context, ids []pgtype.UUID) error
+	// tenant: none, deleting the company itself, by its ID, inside purgeTx.
 	DeleteTenant(ctx context.Context, id pgtype.UUID) error
 	DeleteWebhookEndpoint(ctx context.Context, arg DeleteWebhookEndpointParams) (WebhookEndpoint, error)
+	// tenant: none, tracking partitions are shared by every company.
 	// Retention: drops each day's partition that ends before the cut-off, and
 	// deletes older rows from the default partition. Returns how many days.
 	DropOldTrackingPartitions(ctx context.Context, before pgtype.Timestamptz) (int32, error)
+	// tenant: none, the outbound queue, which sends every company's mail.
 	DueEmailIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error)
+	// tenant: none, the outbound queue, which sends every company's texts.
 	// Messages due to be sent, for the sweeper to hand to RabbitMQ: retries
 	// whose time has come, and any whose message was lost.
 	DueSMSIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error)
+	// tenant: none, the webhook queue, which delivers every company's events.
 	// Not a paused endpoint's: they would go round until it is resumed.
 	DueWebhookIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error)
 	EnqueueEmail(ctx context.Context, arg EnqueueEmailParams) (Email, error)
@@ -156,6 +190,7 @@ type Querier interface {
 	// One message to each of the company's endpoints that asked for this
 	// event. A paused endpoint's wait for it to be resumed.
 	EnqueueWebhooks(ctx context.Context, arg EnqueueWebhooksParams) ([]pgtype.UUID, error)
+	// tenant: none, retention, across every company.
 	// A prompt nobody answered. A late approval is still honoured.
 	ExpirePendingPayments(ctx context.Context, createdAt pgtype.Timestamptz) error
 	ExportCharges(ctx context.Context, tenantID pgtype.UUID) ([]ExportChargesRow, error)
@@ -167,7 +202,9 @@ type Querier interface {
 	// period or on request, and deleting a company (FR-041, AC-049.3).
 	ExportShipments(ctx context.Context, tenantID pgtype.UUID) ([]ExportShipmentsRow, error)
 	ExportVehicles(ctx context.Context, tenantID pgtype.UUID) ([]ExportVehiclesRow, error)
+	// tenant: none, a payment the caller has already found, by its ID.
 	FinishPayment(ctx context.Context, arg FinishPaymentParams) error
+	// tenant: none, a payment the caller has already found, by its ID.
 	FlagRefundDue(ctx context.Context, arg FlagRefundDueParams) error
 	// The one query not scoped by company: the key is what says which company.
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (GetAPIKeyByHashRow, error)
@@ -182,6 +219,7 @@ type Querier interface {
 	// The platform operator's view.
 	// ---------------------------------------------------------------------------
 	GetInvoiceByID(ctx context.Context, id pgtype.UUID) (GetInvoiceByIDRow, error)
+	// tenant: none, a provider quotes the invoice by its number, which is unique across companies; the invoice carries its company.
 	// A payer quotes the number to a provider, which asks us about it. Numbers
 	// are the platform's and unique, so this finds one company's invoice.
 	GetInvoiceByNumber(ctx context.Context, number string) (Invoice, error)
@@ -202,8 +240,10 @@ type Querier interface {
 	GetPayment(ctx context.Context, arg GetPaymentParams) (GetPaymentRow, error)
 	// What the stand-in payment prompt shows: the reference is the secret.
 	GetPaymentByReference(ctx context.Context, reference string) (GetPaymentByReferenceRow, error)
+	// tenant: none, sync_metadata has no tenant_id: a row per driver, by the driver's ID, which belongs to one company.
 	GetSyncMetadata(ctx context.Context, driverID pgtype.UUID) (SyncMetadatum, error)
 	// Subscriptions, invoices and payments (FR-043 to FR-045).
+	// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 	GetTenantForUpdate(ctx context.Context, id pgtype.UUID) (Tenant, error)
 	// Only for the platform admin, who answers every company.
 	GetTicketForPlatform(ctx context.Context, id pgtype.UUID) (GetTicketForPlatformRow, error)
@@ -211,15 +251,18 @@ type Querier interface {
 	// than this one, and another driver on any of them.
 	GetVehicleLoad(ctx context.Context, arg GetVehicleLoadParams) (GetVehicleLoadRow, error)
 	GetWebhookEndpoint(ctx context.Context, arg GetWebhookEndpointParams) (WebhookEndpoint, error)
+	// tenant: none, the webhook queue, which delivers every company's events.
 	// Where a claimed message goes, read as it is sent: a changed address or
 	// secret applies to messages still waiting.
 	GetWebhookTarget(ctx context.Context, id pgtype.UUID) (GetWebhookTargetRow, error)
+	// tenant: none, opting out is the phone's, from every company's texts.
 	IsPhoneOptedOut(ctx context.Context, phone string) (bool, error)
 	// tenant: none, a provider's report names its message, not a company.
 	// A report that found no text: kept until the text is recorded as sent.
 	// One for a text already recorded (a late failure after delivered) isn't
 	// kept. Delivered is final here too.
 	KeepEarlySMSReport(ctx context.Context, arg KeepEarlySMSReportParams) error
+	// tenant: none, the platform's background jobs, which serve every company.
 	// Takes a timed job's lease unless another worker holds it. true when
 	// taken.
 	LeaseJob(ctx context.Context, arg LeaseJobParams) (bool, error)
@@ -237,6 +280,7 @@ type Querier interface {
 	ListBillingContacts(ctx context.Context, tenantID pgtype.UUID) ([]ListBillingContactsRow, error)
 	ListBroadcasts(ctx context.Context, arg ListBroadcastsParams) ([]ListBroadcastsRow, error)
 	ListCompanyTickets(ctx context.Context, tenantID pgtype.UUID) ([]ListCompanyTicketsRow, error)
+	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 	ListDocumentKeysForShipments(ctx context.Context, ids []pgtype.UUID) ([]string, error)
 	// Messages to every driver on the road that reached this driver: those
 	// the driver's feed names (ids), or with none named the newest since a
@@ -253,6 +297,7 @@ type Querier interface {
 	// and when their licence runs out.
 	ListDriversWithStatus(ctx context.Context, arg ListDriversWithStatusParams) ([]ListDriversWithStatusRow, error)
 	ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]Invoice, error)
+	// tenant: none, the platform's own page, for operators.
 	ListJobRuns(ctx context.Context) ([]JobRun, error)
 	// Across tenants. Loads on the road whose truck has stood within 300 m of
 	// where it is now for the company's stop_minutes (alert_rules) or longer,
@@ -270,8 +315,10 @@ type Querier interface {
 	// than a run's worth is worked through, oldest first, over the next runs.
 	// How late counts is the company's rule (alert_rules.late_minutes).
 	ListOverdueShipments(ctx context.Context) ([]ListOverdueShipmentsRow, error)
+	// tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 	ListPODMediaForShipments(ctx context.Context, ids []pgtype.UUID) ([]ListPODMediaForShipmentsRow, error)
 	ListPaymentsByInvoice(ctx context.Context, arg ListPaymentsByInvoiceParams) ([]Payment, error)
+	// tenant: none, the payment checker, across every company.
 	// Payments a provider may have finished without its notification reaching
 	// us: open a minute or more, a few hours old at most, and not asked about
 	// recently. Across companies, for the billing job.
@@ -279,6 +326,7 @@ type Querier interface {
 	// Loads still waiting to be collected well after their planned pickup, not
 	// yet alerted for that pickup time, oldest first.
 	ListPickupOverdue(ctx context.Context, dueBefore pgtype.Timestamptz) ([]ListPickupOverdueRow, error)
+	// tenant: none, the platform's own page, for operators.
 	ListPlatformAdmins(ctx context.Context) ([]ListPlatformAdminsRow, error)
 	ListRecentPayments(ctx context.Context, limit int32) ([]ListRecentPaymentsRow, error)
 	// Who signed for each receiver's deliveries in the last year, newest first,
@@ -314,6 +362,7 @@ type Querier interface {
 	ListShipments(ctx context.Context, arg ListShipmentsParams) ([]ListShipmentsRow, error)
 	// A person's shipments: the ones they booked and the ones they receive.
 	ListShipmentsByCustomerPhone(ctx context.Context, phone string) ([]ListShipmentsByCustomerPhoneRow, error)
+	// tenant: none, anonymising, across every company, loads past retention.
 	// Shipments that finished before the keeping period ended and still hold
 	// customer and delivery details (AC-041.2, AC-041.3). Across companies: the
 	// retention job runs for all of them.
@@ -328,6 +377,7 @@ type Querier interface {
 	ListSupportInbox(ctx context.Context, status *string) ([]ListSupportInboxRow, error)
 	ListTenantDocumentKeys(ctx context.Context, tenantID pgtype.UUID) ([]string, error)
 	ListTenantPODMedia(ctx context.Context, tenantID pgtype.UUID) ([]ListTenantPODMediaRow, error)
+	// tenant: none, the usage billing job, across every company.
 	// Companies with a finished month whose texts are not yet settled.
 	ListTenantsForUsageBilling(ctx context.Context, smsBilledMonth pgtype.Date) ([]Tenant, error)
 	// Companies using 80% or more of their driver places or of the month's
@@ -355,64 +405,93 @@ type Querier interface {
 	ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]ListWebhookDeliveriesRow, error)
 	ListWebhookEndpoints(ctx context.Context, tenantID pgtype.UUID) ([]ListWebhookEndpointsRow, error)
 	LockInvoice(ctx context.Context, arg LockInvoiceParams) (Invoice, error)
+	// tenant: none, a provider quotes the invoice by its number, which is unique across companies; the invoice carries its company.
 	LockInvoiceByNumber(ctx context.Context, number string) (Invoice, error)
+	// tenant: none, an operator's action on any company's payment.
 	LockPayment(ctx context.Context, id pgtype.UUID) (LockPaymentRow, error)
+	// tenant: none, a payment found by the provider's reference, unique across companies; the payment carries its company.
 	// A provider's notification carries only our reference. References are
 	// random and unique, so this finds one company's payment.
 	LockPaymentByReference(ctx context.Context, reference string) (Payment, error)
+	// tenant: none, tracking partitions are shared by every company.
 	// Makes the partitions of the days ahead, and those of recent days whose
 	// positions wait in the default partition. Returns how many it made.
 	MaintainTrackingPartitions(ctx context.Context, arg MaintainTrackingPartitionsParams) (int32, error)
 	MarkAlertsSeen(ctx context.Context, arg MarkAlertsSeenParams) error
+	// tenant: none, the outbound queue, which sends every company's mail.
 	MarkEmailFailed(ctx context.Context, arg MarkEmailFailedParams) error
+	// tenant: none, the outbound queue, which sends every company's mail.
 	MarkEmailRetry(ctx context.Context, arg MarkEmailRetryParams) error
+	// tenant: none, the outbound queue, which sends every company's mail.
 	MarkEmailSent(ctx context.Context, arg MarkEmailSentParams) error
 	// A plan's period runs from when it is paid for, so a subscription invoice
 	// gets its dates on payment, and a renewal paid after read-only mode began
 	// has them moved to the payment.
 	MarkInvoicePaid(ctx context.Context, arg MarkInvoicePaidParams) error
+	// tenant: none, a consumer's record of messages it handled, across every company.
 	// A consumer's record of a message it handled, in the same transaction as
 	// its effect. No row: it was handled already, so the handler does nothing.
 	MarkMessageProcessed(ctx context.Context, arg MarkMessageProcessedParams) (int64, error)
+	// tenant: none, the event relay, which publishes every company's events.
 	// A publish that failed is tried again after delay.
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) error
+	// tenant: none, the event relay, which publishes every company's events.
 	MarkOutboxSent(ctx context.Context, ids []pgtype.UUID) error
+	// tenant: none, an operator's action on any company's payment.
 	MarkPaymentRefunded(ctx context.Context, arg MarkPaymentRefundedParams) error
+	// tenant: none, the outbound queue, which sends every company's texts.
 	MarkSMSFailed(ctx context.Context, arg MarkSMSFailedParams) error
+	// tenant: none, the outbound queue, which sends every company's texts.
 	MarkSMSRetry(ctx context.Context, arg MarkSMSRetryParams) error
+	// tenant: none, the outbound queue, which sends every company's texts.
 	MarkSMSSent(ctx context.Context, arg MarkSMSSentParams) error
+	// tenant: none, the outbound queue, which sends every company's texts.
 	MarkSMSSkipped(ctx context.Context, arg MarkSMSSkippedParams) error
+	// tenant: none, the webhook queue, which delivers every company's events.
 	MarkWebhookDelivered(ctx context.Context, arg MarkWebhookDeliveredParams) error
+	// tenant: none, the webhook queue, which delivers every company's events.
 	MarkWebhookFailed(ctx context.Context, arg MarkWebhookFailedParams) error
+	// tenant: none, the webhook queue, which delivers every company's events.
 	MarkWebhookRetry(ctx context.Context, arg MarkWebhookRetryParams) error
+	// tenant: none, invoice numbers are the platform's, one sequence for every company.
 	// Moves the year's counter within the caller's transaction, so numbers have
 	// no gaps.
 	NextInvoiceNumber(ctx context.Context, year int32) (int32, error)
+	// tenant: none, the platform's own page, for operators.
 	// Texts and emails waiting, and those sent or failed in the last day.
 	OutboxHealth(ctx context.Context) ([]OutboxHealthRow, error)
+	// tenant: none, the event relay, which publishes every company's events.
 	// How many events wait, and how long the oldest has, for /metrics.
 	OutboxLag(ctx context.Context) (OutboxLagRow, error)
+	// tenant: none, the platform's own page, for operators.
 	// Texts and emails waiting to be sent, for /metrics. Read off the partial
 	// queue indexes, so it is cheap to run every minute.
 	OutboxWaiting(ctx context.Context) ([]OutboxWaitingRow, error)
+	// tenant: none, the platform's background jobs, which serve every company.
 	RecordJobRun(ctx context.Context, arg RecordJobRunParams) error
 	// For messages that are logged rather than sent through the queue: inbound
 	// messages, and outbound ones refused before queueing. An inbound message
 	// the provider sent before (the same ID) is not recorded again: no row.
 	RecordSMS(ctx context.Context, arg RecordSMSParams) (SmsMessage, error)
+	// tenant: none, a provider's report names its message, not a company.
 	// A provider's delivery report. Its message IDs are unique per provider, so
 	// this finds one company's text. Delivered is final; a text reported
 	// undelivered may still arrive when the network tries again. The error is
 	// the report's reason, none once delivered.
 	RecordSMSDelivery(ctx context.Context, arg RecordSMSDeliveryParams) (int64, error)
+	// tenant: none, the outbound queue, which sends every company's mail.
 	// As ReleaseSMS.
 	ReleaseEmails(ctx context.Context, ids []pgtype.UUID) error
+	// tenant: none, the platform's background jobs, which serve every company.
 	ReleaseJob(ctx context.Context, name string) error
+	// tenant: none, the outbound queue, which sends every company's texts.
 	// Hands back messages claimed but not yet attempted when the process stops,
 	// so the next one sends them at once instead of after the lease.
 	ReleaseSMS(ctx context.Context, ids []pgtype.UUID) error
+	// tenant: none, the webhook queue, which delivers every company's events.
 	// As ReleaseEmails.
 	ReleaseWebhooks(ctx context.Context, ids []pgtype.UUID) error
+	// tenant: none, opting out is the phone's, from every company's texts.
 	RemoveSMSOptOut(ctx context.Context, phone string) error
 	// Why shipments were cancelled, and how many of them after the cargo had
 	// left: a refused or returned load cost a trip.
@@ -431,9 +510,12 @@ type Querier interface {
 	ReportDriverPerformance(ctx context.Context, arg ReportDriverPerformanceParams) ([]ReportDriverPerformanceRow, error)
 	ReportRoutes(ctx context.Context, arg ReportRoutesParams) ([]ReportRoutesRow, error)
 	ReportSummary(ctx context.Context, arg ReportSummaryParams) (ReportSummaryRow, error)
+	// tenant: none, the outbound queue, which sends every company's mail.
 	RequeueStuckEmails(ctx context.Context) error
+	// tenant: none, the outbound queue, which sends every company's texts.
 	// A process that died mid-send leaves rows in 'sending' past their lease.
 	RequeueStuckSMS(ctx context.Context) error
+	// tenant: none, the webhook queue, which delivers every company's events.
 	RequeueStuckWebhooks(ctx context.Context) error
 	// Sends a message again, from the start of its retries.
 	ResendWebhook(ctx context.Context, arg ResendWebhookParams) (WebhookDelivery, error)
@@ -441,6 +523,7 @@ type Querier interface {
 	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (ApiKey, error)
 	// Saving under an existing name replaces that view.
 	SaveFilter(ctx context.Context, arg SaveFilterParams) (SavedFilter, error)
+	// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 	// Writes a company's subscription as the billing service decided it. The
 	// month's text allowance only ever rises until the month ends.
 	SaveSubscription(ctx context.Context, arg SaveSubscriptionParams) error
@@ -450,23 +533,30 @@ type Querier interface {
 	// Keeps the driver's newest position for the fleet map. An older fix,
 	// from a phone sending what it saved while offline, changes nothing.
 	SetDriverPosition(ctx context.Context, arg SetDriverPositionParams) error
+	// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 	SetEnterpriseOffer(ctx context.Context, arg SetEnterpriseOfferParams) error
 	// Files an inbound message under the company and shipment it turned out to
 	// be about, once the sender is known.
 	SetInboundSubject(ctx context.Context, arg SetInboundSubjectParams) error
+	// tenant: none, a payment the caller has already found, by its ID.
 	SetPaymentProviderRef(ctx context.Context, arg SetPaymentProviderRefParams) error
+	// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 	// The month is settled: the next one starts with the current allowance.
 	SetSMSBilledMonth(ctx context.Context, arg SetSMSBilledMonthParams) error
 	SetSupportTicketStatus(ctx context.Context, arg SetSupportTicketStatusParams) error
+	// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 	SetTrialEnd(ctx context.Context, arg SetTrialEndParams) error
 	SetWebhookEndpointActive(ctx context.Context, arg SetWebhookEndpointActiveParams) (WebhookEndpoint, error)
 	SetWebhookSecret(ctx context.Context, arg SetWebhookSecretParams) (WebhookEndpoint, error)
+	// tenant: none, the platform's revenue, across every company, for operators.
 	SumPaidSince(ctx context.Context, completedAt pgtype.Timestamptz) (int64, error)
 	TenantForDeletion(ctx context.Context, id pgtype.UUID) (TenantForDeletionRow, error)
+	// tenant: none, the key that was just authenticated, by its ID.
 	// At most one write a minute, however busy the key.
 	TouchAPIKey(ctx context.Context, id pgtype.UUID) error
 	UpdateWebhookEndpoint(ctx context.Context, arg UpdateWebhookEndpointParams) (WebhookEndpoint, error)
 	UpsertAlertRules(ctx context.Context, arg UpsertAlertRulesParams) error
+	// tenant: none, sync_metadata has no tenant_id: a row per driver, by the driver's ID, which belongs to one company.
 	UpsertSyncMetadata(ctx context.Context, arg UpsertSyncMetadataParams) error
 	VoidInvoice(ctx context.Context, arg VoidInvoiceParams) (int64, error)
 	// For the billing job, across companies: a plan invoice left unpaid past

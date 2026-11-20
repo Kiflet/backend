@@ -118,8 +118,9 @@ make lint                          # golangci-lint, node --check, gitleaks over 
 - The CSP is `script-src 'self'`, so no inline scripts. Pass data to JS through
   `<script type="application/json">` blocks or `data-` attributes.
 - Every query is scoped by tenant. Keep it that way in new queries; one
-  that is global on purpose says why in a comment above it
-  (`-- tenant: none, <reason>`). A reference from one company's table to
+  that is global on purpose says why on the line after its name
+  (`-- tenant: none, <reason>`); `TestEveryQueryIsScopedByTenant`
+  (`sqlc/`) fails on one that doesn't. A reference from one company's table to
   another includes the company: `(tenant_id, x_id) REFERENCES x
   (tenant_id, id)`, and a `SET NULL` names its column.
   `TestReferencesCarryTheTenant` checks every reference; the few an

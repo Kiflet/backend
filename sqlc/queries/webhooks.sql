@@ -56,6 +56,7 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: ClaimQueuedWebhooks :many
+-- tenant: none, the webhook queue, which delivers every company's events.
 -- The five-minute lease of ClaimQueuedEmails. A paused endpoint's messages
 -- wait for it.
 UPDATE webhook_deliveries
@@ -71,32 +72,38 @@ WHERE id IN (
 RETURNING *;
 
 -- name: GetWebhookTarget :one
+-- tenant: none, the webhook queue, which delivers every company's events.
 -- Where a claimed message goes, read as it is sent: a changed address or
 -- secret applies to messages still waiting.
 SELECT url, secret, active FROM webhook_endpoints WHERE id = $1;
 
 -- name: MarkWebhookDelivered :exec
+-- tenant: none, the webhook queue, which delivers every company's events.
 UPDATE webhook_deliveries
 SET status = 'delivered', delivered_at = NOW(), response_status = $2, response_body = $3, duration_ms = $4, last_error = NULL
 WHERE id = $1;
 
 -- name: MarkWebhookRetry :exec
+-- tenant: none, the webhook queue, which delivers every company's events.
 UPDATE webhook_deliveries
 SET status = 'queued', response_status = $2, response_body = $3, duration_ms = $4, last_error = $5, next_attempt_at = $6
 WHERE id = $1;
 
 -- name: MarkWebhookFailed :exec
+-- tenant: none, the webhook queue, which delivers every company's events.
 UPDATE webhook_deliveries
 SET status = 'failed', response_status = $2, response_body = $3, duration_ms = $4, last_error = $5
 WHERE id = $1;
 
 -- name: ReleaseWebhooks :exec
+-- tenant: none, the webhook queue, which delivers every company's events.
 -- As ReleaseEmails.
 UPDATE webhook_deliveries
 SET status = 'queued', attempts = attempts - 1, next_attempt_at = NOW()
 WHERE id = ANY(sqlc.arg(ids)::uuid[]) AND status = 'sending';
 
 -- name: RequeueStuckWebhooks :exec
+-- tenant: none, the webhook queue, which delivers every company's events.
 UPDATE webhook_deliveries
 SET status = 'queued'
 WHERE status = 'sending' AND next_attempt_at < NOW();
@@ -117,9 +124,11 @@ ORDER BY d.created_at DESC, d.id
 LIMIT $3 OFFSET $4;
 
 -- name: DeleteOldWebhookDeliveries :exec
+-- tenant: none, retention, across every company.
 DELETE FROM webhook_deliveries WHERE created_at < $1;
 
 -- name: ClaimWebhooksByIDs :many
+-- tenant: none, the webhook queue, which delivers every company's events.
 -- As ClaimSMSByIDs (webhook.deliver); a paused endpoint's wait.
 UPDATE webhook_deliveries
 SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
@@ -132,6 +141,7 @@ WHERE id IN (
 RETURNING *;
 
 -- name: DueWebhookIDs :many
+-- tenant: none, the webhook queue, which delivers every company's events.
 -- Not a paused endpoint's: they would go round until it is resumed.
 SELECT d.id FROM webhook_deliveries d
 JOIN webhook_endpoints e ON e.id = d.endpoint_id

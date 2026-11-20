@@ -3,9 +3,11 @@
 -- billing module moves (docs/migration.md, phase 4).
 
 -- name: GetTenantByID :one
+-- tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 SELECT * FROM tenants WHERE id = $1;
 
 -- name: CreateTenant :one
+-- tenant: none, a new company, which has no ID before this.
 -- A slug already taken returns no row, so the caller can try another
 -- without aborting its transaction.
 INSERT INTO tenants (name, slug, plan, max_drivers, contact_phone, contact_email, region_city, trial_ends_at)
@@ -14,6 +16,7 @@ ON CONFLICT (slug) DO NOTHING
 RETURNING *;
 
 -- name: UpdateTenantSettings :one
+-- tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 UPDATE tenants
 SET name = $2,
     contact_phone = $3,
@@ -35,4 +38,5 @@ WHERE id = $1
 RETURNING *;
 
 -- name: SetTenantActive :exec
+-- tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 UPDATE tenants SET is_active = $2 WHERE id = $1;

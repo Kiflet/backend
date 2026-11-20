@@ -25,4 +25,5 @@ UPDATE email_tokens SET used_at = NOW()
 WHERE tenant_id = $1 AND user_id = $2 AND purpose = $3 AND used_at IS NULL;
 
 -- name: DeleteOldEmailTokens :exec
+-- tenant: none, retention, across every company.
 DELETE FROM email_tokens WHERE created_at < $1;

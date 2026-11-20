@@ -117,11 +117,13 @@ LIMIT 1;
 SELECT COUNT(*) FROM tracking_events WHERE shipment_id = $1 AND tenant_id = $2;
 
 -- name: MaintainTrackingPartitions :one
+-- tenant: none, tracking partitions are shared by every company.
 -- Makes the partitions of the days ahead, and those of recent days whose
 -- positions wait in the default partition. Returns how many it made.
 SELECT tracking_events_maintain(sqlc.arg(days_ahead)::int, make_interval(days => sqlc.arg(keep_days)::int))::int AS made;
 
 -- name: DropOldTrackingPartitions :one
+-- tenant: none, tracking partitions are shared by every company.
 -- Retention: drops each day's partition that ends before the cut-off, and
 -- deletes older rows from the default partition. Returns how many days.
 SELECT tracking_events_drop_partitions(sqlc.arg(before)::timestamptz)::int AS dropped;

@@ -86,7 +86,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] Charges and cargo values in santim (D4).
 - [ ] A release after: drop `shipments.cargo_value` and
       `shipment_charges.amount`, which nothing reads since the step above.
-- [ ] Every query without `tenant_id` says why, checked in CI (D5).
+- [x] Every query without `tenant_id` says why, checked in CI (D5).
 - [ ] `pod_media`, and signatures stored as files (D6).
 - [ ] A `version` on every edited record, and `idempotency_keys` (D7).
 - [ ] One catalogue of the words for codes, for the office, customers and

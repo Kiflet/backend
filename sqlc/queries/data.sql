@@ -62,6 +62,7 @@ WHERE tenant_id = $1
 ORDER BY plate_number;
 
 -- name: ListShipmentsToAnonymise :many
+-- tenant: none, anonymising, across every company, loads past retention.
 -- Shipments that finished before the keeping period ended and still hold
 -- customer and delivery details (AC-041.2, AC-041.3). Across companies: the
 -- retention job runs for all of them.
@@ -72,17 +73,20 @@ ORDER BY updated_at
 LIMIT sqlc.arg(max_rows);
 
 -- name: ListPODMediaForShipments :many
+-- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 SELECT COALESCE(signature_url, '')::text AS signature_key, COALESCE(photo_urls, '{}')::text[] AS photo_keys
 FROM proof_of_deliveries
 WHERE shipment_id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: AnonymisePODs :exec
+-- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 UPDATE proof_of_deliveries
 SET recipient_name = 'Removed', recipient_phone = NULL, signature_data = NULL, signature_url = NULL,
     photo_urls = '{}', delivery_notes = NULL, delivery_address = NULL, delivery_coordinates = NULL
 WHERE shipment_id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: AnonymiseShipmentEvents :exec
+-- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 -- Notes, positions and details may name the recipient; a customer's own
 -- confirmation carries their name.
 UPDATE shipment_events
@@ -91,9 +95,11 @@ SET note = NULL, details = NULL, latitude = NULL, longitude = NULL,
 WHERE shipment_id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: DeleteShipmentTexts :exec
+-- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 DELETE FROM sms_messages WHERE shipment_id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: AnonymiseShipments :exec
+-- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 -- What reports count stays: dates, statuses, reasons, cities, driver,
 -- vehicle and cargo.
 UPDATE shipments
@@ -123,6 +129,7 @@ UPDATE support_messages SET author_name = sqlc.arg(author_name)
 WHERE author_id = sqlc.arg(author_id) AND tenant_id = sqlc.arg(tenant_id);
 
 -- name: DeletePersonDeviceData :exec
+-- tenant: none, a person being removed, by the user ID the caller found in their company.
 DELETE FROM sync_metadata WHERE driver_id = $1;
 
 -- name: DeleteMessagesToPerson :exec
@@ -154,17 +161,21 @@ WHERE tenant_id = $1 AND status = 'open'
 RETURNING number;
 
 -- name: DeleteTenant :exec
+-- tenant: none, deleting the company itself, by its ID, inside purgeTx.
 DELETE FROM tenants WHERE id = $1;
 
 -- name: AllowLogRewrite :exec
+-- tenant: none, a setting for this transaction, not a table.
 -- Lets this transaction change the append-only audit log and shipment
 -- timeline (see the append_only trigger).
 SELECT set_config('kiflet.purge', 'on', true);
 
 -- name: ListDocumentKeysForShipments :many
+-- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 SELECT storage_key FROM shipment_documents WHERE shipment_id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: DeleteDocumentsForShipments :exec
+-- tenant: none, loads the caller has already chosen (one company's, or those past retention), by ID.
 DELETE FROM shipment_documents WHERE shipment_id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: ListTenantDocumentKeys :many

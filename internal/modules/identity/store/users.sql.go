@@ -101,6 +101,7 @@ SELECT id, tenant_id, role, full_name, phone, email, password_hash, pin_hash, is
 WHERE lower(email) = lower($1)
 `
 
+// tenant: none, signing in, before the company is known; a phone or email is one person's.
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
 	var i User
@@ -186,6 +187,7 @@ SELECT id, tenant_id, role, full_name, phone, email, password_hash, pin_hash, is
 WHERE phone = $1
 `
 
+// tenant: none, signing in, before the company is known; a phone or email is one person's.
 func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByPhone, phone)
 	var i User
@@ -226,6 +228,7 @@ WHERE id = $1
 RETURNING id, tenant_id, role, full_name, phone, email, password_hash, pin_hash, is_active, created_at, updated_at, failed_login_attempts, locked_until, password_reset_required, vehicle_id, last_login_at, email_verified_at, alert_emails, language, app_battery_saver, app_vibrate, anonymised_at, alerts_seen_at, licence_expires_on, alert_sms
 `
 
+// tenant: none, the person signing in, or one the caller found in their company, by ID.
 func (q *Queries) IncrementFailedLoginAttempts(ctx context.Context, id pgtype.UUID) (User, error) {
 	row := q.db.QueryRow(ctx, incrementFailedLoginAttempts, id)
 	var i User
@@ -329,6 +332,7 @@ type LockUserAccountParams struct {
 	LockedUntil pgtype.Timestamptz `db:"locked_until" json:"locked_until"`
 }
 
+// tenant: none, the person signing in, or one the caller found in their company, by ID.
 // Locking clears the count: when the lock expires the account starts again
 // from zero, instead of one mistype locking it at once.
 func (q *Queries) LockUserAccount(ctx context.Context, arg LockUserAccountParams) error {
@@ -342,6 +346,7 @@ SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW()
 WHERE id = $1
 `
 
+// tenant: none, the person signing in, or one the caller found in their company, by ID.
 func (q *Queries) RecordSuccessfulLogin(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, recordSuccessfulLogin, id)
 	return err
@@ -428,6 +433,7 @@ type UpdatePINParams struct {
 	PasswordResetRequired bool        `db:"password_reset_required" json:"password_reset_required"`
 }
 
+// tenant: none, the person signing in, or one the caller found in their company, by ID.
 func (q *Queries) UpdatePIN(ctx context.Context, arg UpdatePINParams) error {
 	_, err := q.db.Exec(ctx, updatePIN, arg.ID, arg.PinHash, arg.PasswordResetRequired)
 	return err
@@ -445,6 +451,7 @@ type UpdatePasswordParams struct {
 	PasswordResetRequired bool        `db:"password_reset_required" json:"password_reset_required"`
 }
 
+// tenant: none, the person signing in, or one the caller found in their company, by ID.
 func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) error {
 	_, err := q.db.Exec(ctx, updatePassword, arg.ID, arg.PasswordHash, arg.PasswordResetRequired)
 	return err
@@ -518,6 +525,7 @@ type UserNamesByIDsRow struct {
 	FullName string      `db:"full_name" json:"full_name"`
 }
 
+// tenant: none, operators' view of every company's audit log (UserService.Names checks the role).
 // Names of the people in the platform's audit log, from every company:
 // for the platform admin only (UserService.Names checks).
 func (q *Queries) UserNamesByIDs(ctx context.Context, ids []pgtype.UUID) ([]UserNamesByIDsRow, error) {

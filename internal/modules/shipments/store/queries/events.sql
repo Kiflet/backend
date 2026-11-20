@@ -17,6 +17,7 @@ WHERE shipment_id = $1 AND tenant_id = $2
 ORDER BY occurred_at ASC, created_at ASC;
 
 -- name: ListPublicShipmentEvents :many
+-- tenant: none, the public tracking page: a load found by its tracking number.
 SELECT event_type, to_status, reason, occurred_at, latitude, longitude
 FROM shipment_events
 WHERE shipment_id = $1 AND public

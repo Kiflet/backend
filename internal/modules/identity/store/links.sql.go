@@ -67,6 +67,7 @@ const deleteOldEmailTokens = `-- name: DeleteOldEmailTokens :exec
 DELETE FROM email_tokens WHERE created_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteOldEmailTokens(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldEmailTokens, createdAt)
 	return err

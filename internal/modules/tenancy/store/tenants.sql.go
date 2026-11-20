@@ -29,6 +29,7 @@ type CreateTenantParams struct {
 	TrialEndsAt  pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
 }
 
+// tenant: none, a new company, which has no ID before this.
 // A slug already taken returns no row, so the caller can try another
 // without aborting its transaction.
 func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error) {
@@ -93,6 +94,7 @@ SELECT id, name, slug, plan, max_drivers, is_active, created_at, updated_at, con
 // The tenancy module's own table, tenants: the companies. Billing's plan
 // and standing columns are still written by internal/service until the
 // billing module moves (docs/migration.md, phase 4).
+// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 func (q *Queries) GetTenantByID(ctx context.Context, id pgtype.UUID) (Tenant, error) {
 	row := q.db.QueryRow(ctx, getTenantByID, id)
 	var i Tenant
@@ -147,6 +149,7 @@ type SetTenantActiveParams struct {
 	IsActive bool        `db:"is_active" json:"is_active"`
 }
 
+// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 func (q *Queries) SetTenantActive(ctx context.Context, arg SetTenantActiveParams) error {
 	_, err := q.db.Exec(ctx, setTenantActive, arg.ID, arg.IsActive)
 	return err
@@ -193,6 +196,7 @@ type UpdateTenantSettingsParams struct {
 	CustomerLanguage   string      `db:"customer_language" json:"customer_language"`
 }
 
+// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 func (q *Queries) UpdateTenantSettings(ctx context.Context, arg UpdateTenantSettingsParams) (Tenant, error) {
 	row := q.db.QueryRow(ctx, updateTenantSettings,
 		arg.ID,

@@ -378,7 +378,7 @@ with its tests; the IDs are the audit's.
 4. **Money in santim** (done; D4): `shipment_charges.amount` and
    `shipments.cargo_value` become `bigint` santim, as billing is; the pages
    and the public API change with them (no company uses it yet).
-5. **Tenancy checked** (D5): every query without `tenant_id` says why
+5. **Tenancy checked** (done; D5): every query without `tenant_id` says why
    (`-- tenant: none, <reason>`), and a test that reads every queries file
    fails on one that doesn't.
 6. **Delivery media** (D6): `pod_media` (the delivery, kind, storage key,

@@ -26,6 +26,7 @@ WHERE shipments.driver_id = sqlc.arg(driver_id) AND shipments.tenant_id = sqlc.a
   AND shipments.created_at >= sqlc.arg(since);
 
 -- name: UpsertSyncMetadata :exec
+-- tenant: none, sync_metadata has no tenant_id: a row per driver, by the driver's ID, which belongs to one company.
 INSERT INTO sync_metadata (
     driver_id, last_sync_at, device_id, app_version, battery_level,
     pending_sync_count, storage_used_kb, clock_offset_seconds, tracking_paused, power_saving
@@ -42,6 +43,7 @@ ON CONFLICT (driver_id) DO UPDATE SET
     power_saving = EXCLUDED.power_saving;
 
 -- name: GetSyncMetadata :one
+-- tenant: none, sync_metadata has no tenant_id: a row per driver, by the driver's ID, which belongs to one company.
 SELECT * FROM sync_metadata WHERE driver_id = $1;
 
 -- name: ListStaleActiveDrivers :many

@@ -7,10 +7,12 @@ SELECT * FROM users
 WHERE id = $1 AND tenant_id = $2;
 
 -- name: GetUserByPhone :one
+-- tenant: none, signing in, before the company is known; a phone or email is one person's.
 SELECT * FROM users
 WHERE phone = $1;
 
 -- name: GetUserByEmail :one
+-- tenant: none, signing in, before the company is known; a phone or email is one person's.
 SELECT * FROM users
 WHERE lower(email) = lower(sqlc.arg(email));
 
@@ -51,17 +53,20 @@ UPDATE users SET is_active = $3 WHERE id = $1 AND tenant_id = $2;
 SELECT COUNT(*) FROM users WHERE tenant_id = $1 AND role = 'driver' AND is_active;
 
 -- name: IncrementFailedLoginAttempts :one
+-- tenant: none, the person signing in, or one the caller found in their company, by ID.
 UPDATE users
 SET failed_login_attempts = failed_login_attempts + 1
 WHERE id = $1
 RETURNING *;
 
 -- name: RecordSuccessfulLogin :exec
+-- tenant: none, the person signing in, or one the caller found in their company, by ID.
 UPDATE users
 SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW()
 WHERE id = $1;
 
 -- name: LockUserAccount :exec
+-- tenant: none, the person signing in, or one the caller found in their company, by ID.
 -- Locking clears the count: when the lock expires the account starts again
 -- from zero, instead of one mistype locking it at once.
 UPDATE users
@@ -69,16 +74,19 @@ SET locked_until = $2, failed_login_attempts = 0
 WHERE id = $1;
 
 -- name: UpdatePassword :exec
+-- tenant: none, the person signing in, or one the caller found in their company, by ID.
 UPDATE users
 SET password_hash = $2, password_reset_required = $3, failed_login_attempts = 0, locked_until = NULL
 WHERE id = $1;
 
 -- name: UpdatePIN :exec
+-- tenant: none, the person signing in, or one the caller found in their company, by ID.
 UPDATE users
 SET pin_hash = $2, password_reset_required = $3, failed_login_attempts = 0, locked_until = NULL
 WHERE id = $1;
 
 -- name: UserNamesByIDs :many
+-- tenant: none, operators' view of every company's audit log (UserService.Names checks the role).
 -- Names of the people in the platform's audit log, from every company:
 -- for the platform admin only (UserService.Names checks).
 SELECT id, full_name FROM users WHERE id = ANY(sqlc.arg(ids)::uuid[]);

@@ -15,6 +15,7 @@ const addSMSOptOut = `-- name: AddSMSOptOut :exec
 INSERT INTO sms_opt_outs (phone) VALUES ($1) ON CONFLICT DO NOTHING
 `
 
+// tenant: none, opting out is the phone's, from every company's texts.
 func (q *Queries) AddSMSOptOut(ctx context.Context, phone string) error {
 	_, err := q.db.Exec(ctx, addSMSOptOut, phone)
 	return err
@@ -58,6 +59,7 @@ WHERE id IN (
 RETURNING id, tenant_id, shipment_id, direction, phone, body, purpose, sensitive, status, attempts, last_error, provider, next_attempt_at, sent_at, created_at, provider_message_id, delivery, delivery_at, segments
 `
 
+// tenant: none, the outbound queue, which sends every company's texts.
 // SKIP LOCKED lets several API replicas drain the queue without sending the
 // same message twice.
 // The claim is a five-minute lease: next_attempt_at moves to when the row may
@@ -113,6 +115,7 @@ WHERE id IN (
 RETURNING id, tenant_id, shipment_id, direction, phone, body, purpose, sensitive, status, attempts, last_error, provider, next_attempt_at, sent_at, created_at, provider_message_id, delivery, delivery_at, segments
 `
 
+// tenant: none, the outbound queue, which sends every company's texts.
 // ClaimQueuedSMS for the messages RabbitMQ named (notify.sms): those still
 // queued and due. One sent already, held by another worker or waiting for
 // a retry is left alone.
@@ -161,6 +164,7 @@ SELECT COUNT(*) FROM sms_messages
 WHERE purpose = 'otp' AND direction = 'outbound' AND status IN ('queued', 'sending', 'sent') AND created_at >= $1
 `
 
+// tenant: none, a limit across the platform, on texted codes.
 // Verification codes queued or sent across the platform, for the daily
 // budget.
 func (q *Queries) CountCodesTextedSince(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error) {
@@ -210,6 +214,7 @@ type CountSMSToPhoneSinceParams struct {
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+// tenant: none, a limit on one phone number, before any company is known.
 func (q *Queries) CountSMSToPhoneSince(ctx context.Context, arg CountSMSToPhoneSinceParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countSMSToPhoneSince, arg.Phone, arg.Purpose, arg.CreatedAt)
 	var count int64
@@ -250,6 +255,7 @@ const deleteOldSMS = `-- name: DeleteOldSMS :exec
 DELETE FROM sms_messages WHERE created_at < $1
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteOldSMS(ctx context.Context, createdAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteOldSMS, createdAt)
 	return err
@@ -262,6 +268,7 @@ ORDER BY next_attempt_at
 LIMIT $1
 `
 
+// tenant: none, the outbound queue, which sends every company's texts.
 // Messages due to be sent, for the sweeper to hand to RabbitMQ: retries
 // whose time has come, and any whose message was lost.
 func (q *Queries) DueSMSIDs(ctx context.Context, maxMessages int32) ([]pgtype.UUID, error) {
@@ -339,6 +346,7 @@ const isPhoneOptedOut = `-- name: IsPhoneOptedOut :one
 SELECT EXISTS (SELECT 1 FROM sms_opt_outs WHERE phone = $1)
 `
 
+// tenant: none, opting out is the phone's, from every company's texts.
 func (q *Queries) IsPhoneOptedOut(ctx context.Context, phone string) (bool, error) {
 	row := q.db.QueryRow(ctx, isPhoneOptedOut, phone)
 	var exists bool
@@ -474,6 +482,7 @@ type MarkSMSFailedParams struct {
 	LastError *string     `db:"last_error" json:"last_error"`
 }
 
+// tenant: none, the outbound queue, which sends every company's texts.
 func (q *Queries) MarkSMSFailed(ctx context.Context, arg MarkSMSFailedParams) error {
 	_, err := q.db.Exec(ctx, markSMSFailed, arg.ID, arg.LastError)
 	return err
@@ -491,6 +500,7 @@ type MarkSMSRetryParams struct {
 	NextAttemptAt pgtype.Timestamptz `db:"next_attempt_at" json:"next_attempt_at"`
 }
 
+// tenant: none, the outbound queue, which sends every company's texts.
 func (q *Queries) MarkSMSRetry(ctx context.Context, arg MarkSMSRetryParams) error {
 	_, err := q.db.Exec(ctx, markSMSRetry, arg.ID, arg.LastError, arg.NextAttemptAt)
 	return err
@@ -513,6 +523,7 @@ type MarkSMSSentParams struct {
 	ID                pgtype.UUID `db:"id" json:"id"`
 }
 
+// tenant: none, the outbound queue, which sends every company's texts.
 func (q *Queries) MarkSMSSent(ctx context.Context, arg MarkSMSSentParams) error {
 	_, err := q.db.Exec(ctx, markSMSSent, arg.Provider, arg.ProviderMessageID, arg.ID)
 	return err
@@ -531,6 +542,7 @@ type MarkSMSSkippedParams struct {
 	LastError *string     `db:"last_error" json:"last_error"`
 }
 
+// tenant: none, the outbound queue, which sends every company's texts.
 func (q *Queries) MarkSMSSkipped(ctx context.Context, arg MarkSMSSkippedParams) error {
 	_, err := q.db.Exec(ctx, markSMSSkipped, arg.ID, arg.LastError)
 	return err
@@ -615,6 +627,7 @@ type RecordSMSDeliveryParams struct {
 	ProviderMessageID *string            `db:"provider_message_id" json:"provider_message_id"`
 }
 
+// tenant: none, a provider's report names its message, not a company.
 // A provider's delivery report. Its message IDs are unique per provider, so
 // this finds one company's text. Delivered is final; a text reported
 // undelivered may still arrive when the network tries again. The error is
@@ -639,6 +652,7 @@ SET status = 'queued', attempts = attempts - 1, next_attempt_at = NOW()
 WHERE id = ANY($1::uuid[]) AND status = 'sending'
 `
 
+// tenant: none, the outbound queue, which sends every company's texts.
 // Hands back messages claimed but not yet attempted when the process stops,
 // so the next one sends them at once instead of after the lease.
 func (q *Queries) ReleaseSMS(ctx context.Context, ids []pgtype.UUID) error {
@@ -650,6 +664,7 @@ const removeSMSOptOut = `-- name: RemoveSMSOptOut :exec
 DELETE FROM sms_opt_outs WHERE phone = $1
 `
 
+// tenant: none, opting out is the phone's, from every company's texts.
 func (q *Queries) RemoveSMSOptOut(ctx context.Context, phone string) error {
 	_, err := q.db.Exec(ctx, removeSMSOptOut, phone)
 	return err
@@ -661,6 +676,7 @@ SET status = 'queued'
 WHERE status = 'sending' AND next_attempt_at < NOW()
 `
 
+// tenant: none, the outbound queue, which sends every company's texts.
 // A process that died mid-send leaves rows in 'sending' past their lease.
 func (q *Queries) RequeueStuckSMS(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, requeueStuckSMS)

@@ -72,6 +72,7 @@ DELETE FROM sessions WHERE expires_at < NOW() - INTERVAL '7 days'
    OR revoked_at < NOW() - INTERVAL '7 days'
 `
 
+// tenant: none, retention, across every company.
 func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteExpiredSessions)
 	return err
@@ -170,6 +171,7 @@ WHERE user_id = $1
 ORDER BY COALESCE(last_seen_at, created_at) DESC
 `
 
+// tenant: none, the signed-in person's own sessions, by their user ID.
 func (q *Queries) ListActiveSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]Session, error) {
 	rows, err := q.db.Query(ctx, listActiveSessionsByUser, userID)
 	if err != nil {
@@ -210,6 +212,7 @@ SET revoked_at = NOW()
 WHERE user_id = $1 AND revoked_at IS NULL
 `
 
+// tenant: none, the signed-in person's own sessions, by their user ID.
 func (q *Queries) RevokeAllUserSessions(ctx context.Context, userID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, revokeAllUserSessions, userID)
 	return err
@@ -226,6 +229,7 @@ type RevokeOtherUserSessionsParams struct {
 	ID     pgtype.UUID `db:"id" json:"id"`
 }
 
+// tenant: none, the signed-in person's own sessions, by their user ID.
 func (q *Queries) RevokeOtherUserSessions(ctx context.Context, arg RevokeOtherUserSessionsParams) error {
 	_, err := q.db.Exec(ctx, revokeOtherUserSessions, arg.UserID, arg.ID)
 	return err
@@ -237,6 +241,7 @@ SET revoked_at = NOW()
 WHERE id = $1 AND revoked_at IS NULL
 `
 
+// tenant: none, a session the caller already holds, by its ID.
 func (q *Queries) RevokeSession(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, revokeSession, id)
 	return err
@@ -253,6 +258,7 @@ type RevokeSessionByUserParams struct {
 	UserID pgtype.UUID `db:"user_id" json:"user_id"`
 }
 
+// tenant: none, the signed-in person's own sessions, by their user ID.
 func (q *Queries) RevokeSessionByUser(ctx context.Context, arg RevokeSessionByUserParams) error {
 	_, err := q.db.Exec(ctx, revokeSessionByUser, arg.ID, arg.UserID)
 	return err
@@ -289,6 +295,7 @@ type TouchSessionParams struct {
 	ID        pgtype.UUID        `db:"id" json:"id"`
 }
 
+// tenant: none, a session the caller already holds, by its ID.
 // Sliding expiry: a session in use is pushed out, never pulled in.
 func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
 	_, err := q.db.Exec(ctx, touchSession, arg.ExpiresAt, arg.ID)
