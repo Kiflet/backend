@@ -76,6 +76,11 @@ What changed in each release, newest first.
 
 ### Fixed
 
+- **The cross-origin check covers the API** (audit A2). Every `/api/`
+  path was exempt from it. Now only requests with an `Authorization`
+  header (an API key or a driver's token, which a page on another site
+  can't send by itself) and the providers' calls to `/api/callbacks` are,
+  so a cookie that reaches `/api/v1` can't be used from another site.
 - **Billing's live updates reach only admins** (`docs/migration.md`,
   phase 1, step 10; audit P1). A payment's or an invoice's live update
   went to every open dashboard of the company, dispatchers' included. A
@@ -288,6 +293,12 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The providers' callbacks moved to `/api/callbacks`** (`docs/migration.md`,
+  phase 2, step 5): the SMS gateway's `/api/callbacks/sms/inbound` and
+  `/sms/status`, and each payment provider's `/api/callbacks/payments/<code>/…`,
+  out of `/api/v1`, which is the API and its specification alone. The
+  sandbox, telebirr's notify URL, `.env.example`, `SECURITY.md` and
+  `docs/deploy.md` follow. No provider had been given the old addresses.
 - **A shipment's change carries its company** (`docs/migration.md`,
   phase 1, step 11; audit D9). The texting subscriber read the company
   again inside every transaction that changed a shipment. A transaction

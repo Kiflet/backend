@@ -13,8 +13,8 @@ package sandbox
 // with status "rejected"; a gateway in trouble, 503. The gateway calls
 // Kiflet back, with the shared secret in X-Webhook-Secret:
 //
-//	POST {Kiflet}/api/v1/sms/status   {"message_id", "status": "delivered" or "undelivered", "error", "done_at"}
-//	POST {Kiflet}/api/v1/sms/inbound  {"message_id", "from": "+2519…", "to": <short code>, "message", "received_at"}
+//	POST {Kiflet}/api/callbacks/sms/status   {"message_id", "status": "delivered" or "undelivered", "error", "done_at"}
+//	POST {Kiflet}/api/callbacks/sms/inbound  {"message_id", "from": "+2519…", "to": <short code>, "message", "received_at"}
 
 import (
 	"encoding/json"
@@ -229,7 +229,7 @@ func (s *Sandbox) deliveryReport(number, id string) {
 	}
 	s.updateText(number, id, func(t *text) { t.State, t.Failed = state, status != "delivered" })
 	body := mustJSON(map[string]string{"message_id": id, "status": status, "error": why, "done_at": time.Now().Format(time.RFC3339)})
-	c := s.newCall("SMS", "delivery report for "+id+": "+status, s.cfg.AppURL+"/api/v1/sms/status", s.webhookHeader(), body, 4,
+	c := s.newCall("SMS", "delivery report for "+id+": "+status, s.cfg.AppURL+"/api/callbacks/sms/status", s.webhookHeader(), body, 4,
 		func(a answer, last bool) {
 			report := describeAnswer(a)
 			if !a.ok() && !last {
@@ -254,7 +254,7 @@ func (s *Sandbox) textKiflet(number, body string) (text, answer) {
 		"message_id": id, "from": e164(number), "to": s.cfg.SMS.Number, "message": body,
 		"received_at": time.Now().Format(time.RFC3339),
 	})
-	c := s.newCall("SMS", fmt.Sprintf("text from %s: %q", number, clip(body, 40)), s.cfg.AppURL+"/api/v1/sms/inbound", s.webhookHeader(), payload, 1, nil)
+	c := s.newCall("SMS", fmt.Sprintf("text from %s: %q", number, clip(body, 40)), s.cfg.AppURL+"/api/callbacks/sms/inbound", s.webhookHeader(), payload, 1, nil)
 	a := s.attempt(s.ctx, c)
 	t := text{ID: id, At: time.Now(), From: number, To: s.cfg.SMS.Number, Mine: true, Body: body, State: describeAnswer(a), Failed: !a.ok()}
 	if a.ok() {

@@ -160,7 +160,7 @@ This repository stops serving HTML. Its only HTTP surfaces are `/api/v1/*`
 | `internal/web/api_driver.go` | `internal/modules/*/http`, under `/api/v1/driver` | |
 | `internal/web/api_public.go` | `internal/modules/*/http`, under `/api/v1` | its 8 operations take the API's conventions in phase 2 |
 | `internal/web/app_*.go`, `public.go` | the API's operations, in `internal/modules/*/http`; the pages go to Kiflet/web | the HTML handlers are deleted with their pages, not moved |
-| the providers' callbacks (`/api/v1/sms/*`, `/api/v1/payments/*`) | `/api/callbacks/*` | phase 2, before any provider is given an address |
+| the providers' callbacks (`/api/v1/sms/*`, `/api/v1/payments/*`) | `/api/callbacks/*` | done in phase 2, before any provider was given an address |
 | `internal/web/templates/**` | Kiflet/web `app/**` | deleted here as pages move (phase 4) |
 | `internal/web/static/app.css`, `app.js`, `map.js`, fonts, icons | Kiflet/web (`@kiflet/tokens`, components) | the tokens' starting values |
 | `internal/web/static/driver/**` | Kiflet/mobile, rewritten | frozen; kept until no driver uses it (phase 6) |
@@ -450,7 +450,9 @@ the code, the specification and the clients' types in step. The design is
      record's version, and `If-Match` checked when sent (`412` with the
      current record);
    - `X-Request-Id` on every answer, and `429` with `Retry-After`.
-5. **Who is calling:** a request with `Authorization: Bearer` carries an
+5. **Who is calling** (the cross-origin check and the callbacks done; the
+   session is read once the first `app` operation needs it): a request
+   with `Authorization: Bearer` carries an
    API key (known by its prefix) or a driver token; otherwise the session
    cookie is read. Every request the cookie authenticates goes through Go's
    cross-origin check, and the exemption for all of `/api/` goes (A2). The

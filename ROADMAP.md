@@ -106,9 +106,11 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
       the API tests validated against it.
 - [ ] The conventions in `internal/http`: errors, labels, actions, lists,
       idempotency keys, versions, request IDs.
-- [ ] Who is calling, and the cross-origin check on every request the
-      cookie authenticates (A2).
-- [ ] The providers' callbacks moved to `/api/callbacks/*`.
+- [x] The cross-origin check on every request a cookie may authenticate,
+      the API's included (A2).
+- [ ] Who is calling: an API key or a driver token by `Authorization`,
+      otherwise the session, read once the first `app` operation needs it.
+- [x] The providers' callbacks moved to `/api/callbacks/*`.
 - [ ] The public API's 8 operations, and the driver's, in the
       specification.
 

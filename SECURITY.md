@@ -25,8 +25,8 @@ The surfaces that face the internet:
 | Sign-in: `/login`, `/driver/` (phone and PIN), `/signup`, `/forgot`, `/reset/phone` | Five wrong passwords or PINs lock an account for 15 minutes. One address gets 30 sign-in attempts a minute, and 10 a minute for anything that sends a code. Answers don't reveal whether an email or phone number is registered. |
 | Sessions | A session cookie, revoked on sign-out, password reset, deactivation and suspension. The live feed (a WebSocket) is closed within 30 seconds of any of those. |
 | Public tracking: `/track`, and by phone with a texted code | A tracking number shows one shipment's status, never the company's other loads. Lookups are limited to 60 a minute for each address. |
-| SMS webhooks: `/api/v1/sms/inbound`, `/api/v1/sms/status` | A shared secret (`SMS_INBOUND_SECRET`). A repeated message is handled once, and replies to one number are limited. |
-| Payment notifications: `/api/v1/payments/telebirr/notify`, `/api/v1/payments/cbebirr/…` | telebirr's signature; Basic authentication for CBE Birr. An invoice is settled once however often a notification is repeated. |
+| SMS webhooks: `/api/callbacks/sms/inbound`, `/api/callbacks/sms/status` | A shared secret (`SMS_INBOUND_SECRET`). A repeated message is handled once, and replies to one number are limited. |
+| Payment notifications: `/api/callbacks/payments/telebirr/notify`, `/api/callbacks/payments/cbebirr/…` | telebirr's signature; Basic authentication for CBE Birr. An invoice is settled once however often a notification is repeated. |
 | Uploads: delivery photos and signatures | Images are decoded and their size checked before anything is stored. SVG is refused. |
 | `/metrics` | A token (`METRICS_TOKEN`), and the proxy refuses the path from outside. |
 | Pages | A Content Security Policy with `script-src 'self'` and no inline scripts, no framing, HSTS. |

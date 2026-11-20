@@ -862,7 +862,7 @@ func (e *env) answer(checkout, answer string) string {
 func (e *env) cbe(path string, body, out any, user, pass string) int {
 	e.t.Helper()
 	b, _ := json.Marshal(body)
-	req, _ := http.NewRequest(http.MethodPost, e.srv.URL+"/api/v1/payments/cbebirr"+path, bytes.NewReader(b))
+	req, _ := http.NewRequest(http.MethodPost, e.srv.URL+"/api/callbacks/payments/cbebirr"+path, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(user, pass)
 	res, err := http.DefaultClient.Do(req)
@@ -900,7 +900,7 @@ func (e *env) sign(provider string, n payments.Notification) string {
 // notify posts a provider's notification and returns the response status.
 func (e *env) notify(provider string, n payments.Notification, signature string) int {
 	e.t.Helper()
-	res, err := http.PostForm(e.srv.URL+"/api/v1/payments/"+provider+"/notify", url.Values{
+	res, err := http.PostForm(e.srv.URL+"/api/callbacks/payments/"+provider+"/notify", url.Values{
 		"reference": {n.Reference}, "provider_ref": {n.ProviderRef}, "status": {n.Status},
 		"amount": {strconv.FormatInt(n.Amount, 10)}, "signature": {signature},
 	})

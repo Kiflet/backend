@@ -884,8 +884,8 @@ set of tests.
 | Webhooks | out | companies' systems | Standard Webhooks signature | `api/asyncapi/webhooks.yaml` |
 
 Everything under `/api/v1` is in the specification. The providers'
-callbacks, today under `/api/v1/sms` and `/api/v1/payments`, move to
-`/api/callbacks` before a provider is given an address.
+callbacks, once under `/api/v1/sms` and `/api/v1/payments`, moved to
+`/api/callbacks` before any provider was given an address.
 
 ### Who may call what
 

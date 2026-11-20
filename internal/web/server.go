@@ -128,13 +128,7 @@ func (s *Server) Handler() http.Handler {
 	r.Use(s.logRequests)
 	r.Use(s.securityHeaders)
 
-	// Browsers send Sec-Fetch-Site / Origin with every form post; anything
-	// cross-site that would change state is refused. Bearer-token API calls
-	// carry no ambient credential and server-to-server webhooks no Origin, so
-	// neither needs or gets the check.
-	csrf := http.NewCrossOriginProtection()
-	csrf.AddInsecureBypassPattern("/api/")
-	r.Use(func(next http.Handler) http.Handler { return csrf.Handler(next) })
+	r.Use(crossOrigin)
 
 	r.Get("/healthz", s.healthz)
 	r.Get("/readyz", s.readyz)
@@ -211,7 +205,8 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/driver", http.RedirectHandler("/driver/", http.StatusMovedPermanently).ServeHTTP)
 	r.Get("/driver/*", s.driverApp)
 
-	// JSON API used by the driver app.
+	// The API (api/openapi/v1.yaml): the driver app's operations and the
+	// public API.
 	r.Route("/api/v1", func(r chi.Router) {
 		// The driver app's signed-in calls, and the settings it fetches as
 		// it starts.
@@ -225,7 +220,7 @@ func (s *Server) Handler() http.Handler {
 				r.Post("/driver/sync", s.apiSync)
 			})
 		})
-		// Everything else: signing in, the public API, the providers' calls.
+		// Everything else: signing in, and the public API.
 		r.Group(func(r chi.Router) {
 			r.Use(general)
 			r.Use(s.decompressBody)
@@ -234,17 +229,25 @@ func (s *Server) Handler() http.Handler {
 			r.With(strict).Post("/driver/pin-reset/confirm", s.apiPINResetConfirm)
 			// The public API, for a company's own systems.
 			s.mountPublicAPI(r)
-			r.Post("/sms/inbound", s.apiSMSInbound)
-			r.Post("/sms/status", s.apiSMSStatus)
-			// Each payment provider's calls: how a payment went, and for one
-			// whose payers pay by reference, the look-ups before it.
-			for _, p := range s.svc.Billing.Providers() {
-				if c, ok := p.(payments.Callbacks); ok {
-					prefix := "/api/v1/payments/" + p.Code()
-					r.Mount("/payments/"+p.Code(), http.StripPrefix(prefix, c.Handler(s.svc.Billing, s.paymentFail)))
-				}
-			}
 		})
+	})
+
+	// The providers' calls, each checked by the provider's secret or
+	// signature; not the API, so not in its specification
+	// (docs/architecture.md, section 11).
+	r.Route("/api/callbacks", func(r chi.Router) {
+		r.Use(general)
+		r.Use(s.decompressBody)
+		r.Post("/sms/inbound", s.apiSMSInbound)
+		r.Post("/sms/status", s.apiSMSStatus)
+		// Each payment provider's calls: how a payment went, and for one
+		// whose payers pay by reference, the look-ups before it.
+		for _, p := range s.svc.Billing.Providers() {
+			if c, ok := p.(payments.Callbacks); ok {
+				prefix := "/api/callbacks/payments/" + p.Code()
+				r.Mount("/payments/"+p.Code(), http.StripPrefix(prefix, c.Handler(s.svc.Billing, s.paymentFail)))
+			}
+		}
 	})
 
 	// The dashboard.

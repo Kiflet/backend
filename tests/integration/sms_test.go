@@ -59,7 +59,7 @@ func TestSMSTexts(t *testing.T) {
 		{"ET " + nextRef + " 1", "unchanged"},
 		{"ET " + ref + " 1", "replied"}, // delivered already: not active
 	} {
-		req, _ := http.NewRequest("POST", e.srv.URL+"/api/v1/sms/inbound", strings.NewReader(`{"from":"`+phone+`","body":"`+c.body+`"}`))
+		req, _ := http.NewRequest("POST", e.srv.URL+"/api/callbacks/sms/inbound", strings.NewReader(`{"from":"`+phone+`","body":"`+c.body+`"}`))
 		req.Header.Set("Content-Type", "application/json")
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -155,7 +155,7 @@ func TestInboundSMSOnceAndRepliesLimited(t *testing.T) {
 	_, phone, _ := office.addDriver("Auto Reply")
 	inbound := func(id, body string) service.InboundResult {
 		var out service.InboundResult
-		if code := e.api("POST", "/api/v1/sms/inbound", "", map[string]string{"message_id": id, "from": phone, "message": body}, &out); code != http.StatusOK {
+		if code := e.api("POST", "/api/callbacks/sms/inbound", "", map[string]string{"message_id": id, "from": phone, "message": body}, &out); code != http.StatusOK {
 			t.Fatalf("inbound: status %d", code)
 		}
 		return out

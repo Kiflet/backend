@@ -25,7 +25,7 @@ func smsIn(ctx context.Context, cfg *config.Config, args []string) error {
 		return errors.New(`usage: kiflet sms-in <phone> <text>, for example: kiflet sms-in 0912345601 "1 4F2K"`)
 	}
 	payload, _ := json.Marshal(map[string]string{"from": args[0], "body": strings.Join(args[1:], " ")})
-	url := "http://localhost:" + cfg.Port + "/api/v1/sms/inbound"
+	url := "http://localhost:" + cfg.Port + "/api/callbacks/sms/inbound"
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))

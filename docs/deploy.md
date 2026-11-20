@@ -50,8 +50,8 @@ The maps' satellite view uses Esri World Imagery, which needs an ArcGIS
 licence for commercial use. Point `MAP_SATELLITE_URL` at your own imagery
 provider, or set it to `off`.
 
-Point your SMS provider's webhooks at `https://DOMAIN/api/v1/sms/inbound`
-(texts from phones) and `https://DOMAIN/api/v1/sms/status` (delivery
+Point your SMS provider's webhooks at `https://DOMAIN/api/callbacks/sms/inbound`
+(texts from phones) and `https://DOMAIN/api/callbacks/sms/status` (delivery
 reports), with `SMS_INBOUND_SECRET` in an `X-Webhook-Secret` header or a
 `secret` parameter.
 
@@ -443,8 +443,8 @@ Then:
    CBE Birr's merchant ID and callback login; Ethio telecom's API URL, key
    and sender ID. Unset `SANDBOX_URL`.
 2. Give the providers the app's addresses: telebirr is sent
-   `https://DOMAIN/api/v1/payments/telebirr/notify` with each order; CBE
-   Birr calls `https://DOMAIN/api/v1/payments/cbebirr/query`, `/validation`
+   `https://DOMAIN/api/callbacks/payments/telebirr/notify` with each order; CBE
+   Birr calls `https://DOMAIN/api/callbacks/payments/cbebirr/query`, `/validation`
    and `/confirmation`; Ethio telecom posts to the SMS webhooks above.
 3. Where a provider's contract differs from ours, change the adapter and the
    sandbox's side (`internal/sandbox/sms.go`, `telebirr.go`, `cbebirr.go`)
