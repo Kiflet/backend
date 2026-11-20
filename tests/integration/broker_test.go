@@ -94,6 +94,9 @@ func eventually(t *testing.T, what string, ok func() bool) {
 	}
 }
 
+// TestRabbitMQ (operations): two instances on one RabbitMQ share its
+// queues: texts, live updates and webhooks go through them, each event is
+// published to kiflet.events, and a resent sync stores its positions once.
 func TestRabbitMQ(t *testing.T) {
 	amqpURL := rabbitURL(t)
 	first, second := newEnv(t, withRabbitMQ(amqpURL), privateWebhooks), newEnv(t, withRabbitMQ(amqpURL), privateWebhooks)
@@ -253,9 +256,9 @@ func TestRabbitMQ(t *testing.T) {
 	})
 }
 
-// TestBrokerRetries: a message whose handler fails is tried again after
-// its queue's delay, and parked in the dead-letter queue after its last
-// attempt; one that isn't an envelope is parked at once.
+// TestBrokerRetries (operations): a message whose handler fails is tried
+// again after its queue's delay, and parked in the dead-letter queue after
+// its last attempt; one that isn't an envelope is parked at once.
 func TestBrokerRetries(t *testing.T) {
 	url := rabbitURL(t)
 	queue := broker.Queue{
@@ -339,9 +342,9 @@ func TestBrokerRetries(t *testing.T) {
 	_, _ = ch.QueuePurge("test.flaky.dead", false)
 }
 
-// TestScheduledJobs: with two apps on RabbitMQ, one scheduler leads and
-// names each timed job once on jobs.scheduled, and the workers run them:
-// every job runs, and none twice.
+// TestScheduledJobs (operations): with two apps on RabbitMQ, one scheduler
+// leads and names each timed job once on jobs.scheduled, and the workers run
+// them: every job runs, and none twice.
 func TestScheduledJobs(t *testing.T) {
 	amqpURL := rabbitURL(t)
 	runs := func() map[string]int64 {

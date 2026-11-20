@@ -142,8 +142,9 @@ func TestRecentRecipientsAreSuggested(t *testing.T) {
 	}
 }
 
-// TestDeliveredStraightFromAssigned (L1): a proof of delivery sent before
-// the trip was started still records when the load left.
+// TestDeliveredStraightFromAssigned (FR-018, FR-020; L1): a proof of
+// delivery sent before the trip was started still records when the load
+// left.
 func TestDeliveredStraightFromAssigned(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Direct Delivery")
@@ -158,9 +159,10 @@ func TestDeliveredStraightFromAssigned(t *testing.T) {
 	}
 }
 
-// TestHeldPODAfterReassignment: a driver who delivered while offline, after
-// the office gave the load to someone else, doesn't lose the proof. The
-// office accepts it and the delivery is credited to them.
+// TestHeldPODAfterReassignment (FR-020, FR-040): a driver who delivered
+// while offline, after the office gave the load to someone else, doesn't
+// lose the proof. The office accepts it and the delivery is credited to
+// them.
 func TestHeldPODAfterReassignment(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Handover Haulage")
@@ -229,8 +231,8 @@ func TestHeldPODAfterReassignment(t *testing.T) {
 	}
 }
 
-// TestHeldPODOnCancelledShipment: the office can dismiss a proof recorded
-// on a load it had cancelled; the shipment stays cancelled.
+// TestHeldPODOnCancelledShipment (FR-040): the office can dismiss a proof
+// recorded on a load it had cancelled; the shipment stays cancelled.
 func TestHeldPODOnCancelledShipment(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Dismissal Cargo")
@@ -263,8 +265,8 @@ func TestHeldPODOnCancelledShipment(t *testing.T) {
 	}
 }
 
-// TestRefusedPODLeavesNoFiles: images of a proof that is refused are not
-// kept.
+// TestRefusedPODLeavesNoFiles (FR-021): images of a proof that is refused
+// are not kept.
 func TestRefusedPODLeavesNoFiles(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Clean Storage")
@@ -308,7 +310,7 @@ func TestRefusedPODLeavesNoFiles(t *testing.T) {
 	}
 }
 
-// TestHugePhotoRefused (R6, S4): a delivery photo claiming 8000×8000
+// TestHugePhotoRefused (FR-021; R6, S4): a delivery photo claiming 8000×8000
 // pixels is refused before it is decoded, for good, and so is an SVG
 // signature.
 func TestHugePhotoRefused(t *testing.T) {

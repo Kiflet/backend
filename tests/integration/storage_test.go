@@ -107,8 +107,8 @@ func startObjectStore() (objectStore, error) {
 	return s, s.admin.Apply(ctx, s.plan, 2*time.Minute)
 }
 
-// TestGarageSetup: the set-up job runs at every deploy, so a second run
-// over a cluster it set up changes nothing and fails on nothing.
+// TestGarageSetup (operations): the set-up job runs at every deploy, so a
+// second run over a cluster it set up changes nothing and fails on nothing.
 func TestGarageSetup(t *testing.T) {
 	s := objectStoreFor(t)
 	if err := s.admin.Apply(context.Background(), s.plan, time.Minute); err != nil {
@@ -121,6 +121,8 @@ func TestGarageSetup(t *testing.T) {
 	}
 }
 
+// TestS3Storage (operations): a file is stored in the bucket under its
+// key, read back whole, and gone once deleted.
 func TestS3Storage(t *testing.T) {
 	ctx := context.Background()
 	s := objectStoreFor(t)
@@ -172,9 +174,9 @@ func TestS3Storage(t *testing.T) {
 	}
 }
 
-// TestPresignedURLs: a phone puts a photo straight into the bucket with a
-// presigned URL, and a browser reads it with another; a page on the app's
-// origin may read the answer (CORS), others may not.
+// TestPresignedURLs (FR-021): a phone puts a photo straight into the bucket
+// with a presigned URL, and a browser reads it with another; a page on the
+// app's origin may read the answer (CORS), others may not.
 func TestPresignedURLs(t *testing.T) {
 	ctx := context.Background()
 	s := objectStoreFor(t)
@@ -248,8 +250,9 @@ func TestPresignedURLs(t *testing.T) {
 	}
 }
 
-// The app keeps a delivery's signature and photos in the bucket and serves
-// them to the office through itself, so the bucket needn't be public.
+// TestDeliveriesStoredInS3 (FR-020, FR-021): the app keeps a delivery's
+// signature and photos in the bucket and serves them to the office through
+// itself, so the bucket needn't be public.
 func TestDeliveriesStoredInS3(t *testing.T) {
 	s := objectStoreFor(t)
 	e := newEnv(t, func(c *setup) {

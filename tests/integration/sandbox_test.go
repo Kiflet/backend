@@ -355,9 +355,10 @@ func within(t *testing.T, d time.Duration, what string, cond func() bool) {
 // Ethio telecom
 // ---------------------------------------------------------------------------
 
-// TestTextsThroughTheGateway: the app's texts go through Ethio telecom's
-// gateway to the sandbox's phones and are reported delivered, and a
-// driver's text from their phone moves the shipment and is answered.
+// TestTextsThroughTheGateway (FR-024, FR-037): the app's texts go through
+// Ethio telecom's gateway to the sandbox's phones and are reported
+// delivered, and a driver's text from their phone moves the shipment and is
+// answered.
 func TestTextsThroughTheGateway(t *testing.T) {
 	e, p := sandboxed(t)
 	// Signing up takes the code texted to the sandbox's phone.
@@ -399,9 +400,9 @@ func TestTextsThroughTheGateway(t *testing.T) {
 	}
 }
 
-// TestGatewayFaults: a gateway that is down is tried again later, a number
-// it refuses fails at once, one it can't reach is reported undelivered,
-// and a token it ends early is replaced.
+// TestGatewayFaults (FR-037): a gateway that is down is tried again later, a
+// number it refuses fails at once, one it can't reach is reported
+// undelivered, and a token it ends early is replaced.
 func TestGatewayFaults(t *testing.T) {
 	e, p := sandboxed(t)
 	office := e.company("Outage Freight")
@@ -479,10 +480,10 @@ func TestGatewayFaults(t *testing.T) {
 // telebirr
 // ---------------------------------------------------------------------------
 
-// TestPayingThroughTelebirr: the app orders the payment from telebirr and
-// sends the payer to its checkout, where they pay with their phone and PIN.
-// telebirr's signed notification settles the invoice, and the payer comes
-// back to the payment page.
+// TestPayingThroughTelebirr (FR-044): the app orders the payment from
+// telebirr and sends the payer to its checkout, where they pay with their
+// phone and PIN. telebirr's signed notification settles the invoice, and the
+// payer comes back to the payment page.
 func TestPayingThroughTelebirr(t *testing.T) {
 	e, p := sandboxed(t)
 	office := e.company("Wallet Freight")
@@ -531,9 +532,9 @@ func TestPayingThroughTelebirr(t *testing.T) {
 	}
 }
 
-// TestTelebirrNotificationFaults: a notification that never comes is made
-// up for by asking telebirr, when the payer comes back or in the billing
-// job; one sent twice pays once; and a forged one is refused.
+// TestTelebirrNotificationFaults (FR-044): a notification that never comes
+// is made up for by asking telebirr, when the payer comes back or in the
+// billing job; one sent twice pays once; and a forged one is refused.
 func TestTelebirrNotificationFaults(t *testing.T) {
 	e, p := sandboxed(t)
 	const notify = "/api/v1/payments/telebirr/notify"
@@ -624,10 +625,10 @@ func TestTelebirrNotificationFaults(t *testing.T) {
 // CBE Birr
 // ---------------------------------------------------------------------------
 
-// TestPayingByReferenceThroughCBEBirr: the payer pays the app's merchant ID
-// from their phone, quoting the invoice's reference, and CBE Birr's servers
-// log in to the app to look the reference up, check the payment and
-// confirm it.
+// TestPayingByReferenceThroughCBEBirr (FR-044): the payer pays the app's
+// merchant ID from their phone, quoting the invoice's reference, and CBE
+// Birr's servers log in to the app to look the reference up, check the
+// payment and confirm it.
 func TestPayingByReferenceThroughCBEBirr(t *testing.T) {
 	e, p := sandboxed(t)
 	office := e.company("Reference Wallet Freight")
@@ -718,9 +719,9 @@ func TestPayingByReferenceThroughCBEBirr(t *testing.T) {
 // Settings that disagree
 // ---------------------------------------------------------------------------
 
-// TestProvidersWithOtherSettings: when the sandbox's credentials and the
-// app's disagree, as when one is copied wrong at onboarding, the calls are
-// refused on both sides and nothing is recorded.
+// TestProvidersWithOtherSettings (operations): when the sandbox's
+// credentials and the app's disagree, as when one is copied wrong at
+// onboarding, the calls are refused on both sides and nothing is recorded.
 func TestProvidersWithOtherSettings(t *testing.T) {
 	e, p := sandboxed(t, func(c *sandbox.Config) {
 		c.SMS.Secret = "another-webhook-secret"

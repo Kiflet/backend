@@ -275,8 +275,9 @@ func TestWebhooks(t *testing.T) {
 	rc.quiet()
 }
 
-// TestWebhooksStayOnTheInternet: in production, a webhook can't point at
-// the server's own network, by address or by a name that leads there.
+// TestWebhooksStayOnTheInternet (FR-047): in production, a webhook can't
+// point at the server's own network, by address or by a name that leads
+// there.
 func TestWebhooksStayOnTheInternet(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Curious Freight")

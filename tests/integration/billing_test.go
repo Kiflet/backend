@@ -22,9 +22,9 @@ import (
 	"github.com/kiflet/backend/pkg/payments"
 )
 
-// TestTrialEndMakesTheAccountReadOnly: once the free trial is over nothing
-// new starts until a plan is chosen, but what is on the road finishes and
-// everything can still be seen.
+// TestTrialEndMakesTheAccountReadOnly (FR-043): once the free trial is over
+// nothing new starts until a plan is chosen, but what is on the road
+// finishes and everything can still be seen.
 func TestTrialEndMakesTheAccountReadOnly(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Lapsed Trial Transport")
@@ -78,10 +78,10 @@ func TestTrialEndMakesTheAccountReadOnly(t *testing.T) {
 	}
 }
 
-// TestPayingForAPlan: a company on its trial chooses a plan, pays by mobile
-// money with the prompt printed on the terminal, and its plan starts when
-// the trial ends. The provider's notifications are checked and repeats
-// change nothing.
+// TestPayingForAPlan (FR-043, FR-044): a company on its trial chooses a
+// plan, pays by mobile money with the prompt printed on the terminal, and
+// its plan starts when the trial ends. The provider's notifications are
+// checked and repeats change nothing.
 func TestPayingForAPlan(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Paying Freight")
@@ -192,11 +192,12 @@ func TestPayingForAPlan(t *testing.T) {
 	}
 }
 
-// TestPayingByReference: with CBE Birr the payer pays Kiflet's merchant ID
-// from their phone, quoting the invoice's reference, and CBE Birr's servers
-// call Kiflet to look the reference up, check the payment and confirm it.
-// The stand-in page plays CBE Birr through the same handler. Money CBE Birr
-// took is never turned away: paid twice or short, it is kept for a refund.
+// TestPayingByReference (FR-044): with CBE Birr the payer pays Kiflet's
+// merchant ID from their phone, quoting the invoice's reference, and CBE
+// Birr's servers call Kiflet to look the reference up, check the payment and
+// confirm it. The stand-in page plays CBE Birr through the same handler.
+// Money CBE Birr took is never turned away: paid twice or short, it is kept
+// for a refund.
 func TestPayingByReference(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Reference Freight")
@@ -318,10 +319,10 @@ func TestPayingByReference(t *testing.T) {
 	}
 }
 
-// TestRenewalOverdueAndBankTransfer: each period's invoice is issued when
-// the last one ends. Unpaid a week after its due date, it makes the company
-// read-only; a bank transfer recorded by the operator restores it, and the
-// period starts again from the payment.
+// TestRenewalOverdueAndBankTransfer (FR-044): each period's invoice is
+// issued when the last one ends. Unpaid a week after its due date, it makes
+// the company read-only; a bank transfer recorded by the operator restores
+// it, and the period starts again from the payment.
 func TestRenewalOverdueAndBankTransfer(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -418,8 +419,8 @@ func TestRenewalOverdueAndBankTransfer(t *testing.T) {
 	}
 }
 
-// TestRenewalAfterSuspension: a company suspended past the end of its
-// period isn't billed for the time it was suspended.
+// TestRenewalAfterSuspension (FR-044): a company suspended past the end of
+// its period isn't billed for the time it was suspended.
 func TestRenewalAfterSuspension(t *testing.T) {
 	e := newEnv(t)
 	operator := e.operator()
@@ -441,8 +442,8 @@ func TestRenewalAfterSuspension(t *testing.T) {
 	}
 }
 
-// TestUpgradeIsProrated: moving up a plan costs the difference for what is
-// left of the period, and applies once paid.
+// TestUpgradeIsProrated (FR-043, FR-044): moving up a plan costs the
+// difference for what is left of the period, and applies once paid.
 func TestUpgradeIsProrated(t *testing.T) {
 	e := newEnv(t)
 	operator := e.operator()
@@ -475,8 +476,8 @@ func TestUpgradeIsProrated(t *testing.T) {
 	}
 }
 
-// TestDowngradeWaitsForTheEndOfThePeriod: a smaller plan starts when the
-// paid period ends, and only if the active drivers fit in it.
+// TestDowngradeWaitsForTheEndOfThePeriod (FR-043): a smaller plan starts
+// when the paid period ends, and only if the active drivers fit in it.
 func TestDowngradeWaitsForTheEndOfThePeriod(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -533,8 +534,9 @@ func TestDowngradeWaitsForTheEndOfThePeriod(t *testing.T) {
 	}
 }
 
-// TestTextOverageIsInvoiced: texts beyond the month's allowance are billed
-// once the month is over, and the invoice keeps the counts.
+// TestTextOverageIsInvoiced (FR-044, FR-045): texts beyond the month's
+// allowance are billed once the month is over, and the invoice keeps the
+// counts.
 func TestTextOverageIsInvoiced(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -576,8 +578,8 @@ func TestTextOverageIsInvoiced(t *testing.T) {
 	}
 }
 
-// TestUsageAlerts: the office hears once when 80% of its driver places or
-// of the month's texts are used.
+// TestUsageAlerts (FR-045): the office hears once when 80% of its driver
+// places or of the month's texts are used.
 func TestUsageAlerts(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -613,8 +615,8 @@ func TestUsageAlerts(t *testing.T) {
 	}
 }
 
-// TestTrialNotices: a company hears three days and one day before its trial
-// ends, and when it has, once each; the operator can extend it.
+// TestTrialNotices (FR-043): a company hears three days and one day before
+// its trial ends, and when it has, once each; the operator can extend it.
 func TestTrialNotices(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -655,8 +657,8 @@ func TestTrialNotices(t *testing.T) {
 	office.book("Addis Ababa", "Adama", "")
 }
 
-// TestEnterpriseTerms: Enterprise can be chosen once the operator has made
-// the company an offer, at its price and limits.
+// TestEnterpriseTerms (FR-043): Enterprise can be chosen once the operator
+// has made the company an offer, at its price and limits.
 func TestEnterpriseTerms(t *testing.T) {
 	e := newEnv(t)
 	operator := e.operator()
@@ -685,8 +687,8 @@ func TestEnterpriseTerms(t *testing.T) {
 	}
 }
 
-// TestSignupWithAPaidPlan: a plan chosen at sign-up is invoiced at once,
-// and the new admin lands on the invoice.
+// TestSignupWithAPaidPlan (FR-044, FR-048): a plan chosen at sign-up is
+// invoiced at once, and the new admin lands on the invoice.
 func TestSignupWithAPaidPlan(t *testing.T) {
 	e := newEnv(t)
 	b := e.browser()
@@ -708,9 +710,9 @@ func TestSignupWithAPaidPlan(t *testing.T) {
 	}
 }
 
-// TestPaymentForAPaidInvoiceIsRefunded: money that arrives for an invoice
-// already paid is kept on record and flagged until the operator has sent it
-// back.
+// TestPaymentForAPaidInvoiceIsRefunded (FR-044): money that arrives for an
+// invoice already paid is kept on record and flagged until the operator has
+// sent it back.
 func TestPaymentForAPaidInvoiceIsRefunded(t *testing.T) {
 	e := newEnv(t)
 	operator := e.operator()
@@ -909,8 +911,9 @@ func (e *env) notify(provider string, n payments.Notification, signature string)
 	return res.StatusCode
 }
 
-// TestRenewalKeepsTheBillingDay (L6): a company's billing day is kept and
-// each renewal ends on it, not on whatever day the last period ended.
+// TestRenewalKeepsTheBillingDay (FR-044; L6): a company's billing day is
+// kept and each renewal ends on it, not on whatever day the last period
+// ended.
 func TestRenewalKeepsTheBillingDay(t *testing.T) {
 	e := newEnv(t)
 	office := e.subscribed("Billing Day Haulage", "starter", e.operator())
@@ -936,9 +939,9 @@ func TestRenewalKeepsTheBillingDay(t *testing.T) {
 	}
 }
 
-// TestCancelSubscription (W5): a company admin turns off renewal. The plan
-// runs to the end of the period, isn't renewed, and the account is then
-// read-only until a plan is chosen again. Renewal can be turned back on
+// TestCancelSubscription (FR-043; W5): a company admin turns off renewal.
+// The plan runs to the end of the period, isn't renewed, and the account is
+// then read-only until a plan is chosen again. Renewal can be turned back on
 // while the period runs.
 func TestCancelSubscription(t *testing.T) {
 	e := newEnv(t)
@@ -1004,9 +1007,9 @@ func TestCancelSubscription(t *testing.T) {
 	office.book("Addis Ababa", "Adama", "")
 }
 
-// TestCancelWithRenewalUnpaid (W5): cancelling while the renewal invoice
-// for a period already begun is unpaid cancels that invoice, and the plan
-// ends with the last period paid for, so nothing is owed.
+// TestCancelWithRenewalUnpaid (FR-043, FR-044; W5): cancelling while the
+// renewal invoice for a period already begun is unpaid cancels that invoice,
+// and the plan ends with the last period paid for, so nothing is owed.
 func TestCancelWithRenewalUnpaid(t *testing.T) {
 	e := newEnv(t)
 	office := e.subscribed("Lapsed Renewal Haulage", "starter", e.operator())

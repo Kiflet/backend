@@ -28,8 +28,8 @@ func rulesForm(over map[string]string) url.Values {
 	return v
 }
 
-// TestAlertRules: a company decides what it is alerted about, and when; an
-// administrator sets the rules, and the checks follow them.
+// TestAlertRules (FR-033): a company decides what it is alerted about, and
+// when; an administrator sets the rules, and the checks follow them.
 func TestAlertRules(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -96,8 +96,8 @@ func TestAlertRules(t *testing.T) {
 	}
 }
 
-// TestLongStop: a truck standing still outside a town is alerted once per
-// stop, and the alert resolves itself when the truck moves on.
+// TestLongStop (FR-033): a truck standing still outside a town is alerted
+// once per stop, and the alert resolves itself when the truck moves on.
 func TestLongStop(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -161,8 +161,8 @@ func TestLongStop(t *testing.T) {
 	}
 }
 
-// TestResolveAndRecipients: an alert is resolved with a note of what was
-// done, and an administrator chooses who also gets alerts by SMS.
+// TestResolveAndRecipients (FR-033): an alert is resolved with a note of
+// what was done, and an administrator chooses who also gets alerts by SMS.
 func TestResolveAndRecipients(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -223,9 +223,10 @@ func TestResolveAndRecipients(t *testing.T) {
 	}
 }
 
-// TestAlertsFromTheRoad: what a driver sends the office raises an alert: a
-// message, a report that arrived after the office had moved the load on,
-// and a delivery texted in without proof, which the proof then clears.
+// TestAlertsFromTheRoad (FR-033, FR-035): what a driver sends the office
+// raises an alert: a message, a report that arrived after the office had
+// moved the load on, and a delivery texted in without proof, which the proof
+// then clears.
 func TestAlertsFromTheRoad(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Road Alerts")

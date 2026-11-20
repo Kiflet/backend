@@ -262,8 +262,8 @@ func TestPublicAPI(t *testing.T) {
 	}
 }
 
-// TestAPIKeysAreTheAdminsAlone: a dispatcher can't make, see or revoke
-// keys, which act for the whole company.
+// TestAPIKeysAreTheAdminsAlone (FR-004, FR-046): a dispatcher can't make,
+// see or revoke keys, which act for the whole company.
 func TestAPIKeysAreTheAdminsAlone(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Careful Freight")

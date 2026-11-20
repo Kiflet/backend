@@ -12,9 +12,9 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestCargoPieces: a load can say how many pieces it is ("1,200 bags"). The
-// count is kept as a number and a unit, and shown, exported and sent to the
-// driver as it was written.
+// TestCargoPieces (FR-006): a load can say how many pieces it is ("1,200
+// bags"). The count is kept as a number and a unit, and shown, exported and
+// sent to the driver as it was written.
 func TestCargoPieces(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Counted Freight")
@@ -57,8 +57,8 @@ func TestCargoPieces(t *testing.T) {
 	}
 }
 
-// TestBookingEstimate: the booking form's summary asks for the distance and
-// arrival between two towns as they are typed.
+// TestBookingEstimate (FR-006): the booking form's summary asks for the
+// distance and arrival between two towns as they are typed.
 func TestBookingEstimate(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Estimating Freight")

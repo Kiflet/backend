@@ -21,11 +21,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// TestDelivery: a load from booking to its proof, through every interface
-// it touches. The office books it on the dashboard, the driver is texted
-// it and texts back from the road, the driver app delivers it with a
-// signature and a photo, which the app keeps in S3, the dashboard is told
-// as it happens, and the customer's tracking page says it's delivered.
+// TestDelivery (FR-006, FR-007, FR-018, FR-020, FR-021, FR-036, FR-037,
+// FR-038): a load from booking to its proof, through every interface it
+// touches. The office books it on the dashboard, the driver is texted it and
+// texts back from the road, the driver app delivers it with a signature and
+// a photo, which the app keeps in S3, the dashboard is told as it happens,
+// and the customer's tracking page says it's delivered.
 func TestDelivery(t *testing.T) {
 	office := signUp(t, "Highland Freight")
 
@@ -124,8 +125,9 @@ func TestDelivery(t *testing.T) {
 	}
 }
 
-// TestDriverApp: the driver app is an installable app with a service worker,
-// so it works offline: its shell, manifest and worker are served as such.
+// TestDriverApp (FR-014): the driver app is an installable app with a
+// service worker, so it works offline: its shell, manifest and worker are
+// served as such.
 func TestDriverApp(t *testing.T) {
 	b := newBrowser(t)
 	p := b.get("/driver/")

@@ -23,9 +23,9 @@ func withRoles(roles string) func(*setup) {
 	}
 }
 
-// TestSeparateProcesses: a shipment booked on a web process is texted to
-// its customer by a worker process, woken at once rather than at its next
-// look; the worker serves only its health and figures.
+// TestSeparateProcesses (operations): a shipment booked on a web process is
+// texted to its customer by a worker process, woken at once rather than at
+// its next look; the worker serves only its health and figures.
 func TestSeparateProcesses(t *testing.T) {
 	// The company is made on a process with every role, stopped before the
 	// others start, so that only the worker sends.

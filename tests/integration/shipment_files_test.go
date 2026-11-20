@@ -35,10 +35,10 @@ func (b *browser) uploadDocument(shipmentID, name, kind string, content []byte) 
 
 var pdf = []byte("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n")
 
-// TestShipmentDocuments: the office keeps files with a load. Only PDFs and
-// photos are taken, by what they are rather than what they are called;
-// only the company sees them; and the keeping period removes them with
-// the customer's other details.
+// TestShipmentDocuments (FR-010): the office keeps files with a load. Only
+// PDFs and photos are taken, by what they are rather than what they are
+// called; only the company sees them; and the keeping period removes them
+// with the customer's other details.
 func TestShipmentDocuments(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Paperwork Freight")
@@ -125,8 +125,8 @@ func TestShipmentDocuments(t *testing.T) {
 	}
 }
 
-// TestShipmentCharges: what a customer is charged for a load, line by line,
-// with discounts as negative lines.
+// TestShipmentCharges (FR-006): what a customer is charged for a load, line
+// by line, with discounts as negative lines.
 func TestShipmentCharges(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Invoicing Freight")
@@ -177,8 +177,9 @@ func (b *browser) fetch(path string) (*http.Response, []byte) {
 	return res, body
 }
 
-// TestCargoValueInSantim (audit D4): a value typed in birr is kept in whole
-// santim, shown back in birr, and one with more than two decimals refused.
+// TestCargoValueInSantim (FR-006; audit D4): a value typed in birr is kept
+// in whole santim, shown back in birr, and one with more than two decimals
+// refused.
 func TestCargoValueInSantim(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Valuable Cargo")

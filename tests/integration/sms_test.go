@@ -15,7 +15,8 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestSMSTexts: what drivers and customers receive says what to do next.
+// TestSMSTexts (FR-037): what drivers and customers receive says what to do
+// next.
 func TestSMSTexts(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Texting Transport")
@@ -99,9 +100,9 @@ func TestOfficeMessageFallsBackToSMS(t *testing.T) {
 	}
 }
 
-// TestTrialTextsStopAtTheAllowance (S1): a trial company's texts stop at
-// the trial's allowance and at the hourly ceiling, and the company is told;
-// a paying company's texts go on past its monthly allowance.
+// TestTrialTextsStopAtTheAllowance (FR-045; S1): a trial company's texts
+// stop at the trial's allowance and at the hourly ceiling, and the company
+// is told; a paying company's texts go on past its monthly allowance.
 func TestTrialTextsStopAtTheAllowance(t *testing.T) {
 	e := newEnv(t)
 	sent := func(tenant string, parts int, at string) {
@@ -145,9 +146,9 @@ func TestTrialTextsStopAtTheAllowance(t *testing.T) {
 	}
 }
 
-// TestInboundSMSOnceAndRepliesLimited (S2): the provider sending a message
-// again doesn't make it count twice, and one number gets only so many
-// replies an hour.
+// TestInboundSMSOnceAndRepliesLimited (FR-024; S2): the provider sending a
+// message again doesn't make it count twice, and one number gets only so
+// many replies an hour.
 func TestInboundSMSOnceAndRepliesLimited(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Echo Freight")
@@ -176,8 +177,8 @@ func TestInboundSMSOnceAndRepliesLimited(t *testing.T) {
 	}
 }
 
-// TestCodeBudget (S1): once the platform has texted its daily budget of
-// codes, more are refused, for every number alike.
+// TestCodeBudget (FR-002; S1): once the platform has texted its daily budget
+// of codes, more are refused, for every number alike.
 func TestCodeBudget(t *testing.T) {
 	sent := scalar[int64](t, `SELECT COUNT(*) FROM sms_messages WHERE purpose = 'otp' AND created_at >= NOW() - INTERVAL '1 day'`)
 	e := newEnv(t, func(s *setup) { s.cfg.CodesPerDay = int(sent) + 1 })
@@ -191,8 +192,8 @@ func TestCodeBudget(t *testing.T) {
 	}
 }
 
-// TestCodeLimitsLookTheSame (S5): asking for track-by-phone codes reaches
-// the same limit whether or not the number has shipments.
+// TestCodeLimitsLookTheSame (FR-036; S5): asking for track-by-phone codes
+// reaches the same limit whether or not the number has shipments.
 func TestCodeLimitsLookTheSame(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Quiet Numbers")
@@ -214,8 +215,8 @@ func TestCodeLimitsLookTheSame(t *testing.T) {
 	}
 }
 
-// TestCodeTriesCannotRace (S5): wrong guesses sent together still get only
-// five tries between them.
+// TestCodeTriesCannotRace (FR-036; S5): wrong guesses sent together still
+// get only five tries between them.
 func TestCodeTriesCannotRace(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Racing Guesses")
@@ -246,8 +247,8 @@ func TestCodeTriesCannotRace(t *testing.T) {
 	}
 }
 
-// TestExpiredCodesAreNotSent (L5): a code still waiting when it expires
-// isn't sent late.
+// TestExpiredCodesAreNotSent (FR-002; L5): a code still waiting when it
+// expires isn't sent late.
 func TestExpiredCodesAreNotSent(t *testing.T) {
 	newEnv(t) // its SMS worker picks the code up
 	phone := phoneNumber()

@@ -56,9 +56,9 @@ func (b *browser) on(e *env) *browser {
 	return &browser{e: e, c: b.c, email: b.email, phone: b.phone}
 }
 
-// TestTwoInstances (audit O4): two instances of the app share one
-// database. A change made on one reaches the dashboards open on the
-// other, and only that company's.
+// TestTwoInstances (FR-005, FR-027; audit O4): two instances of the app
+// share one database. A change made on one reaches the dashboards open on
+// the other, and only that company's.
 func TestTwoInstances(t *testing.T) {
 	first, second := newEnv(t), newEnv(t)
 	office := first.company("Twin Freight")
@@ -91,8 +91,9 @@ func TestTwoInstances(t *testing.T) {
 	}
 }
 
-// TestLiveUpdatesByRole (audit P1): a payment's live update reaches the
-// company's admins and not its dispatchers, who still get the shipments'.
+// TestLiveUpdatesByRole (FR-004, FR-027; audit P1): a payment's live update
+// reaches the company's admins and not its dispatchers, who still get the
+// shipments'.
 func TestLiveUpdatesByRole(t *testing.T) {
 	e := newEnv(t)
 	admin := e.company("Live Roles Freight")

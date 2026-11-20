@@ -17,8 +17,9 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestDeliveryLifecycle follows one load from booking to the customer's
-// confirmation, through every interface that touches it.
+// TestDeliveryLifecycle (FR-006, FR-007, FR-008, FR-018, FR-020, FR-036,
+// FR-038) follows one load from booking to the customer's confirmation,
+// through every interface that touches it.
 func TestDeliveryLifecycle(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Lifecycle Freight")
@@ -87,7 +88,8 @@ func TestDeliveryLifecycle(t *testing.T) {
 	}
 }
 
-// TestCompaniesAreIsolated: nothing of one company is reachable from another.
+// TestCompaniesAreIsolated (FR-005): nothing of one company is reachable
+// from another.
 func TestCompaniesAreIsolated(t *testing.T) {
 	e := newEnv(t)
 	a := e.company("Alpha Transport")
@@ -117,8 +119,8 @@ func TestCompaniesAreIsolated(t *testing.T) {
 	}
 }
 
-// TestDeactivatedDriverIsSignedOut: switching a driver off ends their
-// sessions at once, not when the token expires.
+// TestDeactivatedDriverIsSignedOut (FR-003, FR-031): switching a driver off
+// ends their sessions at once, not when the token expires.
 func TestDeactivatedDriverIsSignedOut(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Offboarding Cargo")
@@ -136,7 +138,8 @@ func TestDeactivatedDriverIsSignedOut(t *testing.T) {
 	}
 }
 
-// TestDriverSMSCommands: a driver without a smartphone reports by text.
+// TestDriverSMSCommands (FR-024): a driver without a smartphone reports by
+// text.
 func TestDriverSMSCommands(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Feature Phone Freight")
@@ -212,8 +215,8 @@ func TestDriverSMSCommands(t *testing.T) {
 	}
 }
 
-// TestPublicTrackingIsMinimal: the tracking page is for anyone with the
-// number, so it must not expose people's phone numbers.
+// TestPublicTrackingIsMinimal (FR-036): the tracking page is for anyone with
+// the number, so it must not expose people's phone numbers.
 func TestPublicTrackingIsMinimal(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Privacy Movers")
@@ -235,7 +238,7 @@ func TestPublicTrackingIsMinimal(t *testing.T) {
 	}
 }
 
-// TestStaffRoles: a dispatcher runs shipments but not the company.
+// TestStaffRoles (FR-004): a dispatcher runs shipments but not the company.
 func TestStaffRoles(t *testing.T) {
 	e := newEnv(t)
 	admin := e.company("Role Check Logistics")
@@ -269,9 +272,9 @@ func TestStaffRoles(t *testing.T) {
 	}
 }
 
-// TestTrackingPageDetails: on the road, the tracking page says how far the
-// truck has still to go, when each stage was reached, and how to call the
-// carrier; the steps not yet reached have no time.
+// TestTrackingPageDetails (FR-036): on the road, the tracking page says how
+// far the truck has still to go, when each stage was reached, and how to
+// call the carrier; the steps not yet reached have no time.
 func TestTrackingPageDetails(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Detail Haulage")
