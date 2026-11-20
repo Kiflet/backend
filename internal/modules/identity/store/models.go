@@ -65,6 +65,7 @@ type User struct {
 	AlertsSeenAt          pgtype.Timestamptz `db:"alerts_seen_at" json:"alerts_seen_at"`
 	LicenceExpiresOn      pgtype.Date        `db:"licence_expires_on" json:"licence_expires_on"`
 	AlertSms              []string           `db:"alert_sms" json:"alert_sms"`
+	Version               int32              `db:"version" json:"version"`
 }
 
 type VerificationCode struct {

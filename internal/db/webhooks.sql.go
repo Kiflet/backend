@@ -131,7 +131,7 @@ const createWebhookEndpoint = `-- name: CreateWebhookEndpoint :one
 
 INSERT INTO webhook_endpoints (tenant_id, url, events, secret, created_by)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, tenant_id, url, events, secret, active, created_by, created_at
+RETURNING id, tenant_id, url, events, secret, active, created_by, created_at, version
 `
 
 type CreateWebhookEndpointParams struct {
@@ -162,6 +162,7 @@ func (q *Queries) CreateWebhookEndpoint(ctx context.Context, arg CreateWebhookEn
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Version,
 	)
 	return i, err
 }
@@ -178,7 +179,7 @@ func (q *Queries) DeleteOldWebhookDeliveries(ctx context.Context, createdAt pgty
 
 const deleteWebhookEndpoint = `-- name: DeleteWebhookEndpoint :one
 DELETE FROM webhook_endpoints WHERE id = $1 AND tenant_id = $2
-RETURNING id, tenant_id, url, events, secret, active, created_by, created_at
+RETURNING id, tenant_id, url, events, secret, active, created_by, created_at, version
 `
 
 type DeleteWebhookEndpointParams struct {
@@ -198,6 +199,7 @@ func (q *Queries) DeleteWebhookEndpoint(ctx context.Context, arg DeleteWebhookEn
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Version,
 	)
 	return i, err
 }
@@ -322,7 +324,7 @@ func (q *Queries) EnqueueWebhooks(ctx context.Context, arg EnqueueWebhooksParams
 }
 
 const getWebhookEndpoint = `-- name: GetWebhookEndpoint :one
-SELECT id, tenant_id, url, events, secret, active, created_by, created_at FROM webhook_endpoints WHERE id = $1 AND tenant_id = $2
+SELECT id, tenant_id, url, events, secret, active, created_by, created_at, version FROM webhook_endpoints WHERE id = $1 AND tenant_id = $2
 `
 
 type GetWebhookEndpointParams struct {
@@ -342,6 +344,7 @@ func (q *Queries) GetWebhookEndpoint(ctx context.Context, arg GetWebhookEndpoint
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Version,
 	)
 	return i, err
 }
@@ -446,7 +449,7 @@ func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeli
 }
 
 const listWebhookEndpoints = `-- name: ListWebhookEndpoints :many
-SELECT e.id, e.tenant_id, e.url, e.events, e.secret, e.active, e.created_by, e.created_at,
+SELECT e.id, e.tenant_id, e.url, e.events, e.secret, e.active, e.created_by, e.created_at, e.version,
        (SELECT COUNT(*) FROM webhook_deliveries d WHERE d.endpoint_id = e.id AND d.status = 'failed'
           AND d.created_at > NOW() - INTERVAL '7 days')::bigint AS failed_week,
        (SELECT MAX(d.delivered_at) FROM webhook_deliveries d WHERE d.endpoint_id = e.id)::timestamptz AS last_delivered_at
@@ -464,6 +467,7 @@ type ListWebhookEndpointsRow struct {
 	Active          bool               `db:"active" json:"active"`
 	CreatedBy       pgtype.UUID        `db:"created_by" json:"created_by"`
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	Version         int32              `db:"version" json:"version"`
 	FailedWeek      int64              `db:"failed_week" json:"failed_week"`
 	LastDeliveredAt pgtype.Timestamptz `db:"last_delivered_at" json:"last_delivered_at"`
 }
@@ -486,6 +490,7 @@ func (q *Queries) ListWebhookEndpoints(ctx context.Context, tenantID pgtype.UUID
 			&i.Active,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.Version,
 			&i.FailedWeek,
 			&i.LastDeliveredAt,
 		); err != nil {
@@ -642,7 +647,7 @@ func (q *Queries) ResendWebhook(ctx context.Context, arg ResendWebhookParams) (W
 const setWebhookEndpointActive = `-- name: SetWebhookEndpointActive :one
 UPDATE webhook_endpoints SET active = $3
 WHERE id = $1 AND tenant_id = $2
-RETURNING id, tenant_id, url, events, secret, active, created_by, created_at
+RETURNING id, tenant_id, url, events, secret, active, created_by, created_at, version
 `
 
 type SetWebhookEndpointActiveParams struct {
@@ -663,6 +668,7 @@ func (q *Queries) SetWebhookEndpointActive(ctx context.Context, arg SetWebhookEn
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Version,
 	)
 	return i, err
 }
@@ -670,7 +676,7 @@ func (q *Queries) SetWebhookEndpointActive(ctx context.Context, arg SetWebhookEn
 const setWebhookSecret = `-- name: SetWebhookSecret :one
 UPDATE webhook_endpoints SET secret = $3
 WHERE id = $1 AND tenant_id = $2
-RETURNING id, tenant_id, url, events, secret, active, created_by, created_at
+RETURNING id, tenant_id, url, events, secret, active, created_by, created_at, version
 `
 
 type SetWebhookSecretParams struct {
@@ -691,6 +697,7 @@ func (q *Queries) SetWebhookSecret(ctx context.Context, arg SetWebhookSecretPara
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Version,
 	)
 	return i, err
 }
@@ -698,7 +705,7 @@ func (q *Queries) SetWebhookSecret(ctx context.Context, arg SetWebhookSecretPara
 const updateWebhookEndpoint = `-- name: UpdateWebhookEndpoint :one
 UPDATE webhook_endpoints SET url = $3, events = $4
 WHERE id = $1 AND tenant_id = $2
-RETURNING id, tenant_id, url, events, secret, active, created_by, created_at
+RETURNING id, tenant_id, url, events, secret, active, created_by, created_at, version
 `
 
 type UpdateWebhookEndpointParams struct {
@@ -725,6 +732,7 @@ func (q *Queries) UpdateWebhookEndpoint(ctx context.Context, arg UpdateWebhookEn
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.Version,
 	)
 	return i, err
 }

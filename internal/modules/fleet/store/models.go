@@ -19,4 +19,5 @@ type Vehicle struct {
 	CapacityKg         pgtype.Numeric     `db:"capacity_kg" json:"capacity_kg"`
 	InsuranceExpiresOn pgtype.Date        `db:"insurance_expires_on" json:"insurance_expires_on"`
 	InspectionDueOn    pgtype.Date        `db:"inspection_due_on" json:"inspection_due_on"`
+	Version            int32              `db:"version" json:"version"`
 }

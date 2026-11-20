@@ -51,6 +51,7 @@ type Shipment struct {
 	CargoPieces         *int32             `db:"cargo_pieces" json:"cargo_pieces"`
 	CargoUnit           *string            `db:"cargo_unit" json:"cargo_unit"`
 	CargoValueSantim    int64              `db:"cargo_value_santim" json:"cargo_value_santim"`
+	Version             int32              `db:"version" json:"version"`
 }
 
 type ShipmentCharge struct {

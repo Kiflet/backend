@@ -38,6 +38,7 @@ type AlertRule struct {
 	RouteKm        int32              `db:"route_km" json:"route_km"`
 	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	UpdatedBy      pgtype.UUID        `db:"updated_by" json:"updated_by"`
+	Version        int32              `db:"version" json:"version"`
 }
 
 type ApiKey struct {
@@ -357,6 +358,7 @@ type Shipment struct {
 	CargoPieces         *int32             `db:"cargo_pieces" json:"cargo_pieces"`
 	CargoUnit           *string            `db:"cargo_unit" json:"cargo_unit"`
 	CargoValueSantim    int64              `db:"cargo_value_santim" json:"cargo_value_santim"`
+	Version             int32              `db:"version" json:"version"`
 }
 
 type ShipmentCharge struct {
@@ -521,6 +523,7 @@ type Tenant struct {
 	BillingAnchorDay      *int32             `db:"billing_anchor_day" json:"billing_anchor_day"`
 	RenewalCancelledAt    pgtype.Timestamptz `db:"renewal_cancelled_at" json:"renewal_cancelled_at"`
 	CustomerLanguage      string             `db:"customer_language" json:"customer_language"`
+	Version               int32              `db:"version" json:"version"`
 }
 
 type TrackingEvent struct {
@@ -568,6 +571,7 @@ type User struct {
 	AlertsSeenAt          pgtype.Timestamptz `db:"alerts_seen_at" json:"alerts_seen_at"`
 	LicenceExpiresOn      pgtype.Date        `db:"licence_expires_on" json:"licence_expires_on"`
 	AlertSms              []string           `db:"alert_sms" json:"alert_sms"`
+	Version               int32              `db:"version" json:"version"`
 }
 
 type Vehicle struct {
@@ -581,6 +585,7 @@ type Vehicle struct {
 	CapacityKg         pgtype.Numeric     `db:"capacity_kg" json:"capacity_kg"`
 	InsuranceExpiresOn pgtype.Date        `db:"insurance_expires_on" json:"insurance_expires_on"`
 	InspectionDueOn    pgtype.Date        `db:"inspection_due_on" json:"inspection_due_on"`
+	Version            int32              `db:"version" json:"version"`
 }
 
 type VerificationCode struct {
@@ -622,4 +627,5 @@ type WebhookEndpoint struct {
 	Active    bool               `db:"active" json:"active"`
 	CreatedBy pgtype.UUID        `db:"created_by" json:"created_by"`
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	Version   int32              `db:"version" json:"version"`
 }

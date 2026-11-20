@@ -13,7 +13,7 @@ import (
 
 const listVehiclesWithDrivers = `-- name: ListVehiclesWithDrivers :many
 
-SELECT v.id, v.tenant_id, v.plate_number, v.vehicle_type, v.is_active, v.created_at, v.updated_at, v.capacity_kg, v.insurance_expires_on, v.inspection_due_on,
+SELECT v.id, v.tenant_id, v.plate_number, v.vehicle_type, v.is_active, v.created_at, v.updated_at, v.capacity_kg, v.insurance_expires_on, v.inspection_due_on, v.version,
        COALESCE((SELECT string_agg(u.full_name, ', ' ORDER BY u.full_name)
         FROM users u WHERE u.vehicle_id = v.id AND u.is_active), '')::text AS driver_names,
        (SELECT COUNT(*) FROM shipments s
@@ -38,6 +38,7 @@ type ListVehiclesWithDriversRow struct {
 	CapacityKg         pgtype.Numeric     `db:"capacity_kg" json:"capacity_kg"`
 	InsuranceExpiresOn pgtype.Date        `db:"insurance_expires_on" json:"insurance_expires_on"`
 	InspectionDueOn    pgtype.Date        `db:"inspection_due_on" json:"inspection_due_on"`
+	Version            int32              `db:"version" json:"version"`
 	DriverNames        string             `db:"driver_names" json:"driver_names"`
 	ActiveShipments    int64              `db:"active_shipments" json:"active_shipments"`
 	OnRoad             bool               `db:"on_road" json:"on_road"`
@@ -66,6 +67,7 @@ func (q *Queries) ListVehiclesWithDrivers(ctx context.Context, tenantID pgtype.U
 			&i.CapacityKg,
 			&i.InsuranceExpiresOn,
 			&i.InspectionDueOn,
+			&i.Version,
 			&i.DriverNames,
 			&i.ActiveShipments,
 			&i.OnRoad,
