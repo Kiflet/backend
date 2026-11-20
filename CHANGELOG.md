@@ -211,6 +211,15 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **Money in santim** (`docs/migration.md`, phase 1, step 4; audit D4). A
+  load's cargo value and its charges are kept in whole santim
+  (`cargo_value_santim`, `amount_santim`), as billing is, instead of birr
+  with two decimals in floating point on the way. Forms and the import
+  take birr as typed, with commas and at most two decimals, and refuse
+  more; the pages and exports show birr as before. **The public API's
+  cargo `value_etb` (a number of birr) is now `value_santim` (an integer
+  of santim)**: no company uses the API yet. The old columns stay, unread,
+  for a release, so a rollback finds them.
 - **The tenant in every reference** (`docs/migration.md`, phase 1, step 2;
   audit D2). Each of the 39 references between companies' tables is now
   `(tenant_id, x_id) REFERENCES x (tenant_id, id)`, so the database
