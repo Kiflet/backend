@@ -1,0 +1,70 @@
+# The images, for every merge to main and every release tag, in GitHub's
+# container registry: ghcr.io/kiflet/backend (the app) and
+# ghcr.io/kiflet/sandbox (the provider sandbox). Kiflet/web's and
+# Kiflet/mobile's CI start them with deployments/clients/compose.yml.
+#
+# Tags: sha-<7 characters> for every commit, main for the newest merge,
+# and the version (v0.10.0) for a release. main only takes pull requests
+# that passed CI on top of it, so what is built here has been tested; the
+# clients' check below runs on the images before they are pushed.
+name: Images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+# One at a time per ref, in order, so main always ends at the newest merge.
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  images:
+    name: Build, check and push
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build
+        run: |
+          label=org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}
+          docker build --label "$label" --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -t kiflet-backend:candidate .
+          docker build --label "$label" --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --target sandbox -t kiflet-sandbox:candidate .
+      - name: What the clients' tests expect works
+        run: scripts/clients-check.sh
+        env:
+          KIFLET_BACKEND_IMAGE: kiflet-backend
+          KIFLET_SANDBOX_IMAGE: kiflet-sandbox
+          KIFLET_TAG: candidate
+      - name: Push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          tags=("sha-${GITHUB_SHA::7}")
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            tags+=("${GITHUB_REF_NAME}")
+          else
+            tags+=(main)
+          fi
+          for image in backend sandbox; do
+            for tag in "${tags[@]}"; do
+              docker tag "kiflet-${image}:candidate" "ghcr.io/kiflet/${image}:${tag}"
+              docker push --quiet "ghcr.io/kiflet/${image}:${tag}"
+            done
+          done
+          {
+            echo "### Pushed"
+            for image in backend sandbox; do
+              for tag in "${tags[@]}"; do echo "- \`ghcr.io/kiflet/${image}:${tag}\`"; done
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

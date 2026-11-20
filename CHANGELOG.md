@@ -106,6 +106,12 @@ What changed in each release, newest first.
 - **gosec in `make lint`** (audit P2). Its findings were checked one by
   one: none was a vulnerability. The exceptions are in `.golangci.yml`,
   or beside the line, each with its reason.
+- **Images for the clients** (audit G2). Every merge to main and every
+  release tag builds `ghcr.io/kiflet/backend` and `ghcr.io/kiflet/sandbox`,
+  checks them (`scripts/clients-check.sh`: ready, the demo driver has
+  loads, texts reach the sandbox) and pushes them. Kiflet/web's and
+  Kiflet/mobile's tests start a given tag with the demo company and the
+  sandbox from `deployments/clients/compose.yml`.
 - **The load test** (`docs/deploy.md`, "Load test"). `make load-seed`
   puts `LOAD_PHONES` drivers on the road in staging, signed in, with
   `kiflet seed-load`. `make test-load` then plays their phones with k6: a

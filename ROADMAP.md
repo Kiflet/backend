@@ -69,7 +69,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [ ] Accounts: Expo, the Play Console as an organization (its D-U-N-S
       number can take weeks, so it starts first), Firebase, GitHub
       Packages.
-- [ ] Images to `ghcr.io/kiflet/backend` and `ghcr.io/kiflet/sandbox` on
+- [x] Images to `ghcr.io/kiflet/backend` and `ghcr.io/kiflet/sandbox` on
       every merge, and a compose file that starts a given tag with the
       demo data, for the clients' CI (G2).
 - [ ] gosec (P2); `TestGatewayFaults` made reliable (T5); coverage of the
