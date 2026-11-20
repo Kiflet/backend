@@ -11,13 +11,14 @@ import (
 	"time"
 )
 
-// TestDriverAppInABrowser (FR-002, FR-016, FR-017, FR-018): the driver app
-// itself, in a browser the size of a phone. The driver signs in with the PIN
-// the office gave them and chooses their own, finds the load, and starts the
-// trip on a slow signal, messaging the office while the start is still being
-// sent. Then the signal goes. The delivery form half filled in survives the
-// app being loaded again, with no network to load it from, the delivery is
-// recorded with a signature, and the office has it once the signal is back.
+// TestDriverAppInABrowser (FR-002, FR-014, FR-015, FR-016, FR-017, FR-018):
+// the driver app itself, in a browser the size of a phone. The driver signs
+// in with the PIN the office gave them and chooses their own, finds the
+// load, and starts the trip on a slow signal, messaging the office while the
+// start is still being sent. Then the signal goes. The delivery form half
+// filled in survives the app being loaded again, with no network to load it
+// from, the delivery is recorded with a signature, and the office has it
+// once the signal is back.
 func TestDriverAppInABrowser(t *testing.T) {
 	office := signUp(t, "Lakeside Haulage")
 	driverPhone := phoneNumber()

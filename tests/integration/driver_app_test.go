@@ -366,3 +366,26 @@ func blankPNG(w, h int) string {
 	chunk("IEND", nil)
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
 }
+
+// TestDeliveryNotes (FR-023, AC-023.4): the driver's note on a delivery is
+// kept with its proof and shown to the office on the shipment's page.
+func TestDeliveryNotes(t *testing.T) {
+	e := newEnv(t)
+	office := e.company("Notes Haulage")
+	driverID, phone, pin := office.addDriver("Bekele Girma")
+	id, _ := office.book("Addis Ababa", "Adama", driverID)
+	d := e.signIn(phone, pin)
+	if r := d.status(clientID(), id, "in_transit"); !r.OK {
+		t.Fatalf("depart: %+v", r)
+	}
+	const note = "Left with the guard at the side gate"
+	if r := d.pod(service.SyncPOD{ShipmentID: id, RecipientName: "Almaz Kebede", Notes: "  " + note + "\n"}); !r.OK {
+		t.Fatalf("POD: %+v", r)
+	}
+	if got := scalar[string](t, `SELECT delivery_notes FROM proof_of_deliveries WHERE shipment_id = $1`, id); got != note {
+		t.Errorf("the note kept with the proof is %q, want %q", got, note)
+	}
+	if p := office.get("/app/shipments/" + id); p.Status != http.StatusOK || !strings.Contains(p.Body, "Driver's note") || !strings.Contains(p.Body, note) {
+		t.Errorf("the shipment page doesn't show the driver's note: status %d", p.Status)
+	}
+}

@@ -323,7 +323,7 @@ removes what the clients replaced.
    commit, and on release tags; a compose file that starts the backend at a
    given tag with the demo data and the provider sandbox, which both
    clients' CI runs against.
-5. **Checks:** gosec in golangci-lint (audit P2); `TestGatewayFaults` made
+5. **Checks** (done): gosec in golangci-lint (audit P2); `TestGatewayFaults` made
    reliable (T5); the unit and integration suites' coverage reported
    together in CI, per package, against a floor that only goes up; each
    test names the requirement it covers, and a generated table lists the
