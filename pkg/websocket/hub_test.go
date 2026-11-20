@@ -183,6 +183,26 @@ func TestHub_BroadcastToTenant(t *testing.T) {
 	})
 }
 
+// A message that names roles reaches only the clients of those roles
+// (audit P1); one that names none reaches everyone in the company.
+func TestHub_Roles(t *testing.T) {
+	hub := NewHub(newTestHubLogger())
+	admin := NewClient(hub, nil, "tenant-123", "user-1", "admin")
+	dispatcher := NewClient(hub, nil, "tenant-123", "user-2", "dispatcher")
+	hub.registerClient(admin)
+	hub.registerClient(dispatcher)
+
+	payment := []byte(`{"type":"payment","data":{},"roles":["admin","platform_admin"]}`)
+	hub.send(tenantMessage{tenantID: "tenant-123", message: payment})
+	assert.Equal(t, payment, <-admin.Send)
+	assert.Empty(t, dispatcher.Send, "a dispatcher was sent a payment")
+
+	shipment := []byte(`{"type":"shipment","data":{}}`)
+	hub.send(tenantMessage{tenantID: "tenant-123", message: shipment})
+	assert.Equal(t, shipment, <-admin.Send)
+	assert.Equal(t, shipment, <-dispatcher.Send)
+}
+
 func TestHub_ClientCount(t *testing.T) {
 	hub := NewHub(newTestHubLogger())
 	assert.Equal(t, 0, hub.ClientCount())

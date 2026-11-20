@@ -154,7 +154,7 @@ func (s *BillingService) Settle(ctx context.Context, providerCode string, n paym
 			return nil
 		}
 		published := func() {
-			s.publish(pay.TenantID, "payment", map[string]any{"id": pay.ID.String(), "status": pay.Status})
+			s.publishTo(pay.TenantID, model.CompanyRoles, "payment", map[string]any{"id": pay.ID.String(), "status": pay.Status})
 		}
 		raw := mustJSON(n)
 		if n.Status != payments.StatusPaid {
@@ -262,7 +262,7 @@ func (s *BillingService) BillPaid(ctx context.Context, providerCode string, bp p
 			return err
 		}
 		after.do(func() {
-			s.publish(pay.TenantID, "payment", map[string]any{"id": pay.ID.String(), "status": pay.Status})
+			s.publishTo(pay.TenantID, model.CompanyRoles, "payment", map[string]any{"id": pay.ID.String(), "status": pay.Status})
 		})
 		actor := SystemActor(pay.TenantID)
 		if bp.Amount != inv.TotalSantim {
@@ -440,7 +440,9 @@ func (s *BillingService) settle(ctx context.Context, q *db.Queries, after *after
 	s.audit(ctx, q, a, "invoice_paid", "invoice", inv.ID, nil, map[string]any{
 		"invoice": inv.Number, "amount": payments.FormatETB(inv.TotalSantim), "provider": pay.Provider, "reference": pay.Reference,
 	})
-	after.do(func() { s.publish(t.ID, "invoice", map[string]any{"id": inv.ID.String(), "status": "paid"}) })
+	after.do(func() {
+		s.publishTo(t.ID, model.CompanyRoles, "invoice", map[string]any{"id": inv.ID.String(), "status": "paid"})
+	})
 	if inv.TotalSantim == 0 {
 		return nil
 	}

@@ -5,6 +5,8 @@ package integration
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -86,5 +88,59 @@ func TestTwoInstances(t *testing.T) {
 	case m := <-theirs:
 		t.Errorf("another company's dashboard was sent %q", m)
 	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+// TestLiveUpdatesByRole (audit P1): a payment's live update reaches the
+// company's admins and not its dispatchers, who still get the shipments'.
+func TestLiveUpdatesByRole(t *testing.T) {
+	e := newEnv(t)
+	admin := e.company("Live Roles Freight")
+	email := "dispatch" + phoneNumber() + "@example.et"
+	p := admin.post("/app/team", url.Values{"full_name": {"Dawit Bekele"}, "email": {email}, "phone": {phoneNumber()}, "role": {"dispatcher"}})
+	m := secretRe.FindStringSubmatch(p.Body)
+	if m == nil {
+		t.Fatalf("add dispatcher: status %d %s", p.Status, errorText(p.Body))
+	}
+	dispatcher := e.browser()
+	dispatcher.mustPost("/login", url.Values{"identifier": {email}, "password": {strings.TrimSpace(m[1])}})
+	dispatcher.mustPost("/app/account/password", url.Values{
+		"current_password": {strings.TrimSpace(m[1])}, "new_password": {"dispatch-pass-9"}, "confirm_password": {"dispatch-pass-9"},
+	})
+
+	adminLive, dispatcherLive := admin.live(), dispatcher.live()
+	time.Sleep(200 * time.Millisecond) // the hub registers both
+
+	// A payment declined at the checkout, then a load booked.
+	invoiceID := admin.choose("business", "monthly")
+	admin.confirmEmail()
+	_, checkout := admin.startPayment(invoiceID)
+	e.answer(checkout, "decline")
+	shipment, _ := admin.book("Addis Ababa", "Adama", "")
+
+	seen := func(live <-chan string, until string) []string {
+		t.Helper()
+		var got []string
+		deadline := time.After(5 * time.Second)
+		for {
+			select {
+			case msg, ok := <-live:
+				if !ok {
+					t.Fatal("the live updates closed")
+				}
+				got = append(got, strings.Fields(msg)[0])
+				if msg == until {
+					return got
+				}
+			case <-deadline:
+				t.Fatalf("no %q among %v", until, got)
+			}
+		}
+	}
+	if got := seen(adminLive, "shipment "+shipment); !slices.Contains(got, "payment") {
+		t.Errorf("the admin's live updates %v have no payment", got)
+	}
+	if got := seen(dispatcherLive, "shipment "+shipment); slices.Contains(got, "payment") || slices.Contains(got, "invoice") {
+		t.Errorf("the dispatcher was sent billing updates: %v", got)
 	}
 }

@@ -341,7 +341,17 @@ func (a *afterCommit) fn() func(func()) {
 
 // publish sends a live update to every dashboard of a tenant.
 func (c *core) publish(tenantID pgtype.UUID, kind string, data any) {
-	msg, err := json.Marshal(map[string]any{"type": kind, "data": data})
+	c.publishTo(tenantID, nil, kind, data)
+}
+
+// publishTo sends a live update to the company's dashboards of the given
+// roles only (audit P1); nil is every role.
+func (c *core) publishTo(tenantID pgtype.UUID, roles []string, kind string, data any) {
+	envelope := map[string]any{"type": kind, "data": data}
+	if roles != nil {
+		envelope["roles"] = roles
+	}
+	msg, err := json.Marshal(envelope)
 	if err != nil {
 		c.log.Error().Err(err).Str("type", kind).Msg("marshal live update")
 		return

@@ -73,4 +73,6 @@ var (
 	RoleLabel        = domain.RoleLabel
 	CanManageFleet   = domain.CanManageFleet
 	CanManageCompany = domain.CanManageCompany
+	// CompanyRoles are the roles CanManageCompany allows.
+	CompanyRoles = domain.CompanyRoles
 )

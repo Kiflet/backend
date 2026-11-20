@@ -76,6 +76,12 @@ What changed in each release, newest first.
 
 ### Fixed
 
+- **Billing's live updates reach only admins** (`docs/migration.md`,
+  phase 1, step 10; audit P1). A payment's or an invoice's live update
+  went to every open dashboard of the company, dispatchers' included. A
+  live message now names the roles that may receive it, and the WebSocket
+  hub sends it to no one else, whichever way it crossed instances
+  (in-process, Postgres or RabbitMQ).
 - **A driver's load limit holds when loads are given at once** (audit D3).
   Two assignments to the same driver at the same moment each counted the
   driver's loads before either was saved, so both could pass the

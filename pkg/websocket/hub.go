@@ -1,6 +1,8 @@
 package websocket
 
 import (
+	"encoding/json"
+	"slices"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -92,13 +94,18 @@ func (h *Hub) unregisterClient(client *Client) {
 		Msg("WebSocket client disconnected")
 }
 
-// send hands a message to every client of one company. A client whose
-// buffer is full misses the message: the hub never waits for a slow browser.
+// send hands a message to every client of one company that may receive
+// it. A client whose buffer is full misses the message: the hub never waits
+// for a slow browser.
 func (h *Hub) send(msg tenantMessage) {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
+	roles := rolesOf(msg.message)
 	for client := range h.tenants[msg.tenantID] {
+		if roles != nil && !slices.Contains(roles, client.Role) {
+			continue
+		}
 		select {
 		case client.Send <- msg.message:
 		default:
@@ -109,7 +116,22 @@ func (h *Hub) send(msg tenantMessage) {
 	}
 }
 
-// BroadcastToTenant queues a message for every open dashboard of a company.
+// rolesOf reads the roles a message names, {"roles": [...]}, the only ones
+// that may receive it (audit P1): a payment is the admins'. A message that
+// names none is for everyone in the company. The roles travel in the
+// message, so they cross instances whichever way it does.
+func rolesOf(message []byte) []string {
+	var m struct {
+		Roles []string `json:"roles"`
+	}
+	if json.Unmarshal(message, &m) != nil || len(m.Roles) == 0 {
+		return nil
+	}
+	return m.Roles
+}
+
+// BroadcastToTenant queues a message for every open dashboard of a company,
+// or those of the roles it names.
 func (h *Hub) BroadcastToTenant(tenantID string, message []byte) {
 	h.broadcast <- tenantMessage{tenantID: tenantID, message: message}
 }
