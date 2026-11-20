@@ -52,24 +52,25 @@ func TestDocumentName(t *testing.T) {
 }
 
 func TestCheckCharge(t *testing.T) {
-	d, a, err := CheckCharge("  Loading fee ", 1250.456)
-	if err != nil || d != "Loading fee" || a != 1250.46 {
-		t.Errorf("got %q %v %v", d, a, err)
+	d, err := CheckCharge("  Loading fee ", 125046)
+	if err != nil || d != "Loading fee" {
+		t.Errorf("got %q %v", d, err)
 	}
-	if _, a, err := CheckCharge("Discount", -100); err != nil || a != -100 {
-		t.Errorf("a discount: %v %v", a, err)
+	if _, err := CheckCharge("Discount", -10000); err != nil {
+		t.Errorf("a discount: %v", err)
 	}
 	for name, c := range map[string]struct {
 		desc   string
-		amount float64
+		santim int64
 		want   string
 	}{
-		"no description": {" ", 10, "description"},
-		"too long":       {strings.Repeat("x", 121), 10, "description"},
-		"zero":           {"Fee", 0.001, "amount"},
-		"too much":       {"Fee", 1e12, "amount"},
+		"no description": {" ", 1000, "description"},
+		"too long":       {strings.Repeat("x", 121), 1000, "description"},
+		"zero":           {"Fee", 0, "amount"},
+		"too much":       {"Fee", MaxCharge, "amount"},
+		"too much off":   {"Fee", -MaxCharge, "amount"},
 	} {
-		_, _, err := CheckCharge(c.desc, c.amount)
+		_, err := CheckCharge(c.desc, c.santim)
 		if e, ok := apperror.As(err); !ok || e.Field != c.want {
 			t.Errorf("%s: got %v, want an error on %s", name, err, c.want)
 		}

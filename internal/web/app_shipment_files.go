@@ -5,7 +5,6 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -84,11 +83,7 @@ func (s *Server) shipmentChargeAdd(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	amount, perr := strconv.ParseFloat(strings.ReplaceAll(strings.TrimSpace(r.PostFormValue("amount")), ",", ""), 64)
-	if perr != nil {
-		amount = 0
-	}
-	err = s.svc.Shipments.AddCharge(r.Context(), actor(r), id, r.PostFormValue("description"), amount)
+	err = s.svc.Shipments.AddCharge(r.Context(), actor(r), id, r.PostFormValue("description"), r.PostFormValue("amount"))
 	s.actionResult(w, r, "/app/shipments/"+id.String()+"?tab=charges", err, "Charge added.")
 }
 

@@ -44,17 +44,17 @@ func (q *Queries) CountShipmentDocuments(ctx context.Context, arg CountShipmentD
 }
 
 const createShipmentCharge = `-- name: CreateShipmentCharge :one
-INSERT INTO shipment_charges (tenant_id, shipment_id, description, amount, created_by)
+INSERT INTO shipment_charges (tenant_id, shipment_id, description, amount_santim, created_by)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, tenant_id, shipment_id, description, amount, created_by, created_at
+RETURNING id, tenant_id, shipment_id, description, amount, created_by, created_at, amount_santim
 `
 
 type CreateShipmentChargeParams struct {
-	TenantID    pgtype.UUID    `db:"tenant_id" json:"tenant_id"`
-	ShipmentID  pgtype.UUID    `db:"shipment_id" json:"shipment_id"`
-	Description string         `db:"description" json:"description"`
-	Amount      pgtype.Numeric `db:"amount" json:"amount"`
-	CreatedBy   pgtype.UUID    `db:"created_by" json:"created_by"`
+	TenantID     pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	ShipmentID   pgtype.UUID `db:"shipment_id" json:"shipment_id"`
+	Description  string      `db:"description" json:"description"`
+	AmountSantim int64       `db:"amount_santim" json:"amount_santim"`
+	CreatedBy    pgtype.UUID `db:"created_by" json:"created_by"`
 }
 
 func (q *Queries) CreateShipmentCharge(ctx context.Context, arg CreateShipmentChargeParams) (ShipmentCharge, error) {
@@ -62,7 +62,7 @@ func (q *Queries) CreateShipmentCharge(ctx context.Context, arg CreateShipmentCh
 		arg.TenantID,
 		arg.ShipmentID,
 		arg.Description,
-		arg.Amount,
+		arg.AmountSantim,
 		arg.CreatedBy,
 	)
 	var i ShipmentCharge
@@ -74,6 +74,7 @@ func (q *Queries) CreateShipmentCharge(ctx context.Context, arg CreateShipmentCh
 		&i.Amount,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.AmountSantim,
 	)
 	return i, err
 }
@@ -194,7 +195,7 @@ func (q *Queries) GetShipmentDocument(ctx context.Context, arg GetShipmentDocume
 }
 
 const listShipmentCharges = `-- name: ListShipmentCharges :many
-SELECT id, tenant_id, shipment_id, description, amount, created_by, created_at FROM shipment_charges
+SELECT id, tenant_id, shipment_id, description, amount, created_by, created_at, amount_santim FROM shipment_charges
 WHERE tenant_id = $1 AND shipment_id = $2
 ORDER BY created_at, id
 `
@@ -221,6 +222,7 @@ func (q *Queries) ListShipmentCharges(ctx context.Context, arg ListShipmentCharg
 			&i.Amount,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.AmountSantim,
 		); err != nil {
 			return nil, err
 		}

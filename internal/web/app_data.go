@@ -147,7 +147,7 @@ it from the shipment's page while it is kept.
 			ts(sh.CreatedAt), ts(sh.PlannedPickupAt), ts(sh.PickedUpAt), ts(sh.EstimatedDelivery), ts(sh.ActualDelivery),
 			sh.OriginCity, csvSafe(sh.OriginAddress), sh.DestinationCity, csvSafe(sh.DestinationAddress),
 			csvSafe(sh.CustomerName), csvSafe(sh.CustomerPhone), csvSafe(sh.ConsigneeName), csvSafe(sh.ConsigneePhone),
-			csvSafe(sh.CargoDescription), csvSafe(pieces(sh.CargoPieces, sh.CargoUnit)), numStr(sh.CargoWeightKg), numStr(sh.CargoValue), csvSafe(sh.SpecialInstructions),
+			csvSafe(sh.CargoDescription), csvSafe(pieces(sh.CargoPieces, sh.CargoUnit)), numStr(sh.CargoWeightKg), service.BirrText(sh.CargoValueSantim), csvSafe(sh.SpecialInstructions),
 			csvSafe(sh.DriverName), sh.VehiclePlate,
 			ts(sh.CustomerConfirmedAt), csvSafe(sh.CustomerFeedback), ts(sh.AnonymisedAt),
 		}
@@ -219,7 +219,7 @@ it from the shipment's page while it is kept.
 	}
 	err = writeCSV(zw, "charges.csv", []string{"Tracking number", "Item", "Amount (ETB)", "Added"}, len(ex.Charges), func(i int) []string {
 		c := ex.Charges[i]
-		return []string{c.TrackingNumber, csvSafe(c.Description), strconv.FormatFloat(c.Amount, 'f', 2, 64), ts(c.CreatedAt)}
+		return []string{c.TrackingNumber, csvSafe(c.Description), service.BirrText(c.AmountSantim), ts(c.CreatedAt)}
 	})
 	if err != nil {
 		return err

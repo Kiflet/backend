@@ -27,6 +27,10 @@ type ShipmentService struct {
 	media *MediaService
 }
 
+// maxCargoValue is the most a load's cargo may be worth, in santim: under
+// a trillion birr.
+const maxCargoValue = 100_000_000_000_000
+
 // ShipmentInput is the dispatcher's shipment form.
 type ShipmentInput struct {
 	Priority string
@@ -50,7 +54,9 @@ type ShipmentInput struct {
 
 	CargoDescription string
 	CargoWeightKg    float64
-	CargoValueETB    float64
+	// CargoValue is the cargo's worth in birr as typed (ParseBirr); empty
+	// or 0 is none.
+	CargoValue string
 	// CargoPieces and CargoUnit: how many pieces, and what they are
 	// ("bales"). See ParsePieces.
 	CargoPieces int
@@ -128,7 +134,8 @@ type validShipment struct {
 	consigneeName  *string
 	consigneePhone *string
 	cargo          *string
-	weight, value  pgtype.Numeric
+	weight         pgtype.Numeric
+	value          int64 // santim
 	pieces         *int32
 	unit           *string
 	instructions   *string
@@ -199,8 +206,8 @@ func validateShipment(in ShipmentInput, now time.Time) (validShipment, error) {
 	if in.CargoWeightKg < 0 || math.IsNaN(in.CargoWeightKg) || in.CargoWeightKg > 200000 {
 		return v, invalid("cargo_weight", "Enter a weight between 0 and 200,000 kg.")
 	}
-	if in.CargoValueETB < 0 || math.IsNaN(in.CargoValueETB) || in.CargoValueETB > 1e12 {
-		return v, invalid("cargo_value", "Enter a valid value.")
+	if v.value, err = ParseBirr(in.CargoValue); err != nil || v.value < 0 || v.value >= maxCargoValue {
+		return v, invalid("cargo_value", "Enter the value in birr, with at most two decimals.")
 	}
 	if in.CargoPiecesText != "" {
 		if in.CargoPieces, in.CargoUnit, err = ParsePieces(in.CargoPiecesText); err != nil {
@@ -221,7 +228,6 @@ func validateShipment(in ShipmentInput, now time.Time) (validShipment, error) {
 		return v, invalid("cargo_pieces", "Enter how many, e.g. 152 bales.")
 	}
 	v.weight = toNumericOmitZero(in.CargoWeightKg)
-	v.value = toNumericOmitZero(in.CargoValueETB)
 	v.cargo = toText(strings.TrimSpace(truncate(in.CargoDescription, 500)))
 	v.instructions = toText(strings.TrimSpace(truncate(in.SpecialInstructions, 1000)))
 
@@ -356,7 +362,7 @@ func (s *ShipmentService) Create(ctx context.Context, a Actor, in ShipmentInput)
 			ConsigneePhone:      v.consigneePhone,
 			CargoDescription:    v.cargo,
 			CargoWeight:         v.weight,
-			CargoValue:          v.value,
+			CargoValueSantim:    v.value,
 			CargoPieces:         v.pieces,
 			CargoUnit:           v.unit,
 			SpecialInstructions: v.instructions,
@@ -450,7 +456,7 @@ func (s *ShipmentService) Update(ctx context.Context, a Actor, id pgtype.UUID, i
 			ConsigneePhone:      v.consigneePhone,
 			CargoDescription:    v.cargo,
 			CargoWeight:         v.weight,
-			CargoValue:          v.value,
+			CargoValueSantim:    v.value,
 			CargoPieces:         v.pieces,
 			CargoUnit:           v.unit,
 			SpecialInstructions: v.instructions,
@@ -496,7 +502,7 @@ func changedFields(a, b shipments.Shipment) []string {
 	add(a.CustomerPhone != b.CustomerPhone, "customer phone")
 	add(deref(a.ConsigneeName) != deref(b.ConsigneeName) || deref(a.ConsigneePhone) != deref(b.ConsigneePhone), "receiver")
 	add(deref(a.CargoDescription) != deref(b.CargoDescription) || numericOr(a.CargoWeight) != numericOr(b.CargoWeight), "cargo")
-	add(numericOr(a.CargoValue) != numericOr(b.CargoValue), "cargo value")
+	add(a.CargoValueSantim != b.CargoValueSantim, "cargo value")
 	add(derefInt(a.CargoPieces) != derefInt(b.CargoPieces) || deref(a.CargoUnit) != deref(b.CargoUnit), "pieces")
 	add(deref(a.SpecialInstructions) != deref(b.SpecialInstructions), "instructions")
 	add(!sameTime(a.PlannedPickupAt, b.PlannedPickupAt), "pickup time")
@@ -820,7 +826,7 @@ func InputOf(sh shipments.Shipment) ShipmentInput {
 		DestinationCity: deref(sh.DestinationCity), DestinationAddress: sh.DestinationAddress,
 		CustomerName: sh.CustomerName, CustomerPhone: sh.CustomerPhone,
 		ConsigneeName: deref(sh.ConsigneeName), ConsigneePhone: deref(sh.ConsigneePhone),
-		CargoDescription: deref(sh.CargoDescription), CargoWeightKg: numericOr(sh.CargoWeight), CargoValueETB: numericOr(sh.CargoValue),
+		CargoDescription: deref(sh.CargoDescription), CargoWeightKg: numericOr(sh.CargoWeight), CargoValue: BirrText(sh.CargoValueSantim),
 		CargoPieces: int(derefInt(sh.CargoPieces)), CargoUnit: deref(sh.CargoUnit),
 		SpecialInstructions: deref(sh.SpecialInstructions),
 		PlannedPickup:       timePtr(sh.PlannedPickupAt),

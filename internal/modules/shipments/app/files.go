@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -61,8 +60,8 @@ func (Service) Charges(ctx context.Context, conn database.Conn, tenantID, shipme
 	return store.New(conn).ListShipmentCharges(ctx, store.ListShipmentChargesParams{TenantID: tenantID, ShipmentID: shipmentID})
 }
 
-func (Service) AddCharge(ctx context.Context, conn database.Conn, tenantID, shipmentID, by pgtype.UUID, description string, amount float64) error {
-	description, amount, err := domain.CheckCharge(description, amount)
+func (Service) AddCharge(ctx context.Context, conn database.Conn, tenantID, shipmentID, by pgtype.UUID, description string, santim int64) error {
+	description, err := domain.CheckCharge(description, santim)
 	if err != nil {
 		return err
 	}
@@ -74,12 +73,8 @@ func (Service) AddCharge(ctx context.Context, conn database.Conn, tenantID, ship
 	if n >= domain.MaxChargesPerShipment {
 		return domain.ErrTooManyCharges
 	}
-	var birr pgtype.Numeric
-	if err := birr.Scan(strconv.FormatFloat(amount, 'f', 2, 64)); err != nil {
-		return err
-	}
 	_, err = q.CreateShipmentCharge(ctx, store.CreateShipmentChargeParams{
-		TenantID: tenantID, ShipmentID: shipmentID, Description: description, Amount: birr, CreatedBy: by,
+		TenantID: tenantID, ShipmentID: shipmentID, Description: description, AmountSantim: santim, CreatedBy: by,
 	})
 	return err
 }

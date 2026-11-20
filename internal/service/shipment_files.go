@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -110,20 +109,24 @@ func (s *ShipmentService) DeleteDocument(ctx context.Context, a Actor, shipmentI
 }
 
 // Charges lists a shipment's charges in the order they were added, and
-// their total in birr.
-func (s *ShipmentService) Charges(ctx context.Context, tenantID, shipmentID pgtype.UUID) ([]shipments.Charge, float64, error) {
+// their total in santim.
+func (s *ShipmentService) Charges(ctx context.Context, tenantID, shipmentID pgtype.UUID) ([]shipments.Charge, int64, error) {
 	rows, err := s.shipmentFiles.Charges(ctx, s.q.Conn(), tenantID, shipmentID)
-	total := 0.0
+	var total int64
 	for _, c := range rows {
-		total += numericOr(c.Amount)
+		total += c.AmountSantim
 	}
-	return rows, math.Round(total*100) / 100, err
+	return rows, total, err
 }
 
-// AddCharge adds a line to what the customer is charged for a load. A
-// negative amount is a discount.
-func (s *ShipmentService) AddCharge(ctx context.Context, a Actor, shipmentID pgtype.UUID, description string, amount float64) error {
-	description, amount, err := shipmentsdomain.CheckCharge(description, amount)
+// AddCharge adds a line to what the customer is charged for a load, its
+// amount in birr as typed (ParseBirr). A negative amount is a discount.
+func (s *ShipmentService) AddCharge(ctx context.Context, a Actor, shipmentID pgtype.UUID, description, amount string) error {
+	santim, err := ParseBirr(amount)
+	if err != nil {
+		return invalid("amount", "Enter an amount in birr, with at most two decimals; a discount is negative.")
+	}
+	description, err = shipmentsdomain.CheckCharge(description, santim)
 	if err != nil {
 		return err
 	}
@@ -138,10 +141,10 @@ func (s *ShipmentService) AddCharge(ctx context.Context, a Actor, shipmentID pgt
 		if err := s.requireWritable(ctx, q, tenant); err != nil {
 			return err
 		}
-		if err := s.shipmentFiles.AddCharge(ctx, q.Conn(), a.TenantID, shipmentID, a.UserID, description, amount); err != nil {
+		if err := s.shipmentFiles.AddCharge(ctx, q.Conn(), a.TenantID, shipmentID, a.UserID, description, santim); err != nil {
 			return err
 		}
-		s.audit(ctx, q, a, "charge_added", "shipment", shipmentID, nil, map[string]any{"description": description, "amount": amount})
+		s.audit(ctx, q, a, "charge_added", "shipment", shipmentID, nil, map[string]any{"description": description, "amount_santim": santim})
 		return nil
 	})
 }

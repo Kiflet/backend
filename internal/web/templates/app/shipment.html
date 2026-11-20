@@ -54,7 +54,7 @@ driver card and the note form are left alone, being forms in use. */}}
   <a href="/app/shipments/{{$id}}" {{if eq $d.Tab "overview"}}aria-current="page"{{end}}>Overview</a>
   <a href="/app/shipments/{{$id}}?tab=activity" {{if eq $d.Tab "activity"}}aria-current="page"{{end}}>Activity <span class="badge">{{len $d.Timeline}}</span></a>
   <a href="/app/shipments/{{$id}}?tab=documents" {{if eq $d.Tab "documents"}}aria-current="page"{{end}}>Documents{{with $d.Documents}} <span class="badge">{{len .}}</span>{{end}}</a>
-  <a href="/app/shipments/{{$id}}?tab=charges" {{if eq $d.Tab "charges"}}aria-current="page"{{end}}>Charges{{if $d.Charges}} <span class="badge">{{etb (santim $d.ChargeTotal)}}</span>{{end}}</a>
+  <a href="/app/shipments/{{$id}}?tab=charges" {{if eq $d.Tab "charges"}}aria-current="page"{{end}}>Charges{{if $d.Charges}} <span class="badge">{{etb $d.ChargeTotal}}</span>{{end}}</a>
 </nav>
 
 {{if $s.AnonymisedAt.Valid}}
@@ -239,14 +239,14 @@ driver card and the note form are left alone, being forms in use. */}}
         <tr>
           <td>{{.Description}}</td>
           <td class="small muted">{{date .CreatedAt}}</td>
-          <td class="num mono">{{birr (santim .Amount)}}</td>
+          <td class="num mono">{{birr .AmountSantim}}</td>
           <td class="row-menu"><form method="post" action="/app/shipments/{{$id}}/charges/{{uuid .ID}}/delete"><button class="icon-btn" type="submit" aria-label="Remove {{.Description}}" title="Remove">{{icon "x"}}</button></form></td>
         </tr>
         {{else}}
         <tr><td colspan="4" class="muted">No charges yet.</td></tr>
         {{end}}
       </tbody>
-      {{if $d.Charges}}<tfoot><tr><th colspan="2">Total</th><th class="num mono">{{birr (santim $d.ChargeTotal)}}</th><th></th></tr></tfoot>{{end}}
+      {{if $d.Charges}}<tfoot><tr><th colspan="2">Total</th><th class="num mono">{{birr $d.ChargeTotal}}</th><th></th></tr></tfoot>{{end}}
     </table>
     </div>
     <form method="post" action="/app/shipments/{{$id}}/charges" class="charge-add card-foot">
@@ -332,7 +332,7 @@ driver card and the note form are left alone, being forms in use. */}}
       <div><dt>Cargo</dt><dd>{{with $s.CargoDescription}}{{.}}{{else}}—{{end}}</dd></div>
       <div><dt>Weight</dt><dd>{{if hasNum $s.CargoWeight}}{{kg $s.CargoWeight}}{{else}}—{{end}}</dd></div>
       {{with pieces $s.CargoPieces $s.CargoUnit}}<div><dt>Pieces</dt><dd>{{.}}</dd></div>{{end}}
-      {{if hasNum $s.CargoValue}}<div><dt>Value</dt><dd>{{money $s.CargoValue}}</dd></div>{{end}}
+      {{if $s.CargoValueSantim}}<div><dt>Value</dt><dd>{{birr $s.CargoValueSantim}}</dd></div>{{end}}
       {{with $s.SpecialInstructions}}<div><dt>For the driver</dt><dd class="pre">{{.}}</dd></div>{{end}}
     </dl>
   </section>

@@ -223,7 +223,7 @@ func seed(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log zerol
 			Priority: priority, OriginCity: r.from, OriginAddress: pick(demoAddresses[r.from]),
 			DestinationCity: r.to, DestinationAddress: pick(demoAddresses[r.to]),
 			CustomerName: c.name, CustomerPhone: c.phone, CargoDescription: cargo.what,
-			CargoWeightKg: cargo.kg, CargoValueETB: cargo.etb, CargoPiecesText: cargo.pieces,
+			CargoWeightKg: cargo.kg, CargoValue: fmt.Sprintf("%.2f", cargo.etb), CargoPiecesText: cargo.pieces,
 		}
 		// Chosen by count, not by rng, so the rest of the demo data is
 		// what it was before receivers existed.

@@ -176,7 +176,7 @@ func (in apiShipmentInput) apply(to *service.ShipmentInput) {
 		}
 	}
 	if c := in.Cargo; c != nil {
-		to.CargoDescription, to.CargoWeightKg, to.CargoValueETB = c.Description, c.WeightKg, c.ValueETB
+		to.CargoDescription, to.CargoWeightKg, to.CargoValue = c.Description, c.WeightKg, service.BirrText(c.ValueSantim)
 		to.CargoPieces, to.CargoUnit = c.Pieces, c.Unit
 	}
 	if in.Instructions != nil {
