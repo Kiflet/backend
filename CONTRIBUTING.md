@@ -34,10 +34,14 @@ make staging-down
 ```
 
 CI runs all of it on every pull request, with gofmt, `sqlc diff`,
-govulncheck and shellcheck, and adds to each run's summary how much of
-`internal/service` and `internal/web` the integration tests cover (`make
-test-integration-cover` shows the same). Those tests are those packages'
-tests, so their unit coverage says little.
+govulncheck and shellcheck. It measures what the unit and integration
+tests cover of each package together (`make cover` does the same), adds
+the table to the run's summary, and fails if a package is covered less
+than its floor in `tests/coverage-floor.txt`. The floor only goes up:
+when your tests cover more, `make coverage-floor` raises it, and you
+commit the file with them. A package that loses statements to a move
+(code going into a module) may fall below its floor; lower that line by
+hand, in the same pull request, and say why.
 
 `make lint` reports everything it finds, so there is no backlog to hide a
 new finding in. What it should let pass is excused where it is, with the

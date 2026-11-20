@@ -1,4 +1,4 @@
-.PHONY: help db db-stop run dev build migrate seed test test-integration test-integration-cover test-e2e vet lint sqlc docker-build clean \
+.PHONY: help db db-stop run dev build migrate seed test test-integration cover coverage-floor test-e2e vet lint sqlc docker-build clean \
 	sandbox sandbox-keys run-sandbox \
 	staging-up staging-down staging-ca staging-logs load-seed test-load \
 	clients-up clients-down clients-logs
@@ -44,7 +44,8 @@ help:
 	@echo "  make run-sandbox        run the app with its providers pointed at the sandbox"
 	@echo "  make test               unit tests"
 	@echo "  make test-integration   end-to-end tests against the database"
-	@echo "  make test-integration-cover   the same, with what they cover of the service and web packages"
+	@echo "  make cover              both, with what they cover of each package, checked against its floor"
+	@echo "  make coverage-floor     raise each package's floor to what make cover measured"
 	@echo "  make staging-up         run staging at https://kiflet.localhost:8443"
 	@echo "  make test-e2e           end-to-end tests against staging"
 	@echo "  make load-seed          add LOAD_PHONES drivers on the road to staging, for the load test"
@@ -99,12 +100,22 @@ test:
 test-integration:
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) go test -tags integration -count=1 ./tests/integration/
 
-# The same, measuring what they cover of internal/service and internal/web,
-# whose tests they are: coverage.out, and a line per package. CI runs this.
-test-integration-cover:
+# The unit and integration tests together, measuring what they cover of
+# every package: coverage.out, a table by package, and a check against
+# each package's floor (tests/coverage-floor.txt), which fails below it.
+# CI runs this.
+cover:
+	go test -count=1 -coverpkg=./... -coverprofile=coverage-unit.out ./...
 	TEST_DATABASE_URL=$(TEST_DATABASE_URL) go test -tags integration -count=1 \
-		-coverpkg=./internal/service,./internal/web -coverprofile=coverage.out ./tests/integration/
+		-coverpkg=./... -coverprofile=coverage-integration.out ./tests/integration/
+	@scripts/coverage-merge.sh coverage-unit.out coverage-integration.out > coverage.out
 	@scripts/coverage-summary.sh coverage.out
+	@scripts/coverage-floor.sh check coverage.out
+
+# Raises each package's floor to what make cover last measured; it never
+# lowers one. Commit tests/coverage-floor.txt with the tests that raised it.
+coverage-floor:
+	scripts/coverage-floor.sh raise coverage.out
 
 # Against staging (make staging-up), through Caddy as a browser and the
 # providers reach it.

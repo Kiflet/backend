@@ -1,0 +1,46 @@
+# The least each package's statements must be covered by the unit and
+# integration tests together, in percent: make cover checks it, and CI
+# fails below it. Written by make coverage-floor, which only raises it.
+cmd/sandbox 0.0
+cmd/server 0.0
+internal/app 78.7
+internal/db 78.7
+internal/model 93.4
+internal/modules/audit/app 86.5
+internal/modules/audit/store 77.1
+internal/modules/driversync 99.0
+internal/modules/driversync/app 93.4
+internal/modules/driversync/store 79.0
+internal/modules/fleet/app 86.0
+internal/modules/fleet/domain 94.2
+internal/modules/fleet/store 81.1
+internal/modules/identity 99.0
+internal/modules/identity/app 81.2
+internal/modules/identity/domain 99.0
+internal/modules/identity/store 87.9
+internal/modules/shipments/app 85.9
+internal/modules/shipments/domain 96.6
+internal/modules/shipments/store 84.0
+internal/modules/tenancy/app 90.4
+internal/modules/tenancy/domain 99.0
+internal/modules/tenancy/store 92.7
+internal/platform/apperror 95.1
+internal/platform/config 79.9
+internal/platform/database 70.4
+internal/platform/events 94.5
+internal/platform/geo 97.4
+internal/platform/phone 93.1
+internal/platform/text 97.4
+internal/sandbox 84.0
+internal/service 79.4
+internal/web 76.5
+pkg/broker 68.0
+pkg/console 99.0
+pkg/hash 99.0
+pkg/mail 77.4
+pkg/metrics 99.0
+pkg/payments 84.3
+pkg/sms 93.9
+pkg/storage 88.0
+pkg/storage/garage 80.4
+pkg/websocket 89.0
