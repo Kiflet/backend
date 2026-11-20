@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2022",
+    "skipLibCheck": false
+  },
+  "files": [
+    "index.d.ts",
+    "schema.d.ts",
+    "check.ts"
+  ]
+}

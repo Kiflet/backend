@@ -46,3 +46,6 @@ deployments/prometheus/metrics_token
 *~
 .DS_Store
 Thumbs.db
+
+# @kiflet/api's dependencies (api/typescript)
+node_modules/

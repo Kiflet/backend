@@ -101,9 +101,9 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 
 - [x] `api/openapi/v1.yaml`, each operation tagged `app`, `public` or
       `driver`; `api/asyncapi/live.yaml` and `webhooks.yaml` (A1).
-- [ ] Go types and server interface generated from it; `@kiflet/api`
-      published; regeneration and oasdiff in CI. (The lint, and every
-      response in the API tests validated against it, are done.)
+- [x] Go types and server interface generated from it; `@kiflet/api`
+      published; lint, regeneration and oasdiff in CI; every response in
+      the API tests validated against it.
 - [ ] The conventions in `internal/http`: errors, labels, actions, lists,
       idempotency keys, versions, request IDs.
 - [ ] Who is calling, and the cross-origin check on every request the

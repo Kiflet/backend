@@ -1,0 +1,51 @@
+# @kiflet/api, the TypeScript types and client of api/openapi/v1.yaml,
+# published to GitHub Packages whenever the specification or the package
+# changes on main (docs/architecture.md, section 11), as 1.0.<run>.
+# Kiflet/web and Kiflet/mobile depend on a version of it.
+name: API package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - api/openapi/**
+      - api/typescript/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-package
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish @kiflet/api
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@kiflet'
+      - name: Generate it, and check it is what was merged
+        working-directory: api/typescript
+        run: |
+          npm ci
+          npm run generate
+          git diff --exit-code -- .
+      - name: Publish
+        working-directory: api/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm version --no-git-tag-version "1.0.${GITHUB_RUN_NUMBER}"
+          npm publish

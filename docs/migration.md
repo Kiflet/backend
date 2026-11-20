@@ -418,7 +418,7 @@ the code, the specification and the clients' types in step. The design is
    (Kiflet/web's session), `public` (API keys as well), `driver`
    (Kiflet/mobile's token). `api/asyncapi/live.yaml` describes the live
    socket's messages, and `api/asyncapi/webhooks.yaml` the webhooks.
-2. **Generated code:** oapi-codegen generates the Go types and a strict
+2. **Generated code** (done): oapi-codegen generates the Go types and a strict
    server interface into a platform package; each module's `http/`
    implements its operations, and `internal/http` embeds them into the one
    server, so an operation missing or misnamed fails to compile.
