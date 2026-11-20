@@ -131,7 +131,11 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   with another company's IDs, each operation by API tests.
 - What a customer reads (their texts, the tracking and confirmation pages)
   comes from `internal/platform/text`, in English and Amharic: add the words to
-  `en.go` and `am.go`, and use `{{.T "key"}}` in the template. Tests check
+  `en.go` and `am.go`, and use `{{.T "key"}}` in the template. So do the
+  words for every code (statuses, reasons, roles, alerts, invoice and
+  payment states, the driver's moves and refusals), for the office, the
+  customer and the driver: `text.Label`. A new code fails
+  `TestEveryCodeHasWords` until it has words in both languages. Tests check
   that the two files match and that templates name only keys that exist.
 - Metrics live in `pkg/metrics`. Label them by route pattern or another short
   fixed list, never by company, user or shipment ID.

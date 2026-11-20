@@ -35,6 +35,13 @@ const (
 	invoiceUsage        = "usage"
 )
 
+// InvoiceStates are an invoice's states as people read them: overdue is an
+// open invoice past its due date.
+var InvoiceStates = []string{"open", "paid", "void", "overdue"}
+
+// PaymentStates are a payment's states.
+var PaymentStates = []string{paymentPending, paymentPaid, paymentFailed, paymentExpired, paymentRefunded}
+
 // Payment states, and the provider code of a bank transfer recorded by the
 // platform operator.
 const (

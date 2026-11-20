@@ -1,6 +1,8 @@
 // Package domain is the identity module's rules, without I/O.
 package domain
 
+import "github.com/kiflet/backend/internal/platform/text"
+
 // Roles.
 const (
 	RoleDriver        = "driver"
@@ -13,20 +15,9 @@ const (
 // StaffRoles are the roles an admin can give a dashboard user.
 var StaffRoles = []string{RoleDispatcher, RoleFleetManager, RoleAdmin}
 
-var roleLabels = map[string]string{
-	RoleDriver:        "Driver",
-	RoleDispatcher:    "Dispatcher",
-	RoleFleetManager:  "Fleet manager",
-	RoleAdmin:         "Admin",
-	RolePlatformAdmin: "Platform admin",
-}
-
 // RoleLabel is a role as people read it.
 func RoleLabel(r string) string {
-	if l, ok := roleLabels[r]; ok {
-		return l
-	}
-	return r
+	return text.Label(text.English, text.Office, text.KindRole, r)
 }
 
 // CanManageFleet reports whether a role may manage drivers and vehicles

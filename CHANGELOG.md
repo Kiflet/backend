@@ -233,6 +233,19 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **One catalogue of words for codes** (`docs/migration.md`, phase 1,
+  step 9; audit D8). `internal/platform/text` holds the office's and the
+  driver's words for every code, beside the customer's. That covers
+  statuses, reasons, roles, alert types, why a delivery was held, invoice
+  and payment states, the driver's moves (the PWA's buttons) and the
+  sync's refusal codes (`driversync.Refusals`, for phase 3), in English
+  and Amharic. `text.Label(lang, audience, kind, code)` reads them, with
+  the office's words where an audience has none of its own.
+  `StatusLabel`, `ReasonLabel`, `RoleLabel`, `AlertLabel` and the held
+  messages now read the catalogue instead of their own maps.
+  `TestEveryCodeHasWords` fails on a code without words. The driver's
+  Amharic comes from the PWA's `text.js`. The office's Amharic is new and
+  goes to the native speaker's review (ROADMAP).
 - **Delivery media in `pod_media`** (`docs/migration.md`, phase 1, step 6;
   audit D6). Each stored file of a proof of delivery is a row: the
   signature at position 0, the photos after it, with its key, type, size

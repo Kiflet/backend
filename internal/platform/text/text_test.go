@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/kiflet/backend/internal/model"
 )
 
 var verb = regexp.MustCompile(`%(\[\d+\])?[sd]`)
@@ -56,35 +54,6 @@ func TestCataloguesMatch(t *testing.T) {
 		if _, ok := en[key]; !ok && !strings.HasPrefix(key, "reason.") {
 			t.Errorf("%s has no English", key)
 		}
-	}
-}
-
-// A customer is told the reason for a delay or a problem, so each of those
-// needs its Amharic. English comes from the model's own list.
-func TestReasons(t *testing.T) {
-	for _, code := range slices.Concat(model.DelayReasons, model.IssueReasons) {
-		if _, ok := am["reason."+code]; !ok {
-			t.Errorf("reason %s has no Amharic", code)
-		}
-		if got := Reason(English, code); got != model.ReasonLabel(code) {
-			t.Errorf("Reason(en, %s) = %q", code, got)
-		}
-	}
-	if got := Reason(Amharic, "flat tyre near Mojo"); got != "flat tyre near Mojo" {
-		t.Errorf("prose should pass through, got %q", got)
-	}
-}
-
-func TestStatus(t *testing.T) {
-	for _, s := range model.AllStatuses {
-		for _, l := range Languages {
-			if got := Status(l.Code, s); got == "" || got == s {
-				t.Errorf("Status(%s, %s) = %q", l.Code, s, got)
-			}
-		}
-	}
-	if got := Status(English, model.StatusIssue); got != "Delayed" {
-		t.Errorf("a customer is told an issue is a delay, got %q", got)
 	}
 }
 

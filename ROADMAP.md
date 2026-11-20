@@ -92,7 +92,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] `pod_media`, and signatures stored as files (D6).
 - [x] A `version` on every edited record (D7).
 - [x] `idempotency_keys` (D7).
-- [ ] One catalogue of the words for codes, for the office, customers and
+- [x] One catalogue of the words for codes, for the office, customers and
       drivers, in English and Amharic (D8).
 - [ ] Live updates sent only to the roles that may see them (P1).
 - [ ] Events carry what their subscribers read (D9).

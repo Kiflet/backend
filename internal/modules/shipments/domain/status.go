@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+
+	"github.com/kiflet/backend/internal/platform/text"
 )
 
 // Shipment statuses (FR-008).
@@ -38,23 +40,10 @@ func IsActiveStatus(s string) bool { return slices.Contains(ActiveStatuses, s) }
 func IsOnRoad(s string) bool       { return slices.Contains(OnRoadStatuses, s) }
 func IsFinalStatus(s string) bool  { return s == StatusDelivered || s == StatusCancelled }
 
-var statusLabels = map[string]string{
-	StatusPending:   "Pending",
-	StatusAssigned:  "Assigned",
-	StatusInTransit: "In transit",
-	StatusDelayed:   "Delayed",
-	StatusArrived:   "Arrived",
-	StatusDelivered: "Delivered",
-	StatusIssue:     "Issue",
-	StatusCancelled: "Cancelled",
-}
-
-// StatusLabel is the human-readable name of a status.
+// StatusLabel is a status as the office reads it, in English; the words
+// are in internal/platform/text.
 func StatusLabel(s string) string {
-	if l, ok := statusLabels[s]; ok {
-		return l
-	}
-	return s
+	return text.Label(text.English, text.Office, text.KindStatus, s)
 }
 
 // Actor identifies who is asking for a transition. The same move can be legal
@@ -239,38 +228,10 @@ func CancelReasonsFor(status string) []string {
 	return cancelBeforeDeparture
 }
 
-var reasonLabels = map[string]string{
-	"road_conditions":       "Road conditions",
-	"weather":               "Weather",
-	"security_checkpoint":   "Security checkpoint",
-	"mechanical_issue":      "Mechanical issue",
-	"traffic":               "Traffic",
-	"accident":              "Accident",
-	"breakdown":             "Vehicle breakdown",
-	"recipient_unavailable": "Recipient unavailable",
-	"wrong_address":         "Wrong address",
-	"cargo_damaged":         "Cargo damaged",
-	"recipient_refused":     "Recipient refused delivery",
-	"customer_request":      "Customer request",
-	"duplicate":             "Duplicate shipment",
-	"address_problem":       "Address problem",
-	"cargo_unavailable":     "Cargo not ready",
-	"payment_problem":       "Payment problem",
-	"returned_to_origin":    "Returned to origin",
-	"cargo_lost_damaged":    "Cargo lost or damaged",
-	"met_elsewhere":         "Recipient met the truck elsewhere",
-	"address_wrong":         "Destination on the shipment is wrong",
-	"gps_inaccurate":        "Phone location inaccurate here",
-	"other":                 "Other",
-}
-
 // ReasonLabel is the human-readable form of a reason code. Free text passes
 // through unchanged, since older clients and SMS reports send prose.
 func ReasonLabel(code string) string {
-	if l, ok := reasonLabels[code]; ok {
-		return l
-	}
-	return code
+	return text.Label(text.English, text.Office, text.KindReason, code)
 }
 
 // ReasonsFor returns the reason list that applies to a status, if any.
