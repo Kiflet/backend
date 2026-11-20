@@ -221,11 +221,11 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 			status = PODHeld
 		}
 		podID, err := q.CreatePOD(ctx, db.CreatePODParams{
-			TenantID:               a.TenantID,
-			ShipmentID:             id,
-			DriverID:               driverID,
-			RecipientName:          truncate(in.RecipientName, 200),
-			RecipientPhone:         toText(in.RecipientPhone),
+			TenantID:       a.TenantID,
+			ShipmentID:     id,
+			DriverID:       driverID,
+			RecipientName:  truncate(in.RecipientName, 200),
+			RecipientPhone: toText(in.RecipientPhone),
 			// Written for a release, so a rollback finds them; pod_media
 			// is read.
 			SignatureUrl:           &in.Signature.Key,

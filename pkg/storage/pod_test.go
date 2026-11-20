@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // checksums, not security
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -241,7 +241,7 @@ func TestPODStorage_UploadMultiplePhotos(t *testing.T) {
 		// Each is described as stored, for pod_media.
 		for _, f := range urls {
 			data := mock.uploads[f.Key]
-			sum := md5.Sum(data)
+			sum := md5.Sum(data) //nolint:gosec // a checksum
 			assert.Equal(t, "image/jpeg", f.ContentType)
 			assert.Equal(t, int64(len(data)), f.Size)
 			assert.Equal(t, hex.EncodeToString(sum[:]), f.MD5)
