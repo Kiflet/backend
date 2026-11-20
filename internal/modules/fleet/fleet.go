@@ -29,6 +29,9 @@ type VehicleForm = domain.VehicleForm
 // ErrNoVehicle is a vehicle that isn't there, or isn't the company's.
 var ErrNoVehicle = apperror.NotFound("Vehicle not found.")
 
+// ErrNoDriver is a driver who isn't there, or isn't the company's.
+var ErrNoDriver = apperror.NotFound("Driver not found.")
+
 // PaperDue is a driver's licence (Kind "licence", Subject the driver) or a
 // vehicle's insurance or inspection ("insurance", "inspection", Subject the
 // vehicle) that runs out on DueOn.
@@ -60,6 +63,10 @@ type Fleet interface {
 
 	// SetDriverVehicle sets a driver's usual vehicle (none: an invalid ID).
 	SetDriverVehicle(ctx context.Context, conn database.Conn, tenantID, driverID, vehicleID pgtype.UUID) error
+	// LockDriver holds a driver's row until the transaction (conn) ends: a
+	// transaction that counts the driver's loads before giving one takes it
+	// first. ErrNoDriver when there is no such driver.
+	LockDriver(ctx context.Context, conn database.Conn, tenantID, driverID pgtype.UUID) error
 	// SetDriverLicence records the last day a driver's licence is valid.
 	SetDriverLicence(ctx context.Context, conn database.Conn, tenantID, driverID pgtype.UUID, expires pgtype.Date) error
 	SetDriverAppSettings(ctx context.Context, conn database.Conn, tenantID, driverID pgtype.UUID, s AppSettings) error

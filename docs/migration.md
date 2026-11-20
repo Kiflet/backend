@@ -370,7 +370,7 @@ with its tests; the IDs are the audit's.
    parent table, and each of the 46 references between company-owned
    tables as `(tenant_id, x_id) REFERENCES x (tenant_id, id)`. A helper for
    store tests runs a query with another company's IDs and expects nothing.
-3. **The load limit under a lock** (D3): the assigning transaction locks
+3. **The load limit under a lock** (done; D3): the assigning transaction locks
    the driver's row before counting; a test assigns two loads at once to a
    driver with room for one.
 4. **Money in santim** (D4): `shipment_charges.amount` and

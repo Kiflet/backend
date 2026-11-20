@@ -77,6 +77,28 @@ func (q *Queries) ListPapersDue(ctx context.Context, until pgtype.Date) ([]ListP
 	return items, nil
 }
 
+const lockDriver = `-- name: LockDriver :execrows
+SELECT 1 FROM users
+WHERE id = $1 AND tenant_id = $2 AND role = 'driver'
+FOR NO KEY UPDATE
+`
+
+type LockDriverParams struct {
+	ID       pgtype.UUID `db:"id" json:"id"`
+	TenantID pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+}
+
+// Holds a driver's row until the transaction ends, so that loads given to
+// the driver are counted one transaction at a time. NO KEY UPDATE: it
+// waits for another assignment, not for rows that refer to the driver.
+func (q *Queries) LockDriver(ctx context.Context, arg LockDriverParams) (int64, error) {
+	result, err := q.db.Exec(ctx, lockDriver, arg.ID, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setDriverAppSettings = `-- name: SetDriverAppSettings :exec
 UPDATE users
 SET language = COALESCE($1::text, language),

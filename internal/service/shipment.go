@@ -3,9 +3,8 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
-	"github.com/kiflet/backend/internal/modules/shipments"
-	"github.com/kiflet/backend/internal/platform/events"
 	"math"
 	"strconv"
 	"strings"
@@ -16,6 +15,9 @@ import (
 
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/fleet"
+	"github.com/kiflet/backend/internal/modules/shipments"
+	"github.com/kiflet/backend/internal/platform/events"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/platform/phone"
 )
@@ -619,6 +621,13 @@ func (s *ShipmentService) assignableDriver(ctx context.Context, q *db.Queries, t
 	id, err := parseUUID(driverID)
 	if err != nil {
 		return db.User{}, invalid("driver_id", "Choose a driver.")
+	}
+	// The driver's row is held until the assignment commits, so that two
+	// loads given at once are counted one after the other (audit D3).
+	if err := s.fleet.LockDriver(ctx, q.Conn(), tenant.ID, id); errors.Is(err, fleet.ErrNoDriver) {
+		return db.User{}, invalid("driver_id", "Choose a driver.")
+	} else if err != nil {
+		return db.User{}, err
 	}
 	d, err := s.user(ctx, q, tenant.ID, id)
 	if err != nil || d.Role != model.RoleDriver {
