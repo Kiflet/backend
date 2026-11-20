@@ -115,6 +115,14 @@ What changed in each release, newest first.
 
 ### Added
 
+- **A coverage floor for every package** (`docs/migration.md`, phase 0,
+  step 5). `make cover` runs the unit and integration tests, each
+  measuring every package, merges what they cover, and checks each
+  package against its floor in `tests/coverage-floor.txt`. CI runs it in
+  place of the integration tests' report of two packages, and fails below
+  a floor. `make coverage-floor` raises the floors to what was measured,
+  a point under it for the runs' timing, and never lowers one. Together
+  the tests cover 78% of the code's statements.
 - **Idempotency keys** (`docs/migration.md`, phase 1, step 8; audit D7).
   `idempotency_keys` remembers a keyed create for 24 hours, by company,
   caller and key, with the request's hash and the first response.
