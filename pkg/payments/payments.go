@@ -158,7 +158,7 @@ type Ledger interface {
 type ErrorWriter func(w http.ResponseWriter, r *http.Request, err error)
 
 // Callbacks is a provider whose servers call Kiflet. Its handler is served
-// under /api/v1/payments/{code}, with that prefix removed.
+// under /api/callbacks/payments/{code}, with that prefix removed.
 type Callbacks interface {
 	Handler(l Ledger, fail ErrorWriter) http.Handler
 }

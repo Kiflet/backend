@@ -189,7 +189,7 @@ func TestTelebirrStartsAnOrder(t *testing.T) {
 	tb := newTelebirr(t, srv.URL)
 	charge := Charge{
 		Reference: "PAY-ABCD2345", Amount: 287500, Description: "Kiflet invoice INV-2026-00012 for Abay Freight & Co.",
-		NotifyURL: "https://kiflet.test/api/v1/payments/telebirr/notify", ReturnURL: "https://kiflet.test/app/billing/payments/1",
+		NotifyURL: "https://kiflet.test/api/callbacks/payments/telebirr/notify", ReturnURL: "https://kiflet.test/app/billing/payments/1",
 		Timeout: 30 * time.Minute,
 	}
 	co, err := tb.Start(context.Background(), charge)
@@ -275,7 +275,7 @@ func TestTelebirrNotifications(t *testing.T) {
 	tb := newTelebirr(t, "http://unused")
 	notification := func(change map[string]string, key *rsa.PrivateKey) *http.Request {
 		fields := map[string]string{
-			"notify_url": "https://kiflet.test/api/v1/payments/telebirr/notify", "appid": "merchant-app",
+			"notify_url": "https://kiflet.test/api/callbacks/payments/telebirr/notify", "appid": "merchant-app",
 			"notify_time": "1670575472482", "merch_code": "100200", "merch_order_id": "PAYABCD2345",
 			"payment_order_id": "00801104C911443200001002", "total_amount": "2875.00", "trans_id": "49485948475845",
 			"trans_currency": "ETB", "trade_status": "Completed", "trans_end_time": "1670575472000",

@@ -409,3 +409,22 @@ func assetVersion(fsys fs.FS) string {
 	})
 	return hex.EncodeToString(h.Sum(nil))[:10]
 }
+
+// crossOrigin refuses a request a browser sends from another site that
+// would change something (docs/audit-2026-11-19.md, A2): browsers say so
+// with Sec-Fetch-Site or Origin, and http.CrossOriginProtection reads them.
+// Exempt are only the requests that carry no ambient credential: those
+// with an Authorization header (an API key or a driver's token, which a
+// page on another site can't send by itself), and the providers' calls to
+// /api/callbacks, checked by their secrets and signatures. Every request a
+// cookie may authenticate, the API's included, is checked.
+func crossOrigin(next http.Handler) http.Handler {
+	checked := http.NewCrossOriginProtection().Handler(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" || strings.HasPrefix(r.URL.Path, "/api/callbacks/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		checked.ServeHTTP(w, r)
+	})
+}

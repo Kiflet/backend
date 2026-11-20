@@ -309,7 +309,7 @@ func TestSMSGateway(t *testing.T) {
 	}
 
 	// The delivery report follows, with the webhook secret.
-	report := tb.app.received(t, "/api/v1/sms/status", 1)[0]
+	report := tb.app.received(t, "/api/callbacks/sms/status", 1)[0]
 	if got := report.Header.Get("X-Webhook-Secret"); got != "hook-secret" {
 		t.Errorf("the report's secret is %q", got)
 	}
@@ -367,7 +367,7 @@ func TestSMSFaults(t *testing.T) {
 	if code, _ := tb.sendSMS(token, "+251911000002", "KIFLET", "Hi"); code != http.StatusOK {
 		t.Errorf("an unreachable number: status %d, want the text taken", code)
 	}
-	if f := tb.app.received(t, "/api/v1/sms/status", 1)[0].fields(t); f["status"] != "undelivered" || f["error"] == "" {
+	if f := tb.app.received(t, "/api/callbacks/sms/status", 1)[0].fields(t); f["status"] != "undelivered" || f["error"] == "" {
 		t.Errorf("the unreachable number's report: %v", f)
 	}
 
@@ -378,13 +378,13 @@ func TestSMSFaults(t *testing.T) {
 	}
 	var held []call
 	eventually(t, "the report held back", func() bool { held = tb.held(); return len(held) == 1 })
-	if tb.app.count("/api/v1/sms/status") != 1 {
+	if tb.app.count("/api/callbacks/sms/status") != 1 {
 		t.Error("a dropped report was sent")
 	}
 	if code := tb.call(http.MethodPost, "/api/held/"+strconv.Itoa(held[0].ID), nil, map[string]string{"action": "send"}, nil); code != http.StatusOK {
 		t.Fatalf("sending the held report: status %d", code)
 	}
-	tb.app.received(t, "/api/v1/sms/status", 2)
+	tb.app.received(t, "/api/callbacks/sms/status", 2)
 	if len(tb.held()) != 0 {
 		t.Error("the sent report is still held")
 	}
@@ -417,7 +417,7 @@ func TestTextsFromPhones(t *testing.T) {
 	if code := tb.call(http.MethodPost, "/api/phones/0911223344/texts", nil, map[string]string{"text": "ET 4821 1"}, &res); code != http.StatusOK {
 		t.Fatalf("texting: status %d", code)
 	}
-	in := tb.app.received(t, "/api/v1/sms/inbound", 1)[0]
+	in := tb.app.received(t, "/api/callbacks/sms/inbound", 1)[0]
 	if f := in.fields(t); f["from"] != "+251911223344" || f["to"] != "6060" || f["message"] != "ET 4821 1" || in.Header.Get("X-Webhook-Secret") != "hook-secret" {
 		t.Errorf("Kiflet was sent %v, secret %q", f, in.Header.Get("X-Webhook-Secret"))
 	}
@@ -432,7 +432,7 @@ func TestTextsFromPhones(t *testing.T) {
 	if !res.Text.Failed || !strings.Contains(res.Text.State, "answered 401") {
 		t.Errorf("a refused text is %+v", res.Text)
 	}
-	if n := tb.app.count("/api/v1/sms/inbound"); n != 2 {
+	if n := tb.app.count("/api/callbacks/sms/inbound"); n != 2 {
 		t.Errorf("%d texts sent to Kiflet, want 2: a refused one isn't sent again", n)
 	}
 }
@@ -498,7 +498,7 @@ func (tb *testbed) preOrder(token string, biz map[string]string) string {
 
 func (tb *testbed) orderBiz(merchOrderID string) map[string]string {
 	return map[string]string{
-		"notify_url": "http://app.example/api/v1/payments/telebirr/notify", "appid": "850001", "merch_code": "900001",
+		"notify_url": "http://app.example/api/callbacks/payments/telebirr/notify", "appid": "850001", "merch_code": "900001",
 		"merch_order_id": merchOrderID, "trade_type": "Checkout", "title": "Invoice INV 2026 00012",
 		"total_amount": "2875.00", "trans_currency": "ETB", "timeout_express": "30m", "business_type": "BuyGoods",
 		"redirect_url": "http://app.example/app/billing/payments/42",
@@ -524,7 +524,7 @@ func (tb *testbed) checkoutLink(prepayID string, key *rsa.PrivateKey) string {
 
 // notifyAt points an order's notifications at the fake Kiflet.
 func (tb *testbed) notifyAt(biz map[string]string) map[string]string {
-	biz["notify_url"] = tb.sb.cfg.AppURL + "/api/v1/payments/telebirr/notify"
+	biz["notify_url"] = tb.sb.cfg.AppURL + "/api/callbacks/payments/telebirr/notify"
 	return biz
 }
 
@@ -630,7 +630,7 @@ func TestTelebirrCheckout(t *testing.T) {
 	if p := pay("0911223344", "1234"); p.Status != http.StatusUnprocessableEntity || !strings.Contains(p.Body, "less than") {
 		t.Errorf("too little money: status %d", p.Status)
 	}
-	if o, _ := tb.sb.orderCopy(prepay); o.Status != orderPending || tb.app.count("/api/v1/payments/telebirr/notify") != 0 {
+	if o, _ := tb.sb.orderCopy(prepay); o.Status != orderPending || tb.app.count("/api/callbacks/payments/telebirr/notify") != 0 {
 		t.Fatalf("refused answers changed the order to %s, or notified Kiflet", o.Status)
 	}
 
@@ -639,7 +639,7 @@ func TestTelebirrCheckout(t *testing.T) {
 	if p := pay("0911223344", "1234"); p.Status != http.StatusSeeOther || p.Location != biz["redirect_url"] {
 		t.Fatalf("paying: status %d to %q", p.Status, p.Location)
 	}
-	n := tb.app.received(t, "/api/v1/payments/telebirr/notify", 1)[0].fields(t)
+	n := tb.app.received(t, "/api/callbacks/payments/telebirr/notify", 1)[0].fields(t)
 	if !tb.telebirrSigned(n) || n["trade_status"] != "Completed" || n["total_amount"] != "2875.00" || n["merch_order_id"] != "PAYCHECKOUT1" ||
 		n["payment_order_id"] == "" || n["appid"] != "850001" || n["merch_code"] != "900001" {
 		t.Errorf("the notification: %v", n)
@@ -659,7 +659,7 @@ func TestTelebirrCheckout(t *testing.T) {
 		t.Errorf("paying a paid order: status %d", p.Status)
 	}
 	time.Sleep(30 * time.Millisecond)
-	if c := tb.app.count("/api/v1/payments/telebirr/notify"); c != 1 {
+	if c := tb.app.count("/api/callbacks/payments/telebirr/notify"); c != 1 {
 		t.Errorf("%d notifications, want 1", c)
 	}
 	if o, _ := tb.sb.orderCopy(prepay); o.Notified != "Taken by Kiflet" {
@@ -671,7 +671,7 @@ func TestTelebirrCheckout(t *testing.T) {
 	if p := tb.post("/telebirr/checkout/"+prepay2, url.Values{"action": {"cancel"}}); p.Status != http.StatusSeeOther {
 		t.Errorf("cancelling: status %d", p.Status)
 	}
-	if n := tb.app.received(t, "/api/v1/payments/telebirr/notify", 2)[1].fields(t); n["trade_status"] != "Canceled" || !tb.telebirrSigned(n) {
+	if n := tb.app.received(t, "/api/callbacks/payments/telebirr/notify", 2)[1].fields(t); n["trade_status"] != "Canceled" || !tb.telebirrSigned(n) {
 		t.Errorf("the cancellation: %v", n)
 	}
 }
@@ -679,7 +679,7 @@ func TestTelebirrCheckout(t *testing.T) {
 func TestTelebirrFaults(t *testing.T) {
 	tb := newTestbed(t)
 	token := tb.telebirrToken()
-	const notify = "/api/v1/payments/telebirr/notify"
+	const notify = "/api/callbacks/payments/telebirr/notify"
 	payOrder := func(id string) string {
 		t.Helper()
 		prepay := tb.preOrder(token, tb.notifyAt(tb.orderBiz(id)))
@@ -753,18 +753,18 @@ func (tb *testbed) cbeApp(confirm func(n int) (int, any)) {
 		_ = json.Unmarshal(c.Body, &f)
 		known := f["BillRefNumber"] == "202600012"
 		switch c.Path {
-		case "/api/v1/payments/cbebirr/query":
+		case "/api/callbacks/payments/cbebirr/query":
 			if !known {
 				return http.StatusOK, map[string]string{"ResultCode": "1", "ResultDesc": "No invoice has this reference."}
 			}
 			return http.StatusOK, map[string]string{"ResultCode": "0", "ResultDesc": "Success", "BillRefNumber": f["BillRefNumber"],
 				"Amount": "2875.00", "Currency": "ETB", "CustomerName": "Abay Freight", "Description": "Invoice INV-2026-00012"}
-		case "/api/v1/payments/cbebirr/validation":
+		case "/api/callbacks/payments/cbebirr/validation":
 			if f["TransAmount"] != "2875.00" {
 				return http.StatusOK, map[string]string{"ResultCode": "4", "ResultDesc": "The amount is not what the invoice asks for."}
 			}
 			return http.StatusOK, map[string]string{"ResultCode": "0", "ResultDesc": "Accepted"}
-		case "/api/v1/payments/cbebirr/confirmation":
+		case "/api/callbacks/payments/cbebirr/confirmation":
 			confirmations++
 			if confirm != nil {
 				return confirm(confirmations)
@@ -790,7 +790,7 @@ func (tb *testbed) payCBE(ref string, amount int64, pin string) (int, cbeReply) 
 
 func TestCBEBirr(t *testing.T) {
 	tb := newTestbed(t)
-	const confirmation = "/api/v1/payments/cbebirr/confirmation"
+	const confirmation = "/api/callbacks/payments/cbebirr/confirmation"
 	// The first confirmation is refused: CBE Birr tries again until Kiflet
 	// takes it.
 	tb.cbeApp(func(n int) (int, any) {
@@ -1025,9 +1025,9 @@ func TestFromEnv(t *testing.T) {
 func TestReachAndMasking(t *testing.T) {
 	s := &Sandbox{cfg: Config{HostAlias: "host.docker.internal"}}
 	for in, want := range map[string]string{
-		"http://localhost:8090/api/v1/sms/status": "http://host.docker.internal:8090/api/v1/sms/status",
-		"http://127.0.0.1/notify":                 "http://host.docker.internal/notify",
-		"https://kiflet.example/notify":           "https://kiflet.example/notify",
+		"http://localhost:8090/api/callbacks/sms/status": "http://host.docker.internal:8090/api/callbacks/sms/status",
+		"http://127.0.0.1/notify":                        "http://host.docker.internal/notify",
+		"https://kiflet.example/notify":                  "https://kiflet.example/notify",
 	} {
 		if got := s.reach(in); got != want {
 			t.Errorf("reach(%s) = %s, want %s", in, got, want)

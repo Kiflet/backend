@@ -19,8 +19,8 @@ import (
 )
 
 // The contract (docs/architecture.md, section 11): api/openapi/v1.yaml
-// describes everything under /api/v1 but the providers' callbacks, which
-// move to /api/callbacks.
+// describes everything under /api/v1. The providers' callbacks are under
+// /api/callbacks, outside it.
 
 var (
 	specOnce   sync.Once
@@ -47,19 +47,13 @@ func loadSpec(t *testing.T) (*openapi3.T, routers.Router) {
 	return spec, specRouter
 }
 
-// callback says whether a path is a provider's, which the specification
-// leaves out.
-func callback(path string) bool {
-	return strings.HasPrefix(path, "/api/v1/sms/") || strings.HasPrefix(path, "/api/v1/payments/")
-}
-
 // contract checks every answer under /api/v1 against the specification:
 // its status is one the operation lists, and its body has the shape the
 // specification gives it, no field more or less than it says.
 func contract(t *testing.T, next http.Handler) http.Handler {
 	_, router := loadSpec(t)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/v1/") || callback(r.URL.Path) {
+		if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -108,7 +102,7 @@ func TestSpecificationMatchesTheAPI(t *testing.T) {
 	}
 	served := map[string]bool{}
 	err := chi.Walk(routes, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		if p, ok := strings.CutPrefix(route, "/api/v1"); ok && !callback(route) {
+		if p, ok := strings.CutPrefix(route, "/api/v1"); ok {
 			served[method+" "+p] = true
 		}
 		return nil

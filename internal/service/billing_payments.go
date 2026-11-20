@@ -67,7 +67,7 @@ func (s *BillingService) Pay(ctx context.Context, p *Principal, invoiceID pgtype
 	checkout, err := starter.Start(ctx, payments.Charge{
 		Reference: pay.Reference, Amount: pay.AmountSantim,
 		Description: fmt.Sprintf("%s invoice %s for %s", s.cfg.AppName, inv.Number, p.TenantName),
-		NotifyURL:   s.cfg.BaseURL + "/api/v1/payments/" + prov.Code() + "/notify",
+		NotifyURL:   s.cfg.BaseURL + "/api/callbacks/payments/" + prov.Code() + "/notify",
 		ReturnURL:   s.cfg.BaseURL + "/app/billing/payments/" + pay.ID.String(),
 		Timeout:     paymentPromptTTL,
 	})

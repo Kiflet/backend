@@ -42,3 +42,35 @@ func TestClientIPBelievesOnlyTheProxy(t *testing.T) {
 		})
 	}
 }
+
+// A request a browser sends from another site is refused, the API's
+// included, unless it carries no ambient credential: an Authorization
+// header, or a provider's call to /api/callbacks (audit A2).
+func TestCrossOrigin(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	h := crossOrigin(ok)
+	for _, c := range []struct {
+		name, path, site, auth string
+		want                   int
+	}{
+		{"a dashboard form from another site", "/app/shipments", "cross-site", "", http.StatusForbidden},
+		{"the API from another site, with no key", "/api/v1/driver/login", "cross-site", "", http.StatusForbidden},
+		{"the API from another site, with a key", "/api/v1/shipments", "cross-site", "Bearer kf_test", http.StatusNoContent},
+		{"a provider's call", "/api/callbacks/sms/inbound", "cross-site", "", http.StatusNoContent},
+		{"the driver app, on its own site", "/api/v1/driver/login", "same-origin", "", http.StatusNoContent},
+		{"a phone's app or a server, no browser headers", "/api/v1/driver/login", "", "", http.StatusNoContent},
+	} {
+		r := httptest.NewRequest(http.MethodPost, "https://app.kiflet.et"+c.path, nil)
+		if c.site != "" {
+			r.Header.Set("Sec-Fetch-Site", c.site)
+		}
+		if c.auth != "" {
+			r.Header.Set("Authorization", c.auth)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != c.want {
+			t.Errorf("%s: %d, want %d", c.name, w.Code, c.want)
+		}
+	}
+}

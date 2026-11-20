@@ -527,7 +527,7 @@ func TestPayingThroughTelebirr(t *testing.T) {
 	if ph.Telebirr != startingBalance-total || len(ph.from("127")) != 1 {
 		t.Errorf("the payer's wallet holds %d and they have %d texts from telebirr, want %d and 1", ph.Telebirr, len(ph.from("127")), startingBalance-total)
 	}
-	if calls := p.calls("/api/v1/payments/telebirr/notify"); len(calls) != 1 || calls[0].Status != http.StatusOK {
+	if calls := p.calls("/api/callbacks/payments/telebirr/notify"); len(calls) != 1 || calls[0].Status != http.StatusOK {
 		t.Errorf("telebirr's notifications: %+v", calls)
 	}
 }
@@ -537,7 +537,7 @@ func TestPayingThroughTelebirr(t *testing.T) {
 // billing job; one sent twice pays once; and a forged one is refused.
 func TestTelebirrNotificationFaults(t *testing.T) {
 	e, p := sandboxed(t)
-	const notify = "/api/v1/payments/telebirr/notify"
+	const notify = "/api/callbacks/payments/telebirr/notify"
 	// paid takes a new company from choosing a plan to paying at telebirr's
 	// checkout, and returns its invoice and payment page.
 	paid := func(name string) (office *browser, invoiceID, status string) {
@@ -701,11 +701,11 @@ func TestPayingByReferenceThroughCBEBirr(t *testing.T) {
 	twiceInvoice := twice.choose("starter", "monthly")
 	twiceRef := service.PayReference(scalar[string](t, `SELECT number FROM invoices WHERE id = $1`, twiceInvoice))
 	p.faults(map[string]any{"drop_confirmations": false, "duplicate_confirmations": true})
-	before := len(p.calls("/api/v1/payments/cbebirr/confirmation"))
+	before := len(p.calls("/api/callbacks/payments/cbebirr/confirmation"))
 	if res := p.payCBE(twice.phone, twiceRef); res.status != http.StatusOK {
 		t.Fatalf("paying with the confirmation sent twice: %+v", res)
 	}
-	if n := len(p.calls("/api/v1/payments/cbebirr/confirmation")) - before; n != 2 {
+	if n := len(p.calls("/api/callbacks/payments/cbebirr/confirmation")) - before; n != 2 {
 		t.Errorf("%d confirmations, want 2", n)
 	}
 	for _, id := range []string{lateInvoice, twiceInvoice} {

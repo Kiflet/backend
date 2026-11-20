@@ -6,10 +6,10 @@ package sandbox
 // reference, and CBE Birr calls Kiflet with the merchant's login in Basic
 // authentication:
 //
-//	POST {Kiflet}/api/v1/payments/cbebirr/query         {"BillRefNumber", "BusinessShortCode", "MSISDN"}
+//	POST {Kiflet}/api/callbacks/payments/cbebirr/query         {"BillRefNumber", "BusinessShortCode", "MSISDN"}
 //	     → {"ResultCode", "ResultDesc", "Amount", "Currency", "CustomerName", "Description"}
-//	POST {Kiflet}/api/v1/payments/cbebirr/validation    a transaction → {"ResultCode", "ResultDesc"}
-//	POST {Kiflet}/api/v1/payments/cbebirr/confirmation  the transaction, once the money is taken
+//	POST {Kiflet}/api/callbacks/payments/cbebirr/validation    a transaction → {"ResultCode", "ResultDesc"}
+//	POST {Kiflet}/api/callbacks/payments/cbebirr/confirmation  the transaction, once the money is taken
 //
 // A transaction is TransType, TransID, TransTime (yyyyMMddHHmmss, Ethiopian
 // time), TransAmount ("2875.00"), BusinessShortCode, BillRefNumber and
@@ -241,7 +241,7 @@ func (s *Sandbox) recentPayments(n int) []cbePayment {
 }
 
 func (s *Sandbox) cbeURL(step string) string {
-	return s.cfg.AppURL + "/api/v1/payments/cbebirr/" + step
+	return s.cfg.AppURL + "/api/callbacks/payments/cbebirr/" + step
 }
 
 // cbeHeader is the header of CBE Birr's calls: JSON, and the merchant's

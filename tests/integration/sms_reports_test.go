@@ -19,7 +19,7 @@ func TestDeliveryReportBeforeTheTextIsSaved(t *testing.T) {
 	report := func(id, status string) {
 		t.Helper()
 		body, _ := json.Marshal(map[string]string{"message_id": id, "status": status, "done_at": time.Now().Format(time.RFC3339)})
-		res, err := http.Post(e.srv.URL+"/api/v1/sms/status", "application/json", bytes.NewReader(body))
+		res, err := http.Post(e.srv.URL+"/api/callbacks/sms/status", "application/json", bytes.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
 		}
