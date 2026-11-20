@@ -109,6 +109,14 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Idempotency keys** (`docs/migration.md`, phase 1, step 8; audit D7).
+  `idempotency_keys` remembers a keyed create for 24 hours, by company,
+  caller and key, with the request's hash and the first response.
+  `IdempotencyService` (`Begin`, `Finish`, `Release`) is what phase 2's
+  `Idempotency-Key` middleware will call. A replay gets the first
+  response, the same key with another request is refused, a failure on
+  our side gives the key back, and a request that died is given up after
+  five minutes. Retention prunes the keys.
 - **Versions** (`docs/migration.md`, phase 1, step 7; audit D7).
   Shipments, users, vehicles, companies, webhook endpoints and alert rules
   carry a `version`, raised by a trigger on every update that changes what
