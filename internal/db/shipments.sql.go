@@ -284,7 +284,7 @@ func (q *Queries) ListPickupOverdue(ctx context.Context, dueBefore pgtype.Timest
 }
 
 const listRecentShipmentsByVehicle = `-- name: ListRecentShipmentsByVehicle :many
-SELECT s.id, s.tenant_id, s.tracking_number, s.origin_address, s.destination_address, s.customer_name, s.customer_phone, s.cargo_description, s.cargo_weight, s.cargo_value, s.special_instructions, s.driver_id, s.vehicle_id, s.status, s.status_note, s.status_reason, s.estimated_delivery, s.actual_delivery, s.created_at, s.updated_at, s.created_by, s.status_changed_at, s.priority, s.origin_city, s.destination_city, s.origin_lat, s.origin_lng, s.destination_lat, s.destination_lng, s.destination_precise, s.picked_up_at, s.confirm_token, s.customer_confirmed_at, s.customer_feedback, s.eta_manual, s.planned_pickup_at, s.anonymised_at, s.consignee_name, s.consignee_phone, s.cargo_pieces, s.cargo_unit, s.cargo_value_santim, d.full_name AS driver_name
+SELECT s.id, s.tenant_id, s.tracking_number, s.origin_address, s.destination_address, s.customer_name, s.customer_phone, s.cargo_description, s.cargo_weight, s.cargo_value, s.special_instructions, s.driver_id, s.vehicle_id, s.status, s.status_note, s.status_reason, s.estimated_delivery, s.actual_delivery, s.created_at, s.updated_at, s.created_by, s.status_changed_at, s.priority, s.origin_city, s.destination_city, s.origin_lat, s.origin_lng, s.destination_lat, s.destination_lng, s.destination_precise, s.picked_up_at, s.confirm_token, s.customer_confirmed_at, s.customer_feedback, s.eta_manual, s.planned_pickup_at, s.anonymised_at, s.consignee_name, s.consignee_phone, s.cargo_pieces, s.cargo_unit, s.cargo_value_santim, s.version, d.full_name AS driver_name
 FROM shipments s
 LEFT JOIN users d ON d.id = s.driver_id
 WHERE s.vehicle_id = $1 AND s.tenant_id = $2
@@ -341,6 +341,7 @@ type ListRecentShipmentsByVehicleRow struct {
 	CargoPieces         *int32             `db:"cargo_pieces" json:"cargo_pieces"`
 	CargoUnit           *string            `db:"cargo_unit" json:"cargo_unit"`
 	CargoValueSantim    int64              `db:"cargo_value_santim" json:"cargo_value_santim"`
+	Version             int32              `db:"version" json:"version"`
 	DriverName          *string            `db:"driver_name" json:"driver_name"`
 }
 
@@ -396,6 +397,7 @@ func (q *Queries) ListRecentShipmentsByVehicle(ctx context.Context, arg ListRece
 			&i.CargoPieces,
 			&i.CargoUnit,
 			&i.CargoValueSantim,
+			&i.Version,
 			&i.DriverName,
 		); err != nil {
 			return nil, err
@@ -410,7 +412,7 @@ func (q *Queries) ListRecentShipmentsByVehicle(ctx context.Context, arg ListRece
 
 const listShipments = `-- name: ListShipments :many
 
-SELECT s.id, s.tenant_id, s.tracking_number, s.origin_address, s.destination_address, s.customer_name, s.customer_phone, s.cargo_description, s.cargo_weight, s.cargo_value, s.special_instructions, s.driver_id, s.vehicle_id, s.status, s.status_note, s.status_reason, s.estimated_delivery, s.actual_delivery, s.created_at, s.updated_at, s.created_by, s.status_changed_at, s.priority, s.origin_city, s.destination_city, s.origin_lat, s.origin_lng, s.destination_lat, s.destination_lng, s.destination_precise, s.picked_up_at, s.confirm_token, s.customer_confirmed_at, s.customer_feedback, s.eta_manual, s.planned_pickup_at, s.anonymised_at, s.consignee_name, s.consignee_phone, s.cargo_pieces, s.cargo_unit, s.cargo_value_santim,
+SELECT s.id, s.tenant_id, s.tracking_number, s.origin_address, s.destination_address, s.customer_name, s.customer_phone, s.cargo_description, s.cargo_weight, s.cargo_value, s.special_instructions, s.driver_id, s.vehicle_id, s.status, s.status_note, s.status_reason, s.estimated_delivery, s.actual_delivery, s.created_at, s.updated_at, s.created_by, s.status_changed_at, s.priority, s.origin_city, s.destination_city, s.origin_lat, s.origin_lng, s.destination_lat, s.destination_lng, s.destination_precise, s.picked_up_at, s.confirm_token, s.customer_confirmed_at, s.customer_feedback, s.eta_manual, s.planned_pickup_at, s.anonymised_at, s.consignee_name, s.consignee_phone, s.cargo_pieces, s.cargo_unit, s.cargo_value_santim, s.version,
        d.full_name AS driver_name,
        v.plate_number AS vehicle_plate,
        sm.last_sync_at AS driver_last_sync
@@ -559,6 +561,7 @@ func (q *Queries) ListShipments(ctx context.Context, arg ListShipmentsParams) ([
 			&i.Shipment.CargoPieces,
 			&i.Shipment.CargoUnit,
 			&i.Shipment.CargoValueSantim,
+			&i.Shipment.Version,
 			&i.DriverName,
 			&i.VehiclePlate,
 			&i.DriverLastSync,

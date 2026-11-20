@@ -109,6 +109,13 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Versions** (`docs/migration.md`, phase 1, step 7; audit D7).
+  Shipments, users, vehicles, companies, webhook endpoints and alert rules
+  carry a `version`, raised by a trigger on every update that changes what
+  a person edits, for phase 2's `If-Match`. Bookkeeping (`updated_at`,
+  sign-in counters, the SMS billing month) and credentials don't raise it,
+  so a dispatcher's edit won't be refused because a driver signed in
+  meanwhile; no query can set it.
 - **Every query's company checked** (`docs/migration.md`, phase 1, step 5;
   audit D5). `TestEveryQueryIsScopedByTenant` (`sqlc/`) reads every
   queries file and fails on a query that neither names `tenant_id` nor

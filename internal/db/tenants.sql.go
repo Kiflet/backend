@@ -13,7 +13,7 @@ import (
 
 const listTenantsWithStats = `-- name: ListTenantsWithStats :many
 
-SELECT t.id, t.name, t.slug, t.plan, t.max_drivers, t.is_active, t.created_at, t.updated_at, t.contact_phone, t.contact_email, t.region_city, t.max_active_per_driver, t.sms_on_created, t.sms_on_dispatched, t.sms_on_arrived, t.sms_on_delivered, t.sms_on_cancelled, t.sms_on_delayed, t.sms_driver_on_assign, t.trial_ends_at, t.billing_cycle, t.period_start, t.period_end, t.pending_plan, t.pending_cycle, t.enterprise_price_santim, t.enterprise_max_drivers, t.enterprise_sms_quota, t.subscribed_at, t.sms_quota, t.sms_month_quota, t.sms_billed_month, t.tin, t.alert_on_delivery, t.billing_anchor_day, t.renewal_cancelled_at, t.customer_language,
+SELECT t.id, t.name, t.slug, t.plan, t.max_drivers, t.is_active, t.created_at, t.updated_at, t.contact_phone, t.contact_email, t.region_city, t.max_active_per_driver, t.sms_on_created, t.sms_on_dispatched, t.sms_on_arrived, t.sms_on_delivered, t.sms_on_cancelled, t.sms_on_delayed, t.sms_driver_on_assign, t.trial_ends_at, t.billing_cycle, t.period_start, t.period_end, t.pending_plan, t.pending_cycle, t.enterprise_price_santim, t.enterprise_max_drivers, t.enterprise_sms_quota, t.subscribed_at, t.sms_quota, t.sms_month_quota, t.sms_billed_month, t.tin, t.alert_on_delivery, t.billing_anchor_day, t.renewal_cancelled_at, t.customer_language, t.version,
        (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.role = 'driver' AND u.is_active)::bigint AS drivers,
        (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.role <> 'driver' AND u.is_active)::bigint AS staff,
        (SELECT COUNT(*) FROM shipments s WHERE s.tenant_id = t.id AND s.created_at > NOW() - INTERVAL '30 days')::bigint AS shipments_30d,
@@ -62,6 +62,7 @@ type ListTenantsWithStatsRow struct {
 	BillingAnchorDay      *int32             `db:"billing_anchor_day" json:"billing_anchor_day"`
 	RenewalCancelledAt    pgtype.Timestamptz `db:"renewal_cancelled_at" json:"renewal_cancelled_at"`
 	CustomerLanguage      string             `db:"customer_language" json:"customer_language"`
+	Version               int32              `db:"version" json:"version"`
 	Drivers               int64              `db:"drivers" json:"drivers"`
 	Staff                 int64              `db:"staff" json:"staff"`
 	Shipments30d          int64              `db:"shipments_30d" json:"shipments_30d"`
@@ -120,6 +121,7 @@ func (q *Queries) ListTenantsWithStats(ctx context.Context) ([]ListTenantsWithSt
 			&i.BillingAnchorDay,
 			&i.RenewalCancelledAt,
 			&i.CustomerLanguage,
+			&i.Version,
 			&i.Drivers,
 			&i.Staff,
 			&i.Shipments30d,

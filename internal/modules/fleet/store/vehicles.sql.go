@@ -25,7 +25,7 @@ func (q *Queries) CountVehiclesByTenant(ctx context.Context, tenantID pgtype.UUI
 const createVehicle = `-- name: CreateVehicle :one
 INSERT INTO vehicles (tenant_id, plate_number, vehicle_type, capacity_kg, is_active, insurance_expires_on, inspection_due_on)
 VALUES ($1, $2, $3, $4, true, $5, $6)
-RETURNING id, tenant_id, plate_number, vehicle_type, is_active, created_at, updated_at, capacity_kg, insurance_expires_on, inspection_due_on
+RETURNING id, tenant_id, plate_number, vehicle_type, is_active, created_at, updated_at, capacity_kg, insurance_expires_on, inspection_due_on, version
 `
 
 type CreateVehicleParams struct {
@@ -58,13 +58,14 @@ func (q *Queries) CreateVehicle(ctx context.Context, arg CreateVehicleParams) (V
 		&i.CapacityKg,
 		&i.InsuranceExpiresOn,
 		&i.InspectionDueOn,
+		&i.Version,
 	)
 	return i, err
 }
 
 const getVehicleByID = `-- name: GetVehicleByID :one
 
-SELECT id, tenant_id, plate_number, vehicle_type, is_active, created_at, updated_at, capacity_kg, insurance_expires_on, inspection_due_on FROM vehicles
+SELECT id, tenant_id, plate_number, vehicle_type, is_active, created_at, updated_at, capacity_kg, insurance_expires_on, inspection_due_on, version FROM vehicles
 WHERE id = $1 AND tenant_id = $2
 `
 
@@ -88,12 +89,13 @@ func (q *Queries) GetVehicleByID(ctx context.Context, arg GetVehicleByIDParams) 
 		&i.CapacityKg,
 		&i.InsuranceExpiresOn,
 		&i.InspectionDueOn,
+		&i.Version,
 	)
 	return i, err
 }
 
 const listActiveVehiclesByTenant = `-- name: ListActiveVehiclesByTenant :many
-SELECT id, tenant_id, plate_number, vehicle_type, is_active, created_at, updated_at, capacity_kg, insurance_expires_on, inspection_due_on FROM vehicles
+SELECT id, tenant_id, plate_number, vehicle_type, is_active, created_at, updated_at, capacity_kg, insurance_expires_on, inspection_due_on, version FROM vehicles
 WHERE tenant_id = $1 AND is_active
 ORDER BY plate_number
 `
@@ -118,6 +120,7 @@ func (q *Queries) ListActiveVehiclesByTenant(ctx context.Context, tenantID pgtyp
 			&i.CapacityKg,
 			&i.InsuranceExpiresOn,
 			&i.InspectionDueOn,
+			&i.Version,
 		); err != nil {
 			return nil, err
 		}
@@ -138,7 +141,7 @@ SET plate_number = $3,
     insurance_expires_on = $7,
     inspection_due_on = $8
 WHERE id = $1 AND tenant_id = $2
-RETURNING id, tenant_id, plate_number, vehicle_type, is_active, created_at, updated_at, capacity_kg, insurance_expires_on, inspection_due_on
+RETURNING id, tenant_id, plate_number, vehicle_type, is_active, created_at, updated_at, capacity_kg, insurance_expires_on, inspection_due_on, version
 `
 
 type UpdateVehicleParams struct {
@@ -175,6 +178,7 @@ func (q *Queries) UpdateVehicle(ctx context.Context, arg UpdateVehicleParams) (V
 		&i.CapacityKg,
 		&i.InsuranceExpiresOn,
 		&i.InspectionDueOn,
+		&i.Version,
 	)
 	return i, err
 }

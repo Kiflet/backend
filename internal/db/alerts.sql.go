@@ -270,7 +270,7 @@ func (q *Queries) DeleteOldAlerts(ctx context.Context, createdAt pgtype.Timestam
 }
 
 const getAlertRules = `-- name: GetAlertRules :one
-SELECT tenant_id, problems_on, late_on, late_minutes, offline_on, offline_minutes, stop_on, stop_minutes, route_on, route_km, updated_at, updated_by FROM alert_rules WHERE tenant_id = $1
+SELECT tenant_id, problems_on, late_on, late_minutes, offline_on, offline_minutes, stop_on, stop_minutes, route_on, route_km, updated_at, updated_by, version FROM alert_rules WHERE tenant_id = $1
 `
 
 func (q *Queries) GetAlertRules(ctx context.Context, tenantID pgtype.UUID) (AlertRule, error) {
@@ -289,6 +289,7 @@ func (q *Queries) GetAlertRules(ctx context.Context, tenantID pgtype.UUID) (Aler
 		&i.RouteKm,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.Version,
 	)
 	return i, err
 }

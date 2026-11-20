@@ -385,7 +385,7 @@ with its tests; the IDs are the audit's.
    size, MD5, when and where it was taken); signatures stored as files like
    photos; `photo_urls` and `signature_data` replaced, and the PWA's inline
    uploads stored the same way.
-7. **Versions** (D7): a `version` on shipments, users, vehicles, tenants,
+7. **Versions** (done; D7): a `version` on shipments, users, vehicles, tenants,
    webhook endpoints and alert rules, raised by every update.
 8. **Idempotency keys** (D7): `idempotency_keys` (company, caller, key, the
    request's hash, the response, when), kept 24 hours, for phase 2's
