@@ -137,6 +137,8 @@ type Services struct {
 	Health    *HealthService
 	API       *APIService
 	Webhooks  *WebhookService
+	// Idempotency remembers the first response to a keyed create.
+	Idempotency *IdempotencyService
 }
 
 // New wires the services together.
@@ -158,6 +160,7 @@ func New(d Deps) *Services {
 
 	s := &Services{}
 	s.Audit = &AuditService{core: c}
+	s.Idempotency = &IdempotencyService{core: c}
 	s.SMS = newSMSService(c, d.SMS)
 	c.sms = s.SMS
 	s.Mail = newMailService(c, d.Mail)

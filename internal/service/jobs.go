@@ -253,6 +253,9 @@ func (j *Jobs) Retention(ctx context.Context) error {
 	if err := j.q.DeleteOldEarlySMSReports(ctx, toTimestamp(now.Add(-retainEarlySMSReports))); err != nil {
 		return err
 	}
+	if err := j.q.DeleteOldIdempotencyKeys(ctx, toTimestamp(now.Add(-keepIdempotencyKeys))); err != nil {
+		return err
+	}
 	if err := j.q.DeleteOldSMS(ctx, toTimestamp(now.Add(-retainSMS))); err != nil {
 		return err
 	}

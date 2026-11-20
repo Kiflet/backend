@@ -91,7 +91,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] Every query without `tenant_id` says why, checked in CI (D5).
 - [x] `pod_media`, and signatures stored as files (D6).
 - [x] A `version` on every edited record (D7).
-- [ ] `idempotency_keys` (D7).
+- [x] `idempotency_keys` (D7).
 - [ ] One catalogue of the words for codes, for the office, customers and
       drivers, in English and Amharic (D8).
 - [ ] Live updates sent only to the roles that may see them (P1).

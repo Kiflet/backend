@@ -62,6 +62,9 @@ type Querier interface {
 	// tenant: none, the outbound queue, which sends every company's mail.
 	// As ClaimSMSByIDs (notify.email).
 	ClaimEmailsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Email, error)
+	// The first request with a key claims it. A key past its 24 hours, or one
+	// whose request never finished (the process died), is claimed afresh.
+	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (int64, error)
 	// The next events to publish, oldest first. Run in a transaction that
 	// marks them sent or failed before it commits; SKIP LOCKED lets a second
 	// relay take others instead of waiting.
@@ -157,6 +160,8 @@ type Querier interface {
 	// tenant: none, retention, across every company.
 	DeleteOldEmails(ctx context.Context, createdAt pgtype.Timestamptz) error
 	// tenant: none, retention, across every company.
+	DeleteOldIdempotencyKeys(ctx context.Context, before pgtype.Timestamptz) error
+	// tenant: none, retention, across every company.
 	DeleteOldProcessedMessages(ctx context.Context, before pgtype.Timestamptz) error
 	// tenant: none, retention, across every company.
 	DeleteOldSMS(ctx context.Context, createdAt pgtype.Timestamptz) error
@@ -218,6 +223,7 @@ type Querier interface {
 	// One driver's record over a period, for the driver page.
 	GetDriverPerformance(ctx context.Context, arg GetDriverPerformanceParams) (GetDriverPerformanceRow, error)
 	GetHeldPOD(ctx context.Context, arg GetHeldPODParams) (GetHeldPODRow, error)
+	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (GetIdempotencyKeyRow, error)
 	GetInvoice(ctx context.Context, arg GetInvoiceParams) (Invoice, error)
 	// ---------------------------------------------------------------------------
 	// The platform operator's view.
@@ -488,6 +494,8 @@ type Querier interface {
 	// tenant: none, the outbound queue, which sends every company's mail.
 	// As ReleaseSMS.
 	ReleaseEmails(ctx context.Context, ids []pgtype.UUID) error
+	// A request that failed on our side gives its key back, so the retry runs.
+	ReleaseIdempotencyKey(ctx context.Context, arg ReleaseIdempotencyKeyParams) error
 	// tenant: none, the platform's background jobs, which serve every company.
 	ReleaseJob(ctx context.Context, name string) error
 	// tenant: none, the outbound queue, which sends every company's texts.
@@ -529,6 +537,7 @@ type Querier interface {
 	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (ApiKey, error)
 	// Saving under an existing name replaces that view.
 	SaveFilter(ctx context.Context, arg SaveFilterParams) (SavedFilter, error)
+	SaveIdempotentResponse(ctx context.Context, arg SaveIdempotentResponseParams) error
 	// tenant: none, the company itself, by its ID; the caller holds it from the principal or the payment.
 	// Writes a company's subscription as the billing service decided it. The
 	// month's text allowance only ever rises until the month ends.
