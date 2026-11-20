@@ -112,8 +112,10 @@ cover:
 	@scripts/coverage-summary.sh coverage.out
 	@scripts/coverage-floor.sh check coverage.out
 
-# Raises each package's floor to what make cover last measured; it never
-# lowers one. Commit tests/coverage-floor.txt with the tests that raised it.
+# Raises each package's floor to what coverage.out measured; it never
+# lowers one. Raise it from CI's profile, whose Go release the floor is
+# for: gh run download <run> -n coverage. Commit tests/coverage-floor.txt
+# with the tests that raised it.
 coverage-floor:
 	scripts/coverage-floor.sh raise coverage.out
 

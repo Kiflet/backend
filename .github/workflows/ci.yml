@@ -113,6 +113,14 @@ jobs:
             echo "### What the unit and integration tests cover"
             scripts/coverage-summary.sh coverage.out
           } >> "$GITHUB_STEP_SUMMARY"
+      # The floors are raised from this profile: another Go release counts
+      # statements differently, so a local one doesn't do.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 30
 
   # The same tests with every worker on RabbitMQ (TEST_RABBITMQ), as
   # production runs with it: positions, live updates, texts, email and
