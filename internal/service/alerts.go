@@ -13,6 +13,7 @@ import (
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/platform/events"
+	"github.com/kiflet/backend/internal/platform/text"
 )
 
 // Alert types.
@@ -47,30 +48,6 @@ const (
 // resolvedByCompletion are the alerts a shipment's completion makes moot.
 var resolvedByCompletion = []string{AlertETAExceeded, AlertDelayReported, AlertIssueReported, AlertDriverOffline, AlertPickupOverdue, AlertLongStop}
 
-var alertLabels = map[string]string{
-	AlertIssueReported:      "Issue reported",
-	AlertDelayReported:      "Delay reported",
-	AlertDriverOffline:      "Driver offline",
-	AlertETAExceeded:        "Past ETA",
-	AlertPODLocation:        "Delivery location mismatch",
-	AlertDeliveredNoPOD:     "Delivered without proof",
-	AlertCustomerIssue:      "Customer reported a problem",
-	AlertDriverMessage:      "Message from driver",
-	AlertSyncConflict:       "Offline update not applied",
-	AlertDeliveryOnCanceled: "Delivery recorded on a cancelled shipment",
-	AlertDeliveryHeld:       "Delivery needs review",
-	AlertPickupOverdue:      "Not collected",
-	AlertDriverLimitNear:    "Driver places running out",
-	AlertSMSQuotaNear:       "Text allowance running out",
-	AlertSMSPaused:          "Texts paused",
-	AlertDelivered:          "Delivered",
-	AlertRouteDeviation:     "Moving away from the destination",
-	AlertLongStop:           "Long stop",
-	AlertLicenceDue:         "Driving licence running out",
-	AlertInsuranceDue:       "Insurance running out",
-	AlertInspectionDue:      "Inspection (ቦሎ) due",
-}
-
 // AlertTypes lists the alert types in the order the account page offers
 // them for email, most urgent first.
 var AlertTypes = []string{
@@ -83,10 +60,7 @@ var AlertTypes = []string{
 
 // AlertLabel is the display name of an alert type.
 func AlertLabel(t string) string {
-	if l, ok := alertLabels[t]; ok {
-		return l
-	}
-	return t
+	return text.Label(text.English, text.Office, text.KindAlert, t)
 }
 
 // AlertService is the dispatcher notification centre (FR-033).

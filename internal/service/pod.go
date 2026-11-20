@@ -16,6 +16,7 @@ import (
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/platform/phone"
+	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/pkg/storage"
 )
 
@@ -37,32 +38,21 @@ const (
 
 // HeldReasonLabel explains to the office why a proof was held.
 func HeldReasonLabel(code string) string {
-	switch code {
-	case HeldCancelled:
-		return "The shipment had been cancelled."
-	case HeldReassigned:
-		return "The shipment had been given to another driver."
-	case HeldUnassigned:
-		return "The shipment had been taken off this driver."
-	case HeldDuplicate:
-		return "The shipment already had a proof of delivery."
-	}
-	return "The shipment had changed."
+	return heldWords(text.Office, code)
 }
 
 // heldMessage is what the driver's app says about a held proof.
 func heldMessage(code string) string {
-	switch code {
-	case HeldCancelled:
-		return "This shipment was cancelled. Your delivery record was kept and the office will review it."
-	case HeldReassigned:
-		return "This shipment was given to another driver. Your delivery record was kept and the office will review it."
-	case HeldUnassigned:
-		return "This shipment was taken off you. Your delivery record was kept and the office will review it."
-	case HeldDuplicate:
-		return "This shipment already has a delivery record. Yours was kept and the office will review it."
+	return heldWords(text.Driver, code)
+}
+
+// heldWords are an audience's words for why a proof was held, in English;
+// a reason without its own words is the shipment having changed.
+func heldWords(audience, code string) string {
+	if !text.HasLabel(text.English, audience, text.KindHeld, code) {
+		code = "changed"
 	}
-	return "The office changed this shipment. Your delivery record was kept and they will review it."
+	return text.Label(text.English, audience, text.KindHeld, code)
 }
 
 // PODInput is a recorded proof of delivery whose media is already stored.

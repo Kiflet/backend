@@ -107,3 +107,20 @@ type Feed interface {
 	// Prune deletes every company's entries older than before.
 	Prune(ctx context.Context, before time.Time) (int64, error)
 }
+
+// Why the server refuses an item a driver's phone sent, the stable codes
+// the app chooses its words by (docs/architecture.md, section 11, "Refused
+// items"). Phase 3's sync answers with them; the driver's words for each
+// are in internal/platform/text.
+const (
+	RefusedCancelled   = "cancelled"
+	RefusedReassigned  = "reassigned"
+	RefusedStale       = "stale"
+	RefusedHeld        = "held_for_review"
+	RefusedNotFound    = "not_found"
+	RefusedInvalid     = "invalid"
+	RefusedServerError = "server_error"
+)
+
+// Refusals lists them.
+var Refusals = []string{RefusedCancelled, RefusedReassigned, RefusedStale, RefusedHeld, RefusedNotFound, RefusedInvalid, RefusedServerError}

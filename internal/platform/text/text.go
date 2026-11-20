@@ -1,10 +1,12 @@
-// Package text holds the words customers read, in English and Amharic: the
-// texts they are sent and the tracking and confirmation pages. Each language
-// is one file, so a reviewer who reads Amharic needs only am.go beside en.go.
+// Package text holds the words people read, in English and Amharic: the
+// texts customers are sent, the tracking and confirmation pages, and the
+// words for every code (a status, a reason, a role…) for the office, the
+// customer and the driver (Label). Each language is one file, so a reviewer
+// who reads Amharic needs only am.go beside en.go.
 //
-// The dashboard and the mail to the office are still English only, and the
-// driver app keeps its own words in static/driver/text.js, because it works
-// offline.
+// The Go dashboard and the mail to the office are still English only, and
+// the PWA keeps its own copy of the driver's words in static/driver/text.js;
+// the API's clients take theirs from here.
 package text
 
 import (
@@ -12,8 +14,6 @@ import (
 	"html/template"
 	"strings"
 	"time"
-
-	"github.com/kiflet/backend/internal/model"
 )
 
 // The languages a customer can be addressed in.
@@ -93,21 +93,13 @@ func HTML(lang, key string, args ...any) template.HTML {
 // office's words: a problem on the road is a delay to the customer while
 // the company deals with it.
 func Status(lang, status string) string {
-	if !Has("status." + status) {
-		return model.StatusLabel(status)
-	}
-	return T(lang, "status."+status)
+	return Label(lang, Customer, KindStatus, status)
 }
 
 // Reason is why a shipment is late. A reason that isn't one of the listed
 // codes is prose from an older client or a text message, and passes through.
 func Reason(lang, code string) string {
-	if lang == Amharic {
-		if l, ok := am["reason."+code]; ok {
-			return l
-		}
-	}
-	return model.ReasonLabel(code)
+	return Label(lang, Customer, KindReason, code)
 }
 
 // Accept picks a language from an Accept-Language header: the first of

@@ -390,7 +390,7 @@ with its tests; the IDs are the audit's.
 8. **Idempotency keys** (done; D7): `idempotency_keys` (company, caller, key, the
    request's hash, the response, when), kept 24 hours, for phase 2's
    middleware.
-9. **One catalogue of words for codes** (D8): `internal/platform/text`
+9. **One catalogue of words for codes** (done; D8): `internal/platform/text`
    gains the office's and the driver's words beside the customer's (the
    driver's Amharic from the PWA's `text.js`) for statuses, reasons, moves,
    refusals, alert types, roles, and invoice and payment states. A test
