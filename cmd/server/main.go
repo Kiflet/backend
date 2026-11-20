@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -69,7 +70,14 @@ func main() {
 			if err := migrate(ctx, pool, log); err != nil {
 				return err
 			}
-			return seed(ctx, cfg, pool, log)
+			err := seed(ctx, cfg, pool, log)
+			// --if-empty: a database already seeded is left as it is, so a
+			// stack that seeds on start can be started again.
+			if errors.Is(err, errSeeded) && slices.Contains(os.Args[2:], "--if-empty") {
+				log.Info().Msg("demo data already loaded; left as it is")
+				return nil
+			}
+			return err
 		})
 	case "seed-load":
 		err = withPool(ctx, cfg, log, func(pool *pgxpool.Pool) error {
@@ -81,7 +89,7 @@ func main() {
 	case "sms-in":
 		err = smsIn(ctx, cfg, os.Args[2:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: server [serve [--roles=web,worker,scheduler,relay] | migrate | seed | seed-load --on=<host> [--companies=60 --drivers=200 --out=-] | sms-in <phone> <text> | setup-storage]")
+		fmt.Println("usage: server [serve [--roles=web,worker,scheduler,relay] | migrate | seed [--if-empty] | seed-load --on=<host> [--companies=60 --drivers=200 --out=-] | sms-in <phone> <text> | setup-storage]")
 		return
 	default:
 		err = fmt.Errorf("unknown command %q (want serve, migrate, seed, seed-load, sms-in or setup-storage)", cmd)

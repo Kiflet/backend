@@ -81,13 +81,16 @@ var (
 	demoRecipients = []string{"Alemayehu Worku", "Meseret Tadesse", "Kebede Alemu", "Rahel Mekonnen", "Samuel Getachew", "Bethlehem Assefa", "Ahmed Mohammed", "Fikirte Desta"}
 )
 
+// errSeeded is the seed refusing a database that has its data already.
+var errSeeded = errors.New("demo data is already loaded (demo@kiflet.et exists)")
+
 func seed(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger) error {
 	var exists bool
 	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE email = 'demo@kiflet.et')`).Scan(&exists); err != nil {
 		return err
 	}
 	if exists {
-		return errors.New("demo data is already loaded (demo@kiflet.et exists)")
+		return errSeeded
 	}
 	a, err := app.New(cfg, pool, log, app.Options{})
 	if err != nil {
