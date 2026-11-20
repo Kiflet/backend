@@ -1,4 +1,4 @@
-.PHONY: help db db-stop run dev build migrate seed test test-integration cover coverage-floor test-e2e vet lint sqlc docker-build clean \
+.PHONY: help db db-stop run dev build migrate seed test test-integration cover coverage-floor requirements test-e2e vet lint sqlc docker-build clean \
 	sandbox sandbox-keys run-sandbox \
 	staging-up staging-down staging-ca staging-logs load-seed test-load \
 	clients-up clients-down clients-logs
@@ -46,6 +46,7 @@ help:
 	@echo "  make test-integration   end-to-end tests against the database"
 	@echo "  make cover              both, with what they cover of each package, checked against its floor"
 	@echo "  make coverage-floor     raise each package's floor to what make cover measured"
+	@echo "  make requirements       write docs/requirements.md, which tests cover each requirement"
 	@echo "  make staging-up         run staging at https://kiflet.localhost:8443"
 	@echo "  make test-e2e           end-to-end tests against staging"
 	@echo "  make load-seed          add LOAD_PHONES drivers on the road to staging, for the load test"
@@ -118,6 +119,11 @@ cover:
 # with the tests that raised it.
 coverage-floor:
 	scripts/coverage-floor.sh raise coverage.out
+
+# docs/requirements.md: which tests name each requirement in their doc
+# comments, and which requirements none does. go test ./tests/ checks it.
+requirements:
+	go test ./tests/ -run TestRequirements -count=1 -update
 
 # Against staging (make staging-up), through Caddy as a browser and the
 # providers reach it.

@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-// TestTrackingPartitions: positions are kept one table a day. A day with
-// no partition yet (a phone sending what it kept offline) waits in the
-// default partition until the hourly job gives it one; retention drops
-// whole days past 90, and positions older than every partition with them.
+// TestTrackingPartitions (FR-019): positions are kept one table a day. A day
+// with no partition yet (a phone sending what it kept offline) waits in the
+// default partition until the hourly job gives it one; retention drops whole
+// days past 90, and positions older than every partition with them.
 func TestTrackingPartitions(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()

@@ -11,10 +11,10 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestConsignee: a shipment can name who takes delivery apart from the
-// customer who booked it. Both are kept informed, and what belongs to the
-// handover goes to the receiver: the arrival, the driver's call, and the
-// link to confirm receipt (audit W4).
+// TestConsignee (FR-006, FR-037): a shipment can name who takes delivery
+// apart from the customer who booked it. Both are kept informed, and what
+// belongs to the handover goes to the receiver: the arrival, the driver's
+// call, and the link to confirm receipt (audit W4).
 func TestConsignee(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Two Party Freight")

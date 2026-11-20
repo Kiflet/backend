@@ -12,9 +12,10 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestDeliveryMediaRecorded (audit D6): each stored file of a delivery is a
-// row of pod_media, the signature at 0 and the photos after it, with the
-// size and MD5 of what was stored, and the pages serve them from there.
+// TestDeliveryMediaRecorded (FR-020, FR-021; audit D6): each stored file of
+// a delivery is a row of pod_media, the signature at 0 and the photos after
+// it, with the size and MD5 of what was stored, and the pages serve them
+// from there.
 func TestDeliveryMediaRecorded(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Media Freight")

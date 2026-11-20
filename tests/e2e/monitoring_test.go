@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-// TestMonitoring: Prometheus scrapes the app over the internal network with
-// its token, and Grafana shows it. Each figure is read through Grafana's
-// Prometheus data source, as its dashboard reads them.
+// TestMonitoring (operations): Prometheus scrapes the app over the internal
+// network with its token, and Grafana shows it. Each figure is read through
+// Grafana's Prometheus data source, as its dashboard reads them.
 func TestMonitoring(t *testing.T) {
 	var health struct {
 		Database string `json:"database"`

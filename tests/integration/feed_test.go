@@ -54,9 +54,10 @@ func shipmentIDs(resp service.SyncResponse) map[string]service.DriverShipment {
 	return out
 }
 
-// TestFeedDeliversLateCommits: a change whose transaction began before a
-// sync and committed after it still reaches the phone, as do the changes
-// that waited for it. Today's cursor, the clock less 5 seconds, missed it.
+// TestFeedDeliversLateCommits (FR-039): a change whose transaction began
+// before a sync and committed after it still reaches the phone, as do the
+// changes that waited for it. Today's cursor, the clock less 5 seconds,
+// missed it.
 func TestFeedDeliversLateCommits(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Late Commit Freight")
@@ -123,9 +124,9 @@ func TestFeedDeliversLateCommits(t *testing.T) {
 	}
 }
 
-// TestFeedRemovesWithReasons: a load handed to another driver, one taken
-// back, and one cancelled and reopened without the driver each leave the
-// first driver's phone with the reason, and arrive on the new driver's.
+// TestFeedRemovesWithReasons (FR-039): a load handed to another driver, one
+// taken back, and one cancelled and reopened without the driver each leave
+// the first driver's phone with the reason, and arrive on the new driver's.
 func TestFeedRemovesWithReasons(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Reason Logistics")
@@ -173,9 +174,9 @@ func TestFeedRemovesWithReasons(t *testing.T) {
 	}
 }
 
-// TestFeedFullDownloads: a cursor that can't be carried on from (another
-// driver's, from before the feed's retention, a PWA's timestamp from
-// before the feed) gets a full download, never an error.
+// TestFeedFullDownloads (FR-039): a cursor that can't be carried on from
+// (another driver's, from before the feed's retention, a PWA's timestamp
+// from before the feed) gets a full download, never an error.
 func TestFeedFullDownloads(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Full Download Freight")
@@ -227,8 +228,8 @@ func TestFeedFullDownloads(t *testing.T) {
 	}
 }
 
-// TestFeedPageOfExactlyTheLimit: a page of exactly the limit says there
-// may be more, and the next sync, with nothing, says there isn't.
+// TestFeedPageOfExactlyTheLimit (FR-039): a page of exactly the limit says
+// there may be more, and the next sync, with nothing, says there isn't.
 func TestFeedPageOfExactlyTheLimit(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Exact Page Cargo")
@@ -248,8 +249,8 @@ func TestFeedPageOfExactlyTheLimit(t *testing.T) {
 	}
 }
 
-// TestFeedBroadcasts: a message to every driver on the road reaches each
-// through their feed, once.
+// TestFeedBroadcasts (FR-035, FR-039): a message to every driver on the road
+// reaches each through their feed, once.
 func TestFeedBroadcasts(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Broadcast Haulage")

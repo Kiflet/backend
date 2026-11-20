@@ -12,8 +12,8 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestIdempotencyKeys (audit D7): the first request with a key runs, a
-// replay gets its response, the same key with another request is refused,
+// TestIdempotencyKeys (FR-046; audit D7): the first request with a key runs,
+// a replay gets its response, the same key with another request is refused,
 // and each company and caller has its own keys. A failure gives the key
 // back; a key past its 24 hours, or whose request died, is claimed afresh.
 func TestIdempotencyKeys(t *testing.T) {

@@ -9,9 +9,10 @@ import (
 	"github.com/kiflet/backend/internal/sandbox"
 )
 
-// A stopping app, as on a deploy, sees the text it is sending through and
-// hands back the others it had taken, which the next start sends at once
-// rather than after their five-minute lease.
+// TestStoppingWhileSending (operations): a stopping app, as on a deploy,
+// sees the text it is sending through and hands back the others it had
+// taken, which the next start sends at once rather than after their
+// five-minute lease.
 func TestStoppingWhileSending(t *testing.T) {
 	e, p := sandboxed(t, func(c *sandbox.Config) { c.Timing.Slow = 2 * time.Second })
 	office := e.company("Deploy Day Freight")

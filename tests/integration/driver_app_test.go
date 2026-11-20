@@ -142,8 +142,9 @@ func TestRecentRecipientsAreSuggested(t *testing.T) {
 	}
 }
 
-// TestDeliveredStraightFromAssigned (L1): a proof of delivery sent before
-// the trip was started still records when the load left.
+// TestDeliveredStraightFromAssigned (FR-018, FR-020; L1): a proof of
+// delivery sent before the trip was started still records when the load
+// left.
 func TestDeliveredStraightFromAssigned(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Direct Delivery")
@@ -158,9 +159,10 @@ func TestDeliveredStraightFromAssigned(t *testing.T) {
 	}
 }
 
-// TestHeldPODAfterReassignment: a driver who delivered while offline, after
-// the office gave the load to someone else, doesn't lose the proof. The
-// office accepts it and the delivery is credited to them.
+// TestHeldPODAfterReassignment (FR-020, FR-040): a driver who delivered
+// while offline, after the office gave the load to someone else, doesn't
+// lose the proof. The office accepts it and the delivery is credited to
+// them.
 func TestHeldPODAfterReassignment(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Handover Haulage")
@@ -229,8 +231,8 @@ func TestHeldPODAfterReassignment(t *testing.T) {
 	}
 }
 
-// TestHeldPODOnCancelledShipment: the office can dismiss a proof recorded
-// on a load it had cancelled; the shipment stays cancelled.
+// TestHeldPODOnCancelledShipment (FR-040): the office can dismiss a proof
+// recorded on a load it had cancelled; the shipment stays cancelled.
 func TestHeldPODOnCancelledShipment(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Dismissal Cargo")
@@ -263,8 +265,8 @@ func TestHeldPODOnCancelledShipment(t *testing.T) {
 	}
 }
 
-// TestRefusedPODLeavesNoFiles: images of a proof that is refused are not
-// kept.
+// TestRefusedPODLeavesNoFiles (FR-021): images of a proof that is refused
+// are not kept.
 func TestRefusedPODLeavesNoFiles(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Clean Storage")
@@ -308,7 +310,7 @@ func TestRefusedPODLeavesNoFiles(t *testing.T) {
 	}
 }
 
-// TestHugePhotoRefused (R6, S4): a delivery photo claiming 8000×8000
+// TestHugePhotoRefused (FR-021; R6, S4): a delivery photo claiming 8000×8000
 // pixels is refused before it is decoded, for good, and so is an SVG
 // signature.
 func TestHugePhotoRefused(t *testing.T) {
@@ -363,4 +365,27 @@ func blankPNG(w, h int) string {
 	chunk("IDAT", idat.Bytes())
 	chunk("IEND", nil)
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
+}
+
+// TestDeliveryNotes (FR-023, AC-023.4): the driver's note on a delivery is
+// kept with its proof and shown to the office on the shipment's page.
+func TestDeliveryNotes(t *testing.T) {
+	e := newEnv(t)
+	office := e.company("Notes Haulage")
+	driverID, phone, pin := office.addDriver("Bekele Girma")
+	id, _ := office.book("Addis Ababa", "Adama", driverID)
+	d := e.signIn(phone, pin)
+	if r := d.status(clientID(), id, "in_transit"); !r.OK {
+		t.Fatalf("depart: %+v", r)
+	}
+	const note = "Left with the guard at the side gate"
+	if r := d.pod(service.SyncPOD{ShipmentID: id, RecipientName: "Almaz Kebede", Notes: "  " + note + "\n"}); !r.OK {
+		t.Fatalf("POD: %+v", r)
+	}
+	if got := scalar[string](t, `SELECT delivery_notes FROM proof_of_deliveries WHERE shipment_id = $1`, id); got != note {
+		t.Errorf("the note kept with the proof is %q, want %q", got, note)
+	}
+	if p := office.get("/app/shipments/" + id); p.Status != http.StatusOK || !strings.Contains(p.Body, "Driver's note") || !strings.Contains(p.Body, note) {
+		t.Errorf("the shipment page doesn't show the driver's note: status %d", p.Status)
+	}
 }

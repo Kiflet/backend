@@ -12,9 +12,9 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestCustomersInAmharic: a company that writes to its customers in Amharic
-// sends them Amharic texts, and their tracking and confirmation pages open
-// in Amharic until they switch (audit W1).
+// TestCustomersInAmharic (FR-036, FR-037): a company that writes to its
+// customers in Amharic sends them Amharic texts, and their tracking and
+// confirmation pages open in Amharic until they switch (audit W1).
 func TestCustomersInAmharic(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Amharic Freight")
@@ -160,8 +160,8 @@ func TestCustomersInAmharic(t *testing.T) {
 	}
 }
 
-// TestCustomersInEnglishByDefault: nothing changes for a company that has
-// not chosen Amharic.
+// TestCustomersInEnglishByDefault (FR-037): nothing changes for a company
+// that has not chosen Amharic.
 func TestCustomersInEnglishByDefault(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("English Freight")

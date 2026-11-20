@@ -17,8 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// TestDriverPINReset: a driver who forgot their PIN gets a code by SMS and
-// signs in with a new PIN; the code works once.
+// TestDriverPINReset (FR-002): a driver who forgot their PIN gets a code by
+// SMS and signs in with a new PIN; the code works once.
 func TestDriverPINReset(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Reset Haulage")
@@ -55,9 +55,10 @@ var (
 	resetLinkRe  = regexp.MustCompile(`/reset/[A-Za-z0-9_-]+`)
 )
 
-// TestSignupConfirmsPhoneAndEmail: a company exists only once the code texted
-// to its admin's phone comes back to the browser that signed up, and the
-// admin is asked to confirm their email address until they open its link.
+// TestSignupConfirmsPhoneAndEmail (FR-001, FR-048): a company exists only
+// once the code texted to its admin's phone comes back to the browser that
+// signed up, and the admin is asked to confirm their email address until
+// they open its link.
 func TestSignupConfirmsPhoneAndEmail(t *testing.T) {
 	e := newEnv(t)
 	b := e.browser()
@@ -127,9 +128,9 @@ func TestSignupConfirmsPhoneAndEmail(t *testing.T) {
 	}
 }
 
-// TestPasswordReset: staff who forgot their password get a link by email.
-// It works once, ends every other session, and the form says the same thing
-// whether or not the address has an account.
+// TestPasswordReset (FR-002, FR-003): staff who forgot their password get a
+// link by email. It works once, ends every other session, and the form says
+// the same thing whether or not the address has an account.
 func TestPasswordReset(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Forgetful Freight")
@@ -188,8 +189,8 @@ func TestPasswordReset(t *testing.T) {
 	}
 }
 
-// TestChangedEmailNeedsConfirming: a new address has to be confirmed again,
-// and links sent to the old one stop working.
+// TestChangedEmailNeedsConfirming (FR-001): a new address has to be
+// confirmed again, and links sent to the old one stop working.
 func TestChangedEmailNeedsConfirming(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Moving Address")
@@ -218,8 +219,8 @@ func TestChangedEmailNeedsConfirming(t *testing.T) {
 	}
 }
 
-// TestRetentionClearsAccountLinks: expired sign-ups and old email links are
-// deleted by the nightly retention job.
+// TestRetentionClearsAccountLinks (FR-041): expired sign-ups and old email
+// links are deleted by the nightly retention job.
 func TestRetentionClearsAccountLinks(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Tidy Transport")
@@ -239,9 +240,9 @@ func TestRetentionClearsAccountLinks(t *testing.T) {
 	}
 }
 
-// TestRateLimits: one address may try 30 sign-ins a minute, more than the
-// five wrong passwords that lock an account, and signing in doesn't use up
-// its allowance for what texts a code, which is 10.
+// TestRateLimits (FR-002): one address may try 30 sign-ins a minute, more
+// than the five wrong passwords that lock an account, and signing in doesn't
+// use up its allowance for what texts a code, which is 10.
 func TestRateLimits(t *testing.T) {
 	withinOneMinute(t, func(e *env) string {
 		b := e.browser()
@@ -302,8 +303,9 @@ func withinOneMinute(t *testing.T, check func(e *env) string) {
 	}
 }
 
-// TestLockoutStartsAgainAfterExpiry (R1): once a lockout has expired, one
-// mistyped PIN doesn't lock the account again, and the right PIN works.
+// TestLockoutStartsAgainAfterExpiry (FR-002; R1): once a lockout has
+// expired, one mistyped PIN doesn't lock the account again, and the right
+// PIN works.
 func TestLockoutStartsAgainAfterExpiry(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Lockout Logistics")
@@ -329,8 +331,8 @@ func TestLockoutStartsAgainAfterExpiry(t *testing.T) {
 	}
 }
 
-// TestUnconfirmedStaffEmailGetsNoReset (R5): an address an admin typed in
-// for a colleague, never confirmed, gets no reset link.
+// TestUnconfirmedStaffEmailGetsNoReset (FR-002; R5): an address an admin
+// typed in for a colleague, never confirmed, gets no reset link.
 func TestUnconfirmedStaffEmailGetsNoReset(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Typo Transport")
@@ -346,8 +348,8 @@ func TestUnconfirmedStaffEmailGetsNoReset(t *testing.T) {
 	}
 }
 
-// TestWrongAppNeedsTheRightCredential (S5): being told to use the other
-// app takes that app's credential, so a number alone reveals nothing.
+// TestWrongAppNeedsTheRightCredential (FR-002; S5): being told to use the
+// other app takes that app's credential, so a number alone reveals nothing.
 func TestWrongAppNeedsTheRightCredential(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Two Doors")
@@ -379,8 +381,8 @@ func TestWrongAppNeedsTheRightCredential(t *testing.T) {
 	}
 }
 
-// TestFailedSignupKeepsItsCode (S5, L10): a sign-up whose email was taken
-// meanwhile is refused after the code, and the code isn't used up.
+// TestFailedSignupKeepsItsCode (FR-001; S5, L10): a sign-up whose email was
+// taken meanwhile is refused after the code, and the code isn't used up.
 func TestFailedSignupKeepsItsCode(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Early Bird")
@@ -405,8 +407,8 @@ func TestFailedSignupKeepsItsCode(t *testing.T) {
 	}
 }
 
-// TestStaffResetByPhone (W6): staff without a confirmed email reset their
-// password with a code texted to their phone.
+// TestStaffResetByPhone (FR-002; W6): staff without a confirmed email reset
+// their password with a code texted to their phone.
 func TestStaffResetByPhone(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Phone First")
@@ -440,7 +442,7 @@ func TestStaffResetByPhone(t *testing.T) {
 	}
 }
 
-// TestPhoneTakenElsewhereIsExplained (W7): a number used at another
+// TestPhoneTakenElsewhereIsExplained (FR-031; W7): a number used at another
 // company gets a message that says so, without naming it.
 func TestPhoneTakenElsewhereIsExplained(t *testing.T) {
 	e := newEnv(t)
@@ -453,7 +455,7 @@ func TestPhoneTakenElsewhereIsExplained(t *testing.T) {
 	}
 }
 
-// TestLiveFeedSessionCheck (S3): what the live feed asks every half
+// TestLiveFeedSessionCheck (FR-003; S3): what the live feed asks every half
 // minute. A session stops letting its holder in on sign-out, deactivation
 // or the company's suspension, and the feed is then closed.
 func TestLiveFeedSessionCheck(t *testing.T) {
@@ -485,8 +487,8 @@ func TestLiveFeedSessionCheck(t *testing.T) {
 	active(false, "signed out")
 }
 
-// TestTeamPage: the team page lists who has joined, who was invited and
-// hasn't signed in yet, and who left; its search narrows all three.
+// TestTeamPage (FR-004): the team page lists who has joined, who was invited
+// and hasn't signed in yet, and who left; its search narrows all three.
 func TestTeamPage(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Roster Freight")
@@ -518,9 +520,9 @@ func TestTeamPage(t *testing.T) {
 	}
 }
 
-// TestDriversBehindOneAddress: the driver app's API counts each driver's
-// requests, not the address's, since a depot's phones may all reach the
-// internet through one carrier address.
+// TestDriversBehindOneAddress (FR-002): the driver app's API counts each
+// driver's requests, not the address's, since a depot's phones may all reach
+// the internet through one carrier address.
 func TestDriversBehindOneAddress(t *testing.T) {
 	withinOneMinute(t, func(e *env) string {
 		office := e.company("Shared Address Freight")

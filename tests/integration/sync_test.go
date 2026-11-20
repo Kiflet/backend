@@ -15,8 +15,8 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestSyncReplayIsIdempotent: a phone that loses the response resends the
-// same change, which must not be applied twice.
+// TestSyncReplayIsIdempotent (FR-039): a phone that loses the response
+// resends the same change, which must not be applied twice.
 func TestSyncReplayIsIdempotent(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Replay Logistics")
@@ -35,8 +35,9 @@ func TestSyncReplayIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestOfficeDecisionWinsOverStaleDriverUpdate: once the office cancels, an
-// update queued on a phone that was offline must not revive the shipment.
+// TestOfficeDecisionWinsOverStaleDriverUpdate (FR-040): once the office
+// cancels, an update queued on a phone that was offline must not revive the
+// shipment.
 func TestOfficeDecisionWinsOverStaleDriverUpdate(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Conflict Haulage")
@@ -66,9 +67,9 @@ func TestOfficeDecisionWinsOverStaleDriverUpdate(t *testing.T) {
 	}
 }
 
-// TestSlowPhoneClock (R2): a phone whose clock is a minute and a half slow
-// can start a trip just assigned to it. Its times are corrected by the
-// difference between its clock and the server's, however small.
+// TestSlowPhoneClock (FR-039; R2): a phone whose clock is a minute and a
+// half slow can start a trip just assigned to it. Its times are corrected by
+// the difference between its clock and the server's, however small.
 func TestSlowPhoneClock(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Slow Clock Freight")
@@ -88,9 +89,9 @@ func TestSlowPhoneClock(t *testing.T) {
 	}
 }
 
-// TestResentSyncIsNotAConflict (R3): a phone that never got the answer to a
-// sync sends it again. Each change gets the answer it got the first time,
-// and nothing is recorded twice.
+// TestResentSyncIsNotAConflict (FR-040; R3): a phone that never got the
+// answer to a sync sends it again. Each change gets the answer it got the
+// first time, and nothing is recorded twice.
 func TestResentSyncIsNotAConflict(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Resend Transport")
@@ -133,8 +134,8 @@ func TestResentSyncIsNotAConflict(t *testing.T) {
 	}
 }
 
-// TestDriverMessagesAreTheOffice (R4): the driver's own notes don't come
-// back as messages from the office, and a cancellation without a note
+// TestDriverMessagesAreTheOffice (FR-035; R4): the driver's own notes don't
+// come back as messages from the office, and a cancellation without a note
 // still says something.
 func TestDriverMessagesAreTheOffice(t *testing.T) {
 	e := newEnv(t)
@@ -169,8 +170,8 @@ func TestDriverMessagesAreTheOffice(t *testing.T) {
 	}
 }
 
-// TestManyMessagesArriveInPages (L8): more messages than one sync carries
-// come in the next ones, none skipped.
+// TestManyMessagesArriveInPages (FR-035, FR-039; L8): more messages than one
+// sync carries come in the next ones, none skipped.
 func TestManyMessagesArriveInPages(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Chatty Cargo")
@@ -205,8 +206,9 @@ func TestManyMessagesArriveInPages(t *testing.T) {
 	}
 }
 
-// TestPositionsKeptAfterReassignment (L9): positions a driver recorded
-// offline for a load the office meanwhile gave to someone else are kept.
+// TestPositionsKeptAfterReassignment (FR-019; L9): positions a driver
+// recorded offline for a load the office meanwhile gave to someone else are
+// kept.
 func TestPositionsKeptAfterReassignment(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Handover Positions")
@@ -239,9 +241,9 @@ func TestPositionsKeptAfterReassignment(t *testing.T) {
 	}
 }
 
-// TestFleetMapKeepsTheNewestPosition (O3): the map reads each driver's
-// newest position from its own table, which the positions keep up to date
-// as they arrive, thousands at a time and in any order.
+// TestFleetMapKeepsTheNewestPosition (FR-028; O3): the map reads each
+// driver's newest position from its own table, which the positions keep up
+// to date as they arrive, thousands at a time and in any order.
 func TestFleetMapKeepsTheNewestPosition(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Last Seen Logistics")

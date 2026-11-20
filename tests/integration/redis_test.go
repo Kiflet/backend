@@ -62,9 +62,9 @@ func withRedis(u string) func(*setup) {
 	return func(s *setup) { s.cfg.RedisURL = u }
 }
 
-// TestSharedRateLimits: with Redis, an address's allowance is the same
-// however its requests are spread over the instances: ten code requests a
-// minute in all, not ten on each.
+// TestSharedRateLimits (operations): with Redis, an address's allowance is
+// the same however its requests are spread over the instances: ten code
+// requests a minute in all, not ten on each.
 func TestSharedRateLimits(t *testing.T) {
 	u := redisURL(t)
 	opts, err := redis.ParseURL(u)

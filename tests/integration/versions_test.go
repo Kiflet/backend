@@ -4,7 +4,7 @@ package integration
 
 import "testing"
 
-// TestVersionsRaisedByEdits (audit D7): an edit raises the record's
+// TestVersionsRaisedByEdits (FR-040; audit D7): an edit raises the record's
 // version, an update that changes nothing a person edits (a sign-in, the
 // billing month, a no-op save) doesn't, and no query can set it.
 func TestVersionsRaisedByEdits(t *testing.T) {

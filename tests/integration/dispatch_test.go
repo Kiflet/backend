@@ -15,9 +15,9 @@ import (
 	"github.com/kiflet/backend/internal/service"
 )
 
-// TestBulkAssign: ticked shipments go to one driver, each on its own, so
-// the driver's load limit stops some without undoing the rest, and another
-// company's shipment can't be slipped in.
+// TestBulkAssign (FR-007, FR-013): ticked shipments go to one driver, each
+// on its own, so the driver's load limit stops some without undoing the
+// rest, and another company's shipment can't be slipped in.
 func TestBulkAssign(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Bulk Haulage")
@@ -64,8 +64,8 @@ func TestBulkAssign(t *testing.T) {
 	}
 }
 
-// TestSavedViews: a view keeps the list's own filters under a name, the
-// same name replaces it, and only its owner can remove it.
+// TestSavedViews (FR-009, FR-029): a view keeps the list's own filters under
+// a name, the same name replaces it, and only its owner can remove it.
 func TestSavedViews(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("View Freight")
@@ -110,9 +110,9 @@ func TestSavedViews(t *testing.T) {
 	}
 }
 
-// TestMessageEveryDriverOnTheRoad: one message reaches every driver with a
-// shipment assigned or under way; the app shows it, and a driver whose app
-// hasn't synced lately gets it by SMS too.
+// TestMessageEveryDriverOnTheRoad (FR-035): one message reaches every driver
+// with a shipment assigned or under way; the app shows it, and a driver
+// whose app hasn't synced lately gets it by SMS too.
 func TestMessageEveryDriverOnTheRoad(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Broadcast Trucking")
@@ -164,8 +164,8 @@ func TestMessageEveryDriverOnTheRoad(t *testing.T) {
 	}
 }
 
-// TestDeliveredAlertCanBeTurnedOff: a delivery shows as an info alert unless
-// the company turns that off in Settings.
+// TestDeliveredAlertCanBeTurnedOff (FR-033): a delivery shows as an info
+// alert unless the company turns that off in Settings.
 func TestDeliveredAlertCanBeTurnedOff(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Delivered Alerts")
@@ -200,8 +200,8 @@ func TestDeliveredAlertCanBeTurnedOff(t *testing.T) {
 	}
 }
 
-// TestAlertEmails: staff choose which alerts reach them by email; only a
-// confirmed address gets them.
+// TestAlertEmails (FR-033): staff choose which alerts reach them by email;
+// only a confirmed address gets them.
 func TestAlertEmails(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Email Alerts")
@@ -251,9 +251,9 @@ func TestAlertEmails(t *testing.T) {
 	}
 }
 
-// TestHeadingAwayFromTheDestination: a truck getting further from the
-// drop-off over an hour raises one alert, and the trip's positions export
-// as CSV for the company alone.
+// TestHeadingAwayFromTheDestination (FR-019, FR-033): a truck getting
+// further from the drop-off over an hour raises one alert, and the trip's
+// positions export as CSV for the company alone.
 func TestHeadingAwayFromTheDestination(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -361,9 +361,9 @@ func TestALongTripEndsWhereTheTruckIs(t *testing.T) {
 	}
 }
 
-// TestNewDestinationTextsTheDriver: moving an assigned load's drop-off
-// texts the driver, who may be driving with the app closed, and shows in
-// the app.
+// TestNewDestinationTextsTheDriver (FR-011): moving an assigned load's
+// drop-off texts the driver, who may be driving with the app closed, and
+// shows in the app.
 func TestNewDestinationTextsTheDriver(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Redirect Cargo")
@@ -391,9 +391,9 @@ func TestNewDestinationTextsTheDriver(t *testing.T) {
 	}
 }
 
-// TestReportFilters: every report narrows to one driver or one route, a
-// town found under another name too, and the chart's CSV follows its
-// grouping.
+// TestReportFilters (FR-034): every report narrows to one driver or one
+// route, a town found under another name too, and the chart's CSV follows
+// its grouping.
 func TestReportFilters(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Report Filters")
@@ -446,8 +446,8 @@ func TestReportFilters(t *testing.T) {
 	}
 }
 
-// TestSearchByPhoneInAnyForm: a customer's number finds their shipments
-// however it is typed, and the match is marked.
+// TestSearchByPhoneInAnyForm (FR-009): a customer's number finds their
+// shipments however it is typed, and the match is marked.
 func TestSearchByPhoneInAnyForm(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Phone Search")
@@ -466,8 +466,9 @@ func TestSearchByPhoneInAnyForm(t *testing.T) {
 	}
 }
 
-// TestPlannedPickup: a load booked days ahead is not late before it leaves,
-// its ETA counts from the pickup, and a missed pickup is flagged.
+// TestPlannedPickup (FR-006, FR-033): a load booked days ahead is not late
+// before it leaves, its ETA counts from the pickup, and a missed pickup is
+// flagged.
 func TestPlannedPickup(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -519,9 +520,9 @@ func TestPlannedPickup(t *testing.T) {
 	}
 }
 
-// TestDismissedAlertsStayDismissed: the checks run every minute, so an alert
-// the office dismissed must not come straight back. A new ETA is a new
-// situation and alerts again.
+// TestDismissedAlertsStayDismissed (FR-033): the checks run every minute, so
+// an alert the office dismissed must not come straight back. A new ETA is a
+// new situation and alerts again.
 func TestDismissedAlertsStayDismissed(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -567,8 +568,8 @@ func TestDismissedAlertsStayDismissed(t *testing.T) {
 	}
 }
 
-// TestRepeatDelayIsRecorded: a second delay report with a new cause is news
-// for the office, though the customer isn't texted again.
+// TestRepeatDelayIsRecorded (FR-018, FR-033): a second delay report with a
+// new cause is news for the office, though the customer isn't texted again.
 func TestRepeatDelayIsRecorded(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Delay Logistics")
@@ -621,8 +622,8 @@ func TestRepeatDelayIsRecorded(t *testing.T) {
 	}
 }
 
-// TestCancelReasonsFollowTheRoad: a load that has left is cancelled for
-// what happened on the trip, and reports count the reasons.
+// TestCancelReasonsFollowTheRoad (FR-012, FR-034): a load that has left is
+// cancelled for what happened on the trip, and reports count the reasons.
 func TestCancelReasonsFollowTheRoad(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Refusal Road")
@@ -661,8 +662,8 @@ func TestCancelReasonsFollowTheRoad(t *testing.T) {
 	}
 }
 
-// TestAlertBadgeIsPerPerson (W3): one dispatcher opening the alert list
-// clears their own badge, not a colleague's.
+// TestAlertBadgeIsPerPerson (FR-033; W3): one dispatcher opening the alert
+// list clears their own badge, not a colleague's.
 func TestAlertBadgeIsPerPerson(t *testing.T) {
 	e := newEnv(t)
 	admin := e.company("Badge Logistics")
@@ -704,9 +705,9 @@ func TestAlertBadgeIsPerPerson(t *testing.T) {
 	}
 }
 
-// TestAmharicNamesFit (W9): name limits count letters, not bytes. An
-// Amharic letter takes three bytes, so 50 letters used to be refused as
-// "too long".
+// TestAmharicNamesFit (FR-006, FR-031; W9): name limits count letters, not
+// bytes. An Amharic letter takes three bytes, so 50 letters used to be
+// refused as "too long".
 func TestAmharicNamesFit(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Amharic Names")
@@ -723,8 +724,9 @@ func TestAmharicNamesFit(t *testing.T) {
 	}
 }
 
-// TestReopenFollowsTheRules (L2): reopening is new work. A driver at their
-// limit doesn't get the load back, and a read-only company can't reopen.
+// TestReopenFollowsTheRules (FR-012; L2): reopening is new work. A driver at
+// their limit doesn't get the load back, and a read-only company can't
+// reopen.
 func TestReopenFollowsTheRules(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Reopen Rules")
@@ -751,9 +753,10 @@ func TestReopenFollowsTheRules(t *testing.T) {
 	}
 }
 
-// TestVehicleOnOneTripWithinCapacity (L3): a truck on one driver's trip
-// can't be given to another, nor loaded past its capacity. A driver's usual
-// truck in that state is left off rather than blocking the assignment.
+// TestVehicleOnOneTripWithinCapacity (FR-007, FR-032; L3): a truck on one
+// driver's trip can't be given to another, nor loaded past its capacity. A
+// driver's usual truck in that state is left off rather than blocking the
+// assignment.
 func TestVehicleOnOneTripWithinCapacity(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("One Truck Freight")
@@ -785,9 +788,9 @@ func TestVehicleOnOneTripWithinCapacity(t *testing.T) {
 	}
 }
 
-// TestLoadLimitUnderALock (audit D3): two loads given at once to a driver
-// with room for one: one is given, the other refused. The test holds the
-// driver's row while both assignments start, so they reach the count
+// TestLoadLimitUnderALock (FR-007; audit D3): two loads given at once to a
+// driver with room for one: one is given, the other refused. The test holds
+// the driver's row while both assignments start, so they reach the count
 // together; without the lock both would count none and both be given.
 func TestLoadLimitUnderALock(t *testing.T) {
 	e := newEnv(t)

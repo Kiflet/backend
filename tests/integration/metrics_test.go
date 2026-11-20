@@ -11,8 +11,9 @@ import (
 
 const metricsToken = "integration-metrics-token"
 
-// TestMetrics: /metrics answers only with its token, and counts requests by
-// route pattern, driver app changes and texts, with no IDs in the labels.
+// TestMetrics (operations): /metrics answers only with its token, and counts
+// requests by route pattern, driver app changes and texts, with no IDs in
+// the labels.
 func TestMetrics(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Metric Movers")

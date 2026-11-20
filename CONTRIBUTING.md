@@ -46,6 +46,14 @@ another release counts statements differently. A package that loses statements t
 (code going into a module) may fall below its floor; lower that line by
 hand, in the same pull request, and say why.
 
+Each integration and end-to-end test names in its doc comment the
+requirement it covers, `// TestDeliveryNotes (FR-023, AC-023.4): ...`,
+or says `(operations)` for what no requirement covers (backups, the
+broker). `make requirements` writes `docs/requirements.md` from them,
+the table of which tests cover each requirement and which requirements
+none does; `go test ./tests/` fails when a test names nothing, names a
+requirement that doesn't exist, or the table is out of date.
+
 `make lint` reports everything it finds, so there is no backlog to hide a
 new finding in. What it should let pass is excused where it is, with the
 reason: in `.golangci.yml` for a kind of finding (closing what was only

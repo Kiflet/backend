@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-// TestBackupAndRestore is the restore drill: scripts/backup.sh,
+// TestBackupAndRestore (operations) is the restore drill: scripts/backup.sh,
 // fetch-backup.sh and restore.sh, run on staging as on a production machine
 // with staging's backup.env. The backup is encrypted with a key the test
 // makes and copied to a bucket (a second one in staging's Garage). Then the
@@ -132,11 +132,11 @@ func TestBackupAndRestore(t *testing.T) {
 	}
 }
 
-// TestPointInTimeRestore is the drill for WAL archiving (staging has
-// WAL_ARCHIVE=on): a base backup, WAL shipped encrypted to the bucket, the
-// machine lost, and the database brought back from the bucket to a moment
-// between two sign-ups. The company from before that moment is back, and
-// the one from after it is gone.
+// TestPointInTimeRestore (operations) is the drill for WAL archiving
+// (staging has WAL_ARCHIVE=on): a base backup, WAL shipped encrypted to the
+// bucket, the machine lost, and the database brought back from the bucket to
+// a moment between two sign-ups. The company from before that moment is
+// back, and the one from after it is gone.
 //
 // It replaces staging's data, after TestBackupAndRestore.
 func TestPointInTimeRestore(t *testing.T) {

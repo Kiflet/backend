@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-// TestDeliveryReportBeforeTheTextIsSaved: a gateway may report on a text
-// before the sender has saved the gateway's message ID. The report is kept,
-// and saving the text applies it, rather than the report being lost.
+// TestDeliveryReportBeforeTheTextIsSaved (FR-037): a gateway may report on a
+// text before the sender has saved the gateway's message ID. The report is
+// kept, and saving the text applies it, rather than the report being lost.
 func TestDeliveryReportBeforeTheTextIsSaved(t *testing.T) {
 	e := newEnv(t)
 	office := e.company("Early Report Freight")

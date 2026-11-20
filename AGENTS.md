@@ -16,6 +16,11 @@ the dashboard, the public pages and the driver PWA. The Go module is
 - `docs/functional_requirements.md`: the original requirements (FR numbers
   are referenced in code comments). Appendix D records where the product
   deliberately differs; add to it when you depart from a requirement.
+- `docs/requirements.md`: which tests cover each requirement, and which
+  none does. Generated (`make requirements`): an integration or
+  end-to-end test names its requirement in its doc comment
+  (`TestX (FR-023): ...`), or says `(operations)` when none covers it;
+  `go test ./tests/` checks both.
 - `docs/logistics.md`: background on the problem
 - `docs/E2E_TEST_GUIDE.md`: manual walkthrough of every flow
 - `docs/deploy.md`: production, backups, staging, connecting the providers

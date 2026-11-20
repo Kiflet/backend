@@ -538,8 +538,8 @@ func readCSV(t *testing.T, b []byte) [][]string {
 	return rows
 }
 
-// TestPlatformAdminStaysOnPlatform: the platform admin's own company is
-// empty; its pages send them to the companies list.
+// TestPlatformAdminStaysOnPlatform (FR-049): the platform admin's own
+// company is empty; its pages send them to the companies list.
 func TestPlatformAdminStaysOnPlatform(t *testing.T) {
 	e := newEnv(t)
 	admin := e.company("Platform Operator")

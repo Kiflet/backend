@@ -20,9 +20,9 @@ import (
 	"github.com/kiflet/backend/migrations"
 )
 
-// TestMigrations: the migrations build the schema, each can run a second
-// time without changing it, and they come down to nothing and up again to
-// the same schema. A database is migrated when the app starts, so a
+// TestMigrations (operations): the migrations build the schema, each can run
+// a second time without changing it, and they come down to nothing and up
+// again to the same schema. A database is migrated when the app starts, so a
 // migration that half ran must be safe to run again.
 func TestMigrations(t *testing.T) {
 	ctx := context.Background()

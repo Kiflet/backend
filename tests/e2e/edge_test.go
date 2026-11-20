@@ -11,9 +11,10 @@ import (
 	"testing"
 )
 
-// TestEdge: what anyone reaching the site meets first. Plain HTTP is sent to
-// HTTPS, which is TLS 1.2 or newer over HTTP/2, with the security headers on
-// every page, and the metrics are not reachable from outside.
+// TestEdge (operations): what anyone reaching the site meets first. Plain
+// HTTP is sent to HTTPS, which is TLS 1.2 or newer over HTTP/2, with the
+// security headers on every page, and the metrics are not reachable from
+// outside.
 func TestEdge(t *testing.T) {
 	visitor := newBrowser(t)
 

@@ -10,10 +10,10 @@ import (
 	"testing"
 )
 
-// TestPayingWithTelebirr: a company pays its invoice at telebirr's checkout.
-// The app sends the payer there, the payer approves with their PIN, telebirr
-// notifies the app over HTTPS at its public address and sends the payer back,
-// and the receipt is emailed.
+// TestPayingWithTelebirr (FR-044): a company pays its invoice at telebirr's
+// checkout. The app sends the payer there, the payer approves with their
+// PIN, telebirr notifies the app over HTTPS at its public address and sends
+// the payer back, and the receipt is emailed.
 func TestPayingWithTelebirr(t *testing.T) {
 	office := signUp(t, "Telebirr Paying Freight")
 	invoice := choosePlan(t, office, "starter")
@@ -53,9 +53,9 @@ func TestPayingWithTelebirr(t *testing.T) {
 	}
 }
 
-// TestPayingWithCBEBirr: a company pays by reference from a CBE Birr wallet.
-// CBE Birr's servers ask the app about the reference, check the amount and
-// confirm the payment, each over HTTPS with their login.
+// TestPayingWithCBEBirr (FR-044): a company pays by reference from a CBE
+// Birr wallet. CBE Birr's servers ask the app about the reference, check the
+// amount and confirm the payment, each over HTTPS with their login.
 func TestPayingWithCBEBirr(t *testing.T) {
 	office := signUp(t, "Reference Paying Freight")
 	invoice := choosePlan(t, office, "starter")

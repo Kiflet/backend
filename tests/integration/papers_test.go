@@ -12,9 +12,10 @@ import (
 
 func inDays(n int) string { return time.Now().AddDate(0, 0, n).Format("2006-01-02") }
 
-// TestDriverLicence: a driver's licence date is kept, the office is reminded
-// 30 days before and again once it has run out, a driver whose licence has
-// run out can't be given a trip, and recording the renewal clears it all.
+// TestDriverLicence (FR-031): a driver's licence date is kept, the office is
+// reminded 30 days before and again once it has run out, a driver whose
+// licence has run out can't be given a trip, and recording the renewal
+// clears it all.
 func TestDriverLicence(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -91,8 +92,8 @@ func TestDriverLicence(t *testing.T) {
 	}
 }
 
-// TestVehiclePapers: a vehicle's insurance and inspection (ቦሎ) dates, and
-// their reminders, which are about the vehicle and link to it.
+// TestVehiclePapers (FR-032): a vehicle's insurance and inspection (ቦሎ)
+// dates, and their reminders, which are about the vehicle and link to it.
 func TestVehiclePapers(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()

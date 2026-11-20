@@ -21,10 +21,10 @@ var singleReferences = map[string]bool{
 	"sync_metadata.driver_id":    true, // no tenant_id: one row per driver, its only reference
 }
 
-// TestReferencesCarryTheTenant (audit D2): every reference from a table
-// that belongs to a company to another such table includes tenant_id, so
-// the database refuses a row pointing at another company's. A new table or
-// reference is held to it too.
+// TestReferencesCarryTheTenant (FR-005; audit D2): every reference from a
+// table that belongs to a company to another such table includes tenant_id,
+// so the database refuses a row pointing at another company's. A new table
+// or reference is held to it too.
 func TestReferencesCarryTheTenant(t *testing.T) {
 	rows, err := pool.Query(context.Background(), `
 		SELECT c.conrelid::regclass::text || '.' || a.attname
@@ -65,7 +65,7 @@ func crossCompany(t *testing.T, what, sql string, args ...any) {
 	}
 }
 
-// TestAnotherCompanysRowsAreRefused: a load can't be given another
+// TestAnotherCompanysRowsAreRefused (FR-005): a load can't be given another
 // company's driver or truck, nor a proof, charge or alert another company's
 // load.
 func TestAnotherCompanysRowsAreRefused(t *testing.T) {

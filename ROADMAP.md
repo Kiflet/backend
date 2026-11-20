@@ -72,7 +72,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] Images to `ghcr.io/kiflet/backend` and `ghcr.io/kiflet/sandbox` on
       every merge, and a compose file that starts a given tag with the
       demo data, for the clients' CI (G2).
-- [ ] gosec (P2); `TestGatewayFaults` made reliable (T5); coverage of the
+- [x] gosec (P2); `TestGatewayFaults` made reliable (T5); coverage of the
       unit and integration suites reported per package, against a floor
       that only rises; each test names its requirement, and a generated
       table lists the requirements with none (T4).
