@@ -26,6 +26,10 @@ func CanManageFleet(role string) bool {
 	return role == RoleFleetManager || role == RoleAdmin || role == RolePlatformAdmin
 }
 
+// CompanyRoles are the roles CanManageCompany allows: those that see the
+// company's billing, and its live updates.
+var CompanyRoles = []string{RoleAdmin, RolePlatformAdmin}
+
 // CanManageCompany reports whether a role may manage staff accounts and
 // company settings (FR-004 AC-004.4).
 func CanManageCompany(role string) bool {

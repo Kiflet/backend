@@ -172,7 +172,9 @@ make lint                          # golangci-lint, node --check, gitleaks over 
 - Live updates: an element with `data-live-region` and an `id` is fetched
   again and swapped in when a WebSocket message says something changed
   (`static/app.js`). Mark new live parts of a page that way instead of
-  rendering them in JS.
+  rendering them in JS. An update only some roles may see is sent with
+  `publishTo` and those roles (billing's go to `model.CompanyRoles`); the
+  hub gives it to no one else.
 - The look is the "Desk" design (light) and "Night" (dark mode): colours
   are tokens at the top of `static/app.css`, and soft tints and status
   colours are derived from them. Icons are lucide's: `{{icon "truck"}}`,
