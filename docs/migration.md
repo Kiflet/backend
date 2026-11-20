@@ -413,7 +413,7 @@ The API every client uses, its conventions, and the tooling that keeps
 the code, the specification and the clients' types in step. The design is
 `docs/architecture.md`, section 11.
 
-1. **The specification:** `api/openapi/v1.yaml` (OpenAPI 3.1), one file for
+1. **The specification** (done): `api/openapi/v1.yaml` (OpenAPI 3.1), one file for
    the one API, each operation tagged with who may call it: `app`
    (Kiflet/web's session), `public` (API keys as well), `driver`
    (Kiflet/mobile's token). `api/asyncapi/live.yaml` describes the live
@@ -429,7 +429,7 @@ the code, the specification and the clients' types in step. The design is
    `sqlc diff` does), and compares it with `main` using oasdiff: a breaking
    change to a `public` or `driver` operation fails, and one to an `app`
    operation needs the `api-break` label on its pull request.
-3. **The contract test:** every response the API tests receive is
+3. **The contract test** (done): every response the API tests receive is
    validated against the specification.
 4. **The conventions,** in `internal/http`, once for every operation:
    - errors as `{ "error": { "code", "message", "fields", "request_id" } }`,

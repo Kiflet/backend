@@ -39,6 +39,7 @@
           },
           "400": { "$ref": "#/components/responses/Error" },
           "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
           "429": { "$ref": "#/components/responses/Error" }
         }
       },
@@ -66,6 +67,7 @@
         "responses": {
           "200": { "description": "The shipment", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Shipment" } } } },
           "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
           "404": { "$ref": "#/components/responses/Error" },
           "429": { "$ref": "#/components/responses/Error" }
         }
@@ -163,6 +165,7 @@
             } } }
           },
           "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
           "404": { "$ref": "#/components/responses/Error" },
           "429": { "$ref": "#/components/responses/Error" }
         }
@@ -186,6 +189,7 @@
             } } }
           },
           "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
           "429": { "$ref": "#/components/responses/Error" }
         }
       }
@@ -194,6 +198,7 @@
   "webhooks": {
     "shipment.created": {
       "post": {
+        "operationId": "shipmentCreated",
         "summary": "A shipment is booked, from the dashboard, a CSV file or the API",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WebhookMessage" } } } },
         "responses": { "2XX": { "description": "Received. Anything else is tried again." } }
@@ -201,6 +206,7 @@
     },
     "shipment.status_changed": {
       "post": {
+        "operationId": "shipmentStatusChanged",
         "summary": "A shipment's status changes; data.event has from_status and to_status",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WebhookMessage" } } } },
         "responses": { "2XX": { "description": "Received. Anything else is tried again." } }
@@ -208,6 +214,7 @@
     },
     "shipment.delivered": {
       "post": {
+        "operationId": "shipmentDelivered",
         "summary": "A shipment is delivered; sent as well as its status change",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WebhookMessage" } } } },
         "responses": { "2XX": { "description": "Received. Anything else is tried again." } }
@@ -215,6 +222,7 @@
     },
     "shipment.issue_reported": {
       "post": {
+        "operationId": "shipmentIssueReported",
         "summary": "The driver reports a problem (as well as the status change), or the receiver does on the confirmation page (event type customer_issue)",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WebhookMessage" } } } },
         "responses": { "2XX": { "description": "Received. Anything else is tried again." } }

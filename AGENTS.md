@@ -151,10 +151,20 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   UPDATE, DELETE and TRUNCATE. Code that must remove them (company deletion,
   retention) runs inside `purgeTx` in `internal/service/data.go`, which sets
   `kiflet.purge` for its transaction only.
+- `api/openapi/v1.yaml` is the contract of everything under `/api/v1`
+  but the providers' callbacks, each operation tagged `app`, `public` or
+  `driver`: change it with the route. `TestSpecificationMatchesTheAPI`
+  checks the routes, and every answer the integration tests receive is
+  checked against it. `api/asyncapi/live.yaml` and `webhooks.yaml` say
+  what the live socket and the webhooks send; a new kind of live update
+  or webhook event goes there too (`TestAsyncAPIMatchesTheCode`).
+  `make lint` lints the specification.
 - The public API (`api_public.go`) acts as its key's `service.Actor`
   through the same services as the dashboard; it has no rules of its own.
   `static/openapi.json` describes it, and `TestOpenAPIMatchesTheAPI` checks
-  that the two have the same routes and fields: change them together.
+  that the two have the same routes and fields: change them together, and
+  with `api/openapi/v1.yaml`, which must have the same public operations
+  until `openapi.json` is made from it.
 - Webhooks subscribe to `shipment.*` on the bus and are written with the
   shipment's history: a new kind of event reaches them by adding it to
   `webhookTypes` in `internal/service/webhooks.go`. Their payload is the

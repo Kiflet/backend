@@ -1,0 +1,1694 @@
+# The contract of /api/v1 (docs/architecture.md, section 11): written by
+# hand and reviewed like code. Each operation is tagged with who may call
+# it. The routes and this file must match (TestSpecificationMatchesTheAPI),
+# and every response the integration tests receive is checked against it.
+openapi: 3.1.0
+info:
+  title: Kiflet API
+  version: '1'
+  description: 'The one API of Kiflet (docs/architecture.md, section 11), for every
+    client: Kiflet/web, Kiflet/mobile and companies'' own systems. Each operation
+    is tagged with who may call it: public (an API key, or the session), driver
+    (a driver''s token) or app (the session alone, for Kiflet/web). What a tag promises
+    is in section 11, "Who may call what". @kiflet/api is generated from this file.'
+servers:
+- url: /api/v1
+security:
+- apiKey: []
+tags:
+- name: public
+  description: |-
+    Book and follow a company's shipments from its own systems. Every request sends one of the company's API keys, made under Settings → API keys: `Authorization: Bearer kf_…`. A key acts for the whole company with the dashboard's rules, and what it does is recorded under the key's name in each shipment's history.
+
+    Each key may make 300 requests a minute; past that, requests are answered 429 until the minute is over. Times are RFC 3339 and answered in UTC. Weights are in kilograms and values in birr.
+
+    An error is answered with its HTTP status and `{"error": {"code": …, "message": …, "field": …}}`. `message` is written to be shown to a person; `field` names the field at fault, when there is one.
+
+    Webhooks tell a company's system when its shipments change, without asking: an admin adds an address and the events it wants under Settings → Webhooks. Each is a POST of a `WebhookMessage`, signed as Standard Webhooks (https://www.standardwebhooks.com) describes: `webhook-id` (the same when a message is sent again), `webhook-timestamp` and `webhook-signature`. Answer 2xx within 10 seconds; anything else is tried again after 1 and 5 minutes, 30 minutes, then 2, 6 and 12 hours.
+- name: driver
+  description: The driver app's operations, under /driver. The app signs in with
+    the driver's phone number and PIN, and sends the token it gets with every other
+    call.
+- name: app
+  description: Kiflet/web's operations, called with the session cookie alone. An
+    API key calling one gets 403.
+paths:
+  /shipments:
+    get:
+      operationId: listShipments
+      summary: List shipments, newest first unless sorted otherwise
+      parameters:
+      - name: status
+        in: query
+        description: One status, or several separated by commas.
+        schema:
+          type: string
+          examples:
+          - in_transit,delayed
+      - name: driver_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: priority
+        in: query
+        schema:
+          $ref: '#/components/schemas/Priority'
+      - name: q
+        in: query
+        description: Searches the tracking number, the customer's and receiver's
+          names and phones, and the driver's name.
+        schema:
+          type: string
+      - name: created_from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: created_to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum:
+          - created_desc
+          - created_asc
+          - updated_desc
+          - eta_asc
+          - eta_desc
+          - status
+          - priority
+          - customer
+          - tracking
+          default: created_desc
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      responses:
+        '200':
+          description: A page of shipments
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                - page
+                - per_page
+                - total
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Shipment'
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                  total:
+                    type: integer
+                    description: How many shipments match, on every page.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      tags:
+      - public
+    post:
+      operationId: createShipment
+      summary: Book a shipment
+      description: Checked as the booking form checks it, and the customer is texted
+        as from the form. With `driver_id`, the shipment is assigned at once. Without
+        `estimated_delivery`, the arrival is estimated from the route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShipmentBooking'
+      responses:
+        '201':
+          description: Booked. `Location` is the shipment's address in the API.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shipment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '402':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      tags:
+      - public
+  /shipments/{ref}:
+    parameters:
+    - $ref: '#/components/parameters/Ref'
+    get:
+      operationId: getShipment
+      summary: One shipment
+      responses:
+        '200':
+          description: The shipment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shipment'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      tags:
+      - public
+    patch:
+      operationId: updateShipment
+      summary: Change a booking
+      description: 'A field left out stays as it is. An object that is sent replaces
+        the whole of what it names: send a destination''s city and address together.
+        `receiver`, `planned_pickup` and `estimated_delivery` can be sent as null
+        to remove them; a null `estimated_delivery` goes back to the estimate from
+        the route. The driver is changed with `/assign`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShipmentChange'
+      responses:
+        '200':
+          description: The shipment as changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shipment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      tags:
+      - public
+  /shipments/{ref}/assign:
+    parameters:
+    - $ref: '#/components/parameters/Ref'
+    post:
+      operationId: assignShipment
+      summary: Assign a driver, change the driver, or take the driver off
+      description: The driver is texted as from the dashboard. Without `vehicle_id`,
+        the driver's usual vehicle goes. A null or empty `driver_id` takes the shipment
+        back to pending, if it hasn't left.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                driver_id:
+                  type:
+                  - string
+                  - 'null'
+                  format: uuid
+                vehicle_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: The shipment as assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shipment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '402':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      tags:
+      - public
+  /shipments/{ref}/cancel:
+    parameters:
+    - $ref: '#/components/parameters/Ref'
+    post:
+      operationId: cancelShipment
+      summary: Cancel a shipment
+      description: Before it leaves, the reasons are customer_request, duplicate,
+        address_problem, cargo_unavailable, payment_problem and other. On the road,
+        they are recipient_refused, returned_to_origin, cargo_lost_damaged, customer_request,
+        address_problem, payment_problem and other.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - reason
+              properties:
+                reason:
+                  type: string
+                  enum:
+                  - customer_request
+                  - duplicate
+                  - address_problem
+                  - cargo_unavailable
+                  - payment_problem
+                  - recipient_refused
+                  - returned_to_origin
+                  - cargo_lost_damaged
+                  - other
+                note:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '200':
+          description: The shipment, cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shipment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      tags:
+      - public
+  /shipments/{ref}/events:
+    parameters:
+    - $ref: '#/components/parameters/Ref'
+    get:
+      operationId: shipmentEvents
+      summary: A shipment's history, oldest first, and where its truck was last
+        seen
+      responses:
+        '200':
+          description: The history
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                - last_position
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+                  last_position:
+                    oneOf:
+                    - type: 'null'
+                    - type: object
+                      required:
+                      - lat
+                      - lng
+                      - recorded_at
+                      properties:
+                        lat:
+                          type: number
+                        lng:
+                          type: number
+                        recorded_at:
+                          type: string
+                          format: date-time
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      tags:
+      - public
+  /drivers:
+    get:
+      operationId: listDrivers
+      summary: List the company's drivers
+      parameters:
+      - name: active
+        in: query
+        description: false lists deactivated drivers too.
+        schema:
+          type: boolean
+          default: true
+      - name: q
+        in: query
+        description: Searches names and phones.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The drivers
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Driver'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+      tags:
+      - public
+  /openapi.json:
+    get:
+      operationId: getPublicSpecification
+      tags:
+      - public
+      summary: The public operations' specification
+      description: This document, as far as the public operations go, in JSON.
+      security: []
+      responses:
+        '200':
+          description: The specification
+          content:
+            application/json:
+              schema:
+                type: object
+        '429':
+          $ref: '#/components/responses/Error'
+  /driver/config:
+    get:
+      operationId: getDriverConfig
+      tags:
+      - driver
+      summary: What the app needs to work offline
+      description: The status rules, reason lists and their words, fetched as the
+        app starts and before sign-in. They are derived from the server's rules,
+        so the app never offers a move the server would refuse.
+      security: []
+      responses:
+        '200':
+          description: The configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverConfig'
+        '429':
+          $ref: '#/components/responses/Error'
+  /driver/login:
+    post:
+      operationId: driverSignIn
+      tags:
+      - driver
+      summary: Sign in with a phone number and PIN
+      description: 'One token per device: signing in again on the same device replaces
+        its token. Five wrong PINs lock the account for a while.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - phone
+              - pin
+              properties:
+                phone:
+                  type: string
+                  description: 'In any common form: 0911…, +251911…'
+                pin:
+                  type: string
+                device_id:
+                  type: string
+                  description: The app's ID for this phone
+      responses:
+        '200':
+          $ref: '#/components/responses/DriverSignedIn'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /driver/pin-reset/request:
+    post:
+      operationId: requestDriverPINReset
+      tags:
+      - driver
+      summary: Ask for a code to set a new PIN
+      description: Texts a code to the number if it belongs to a driver. The answer
+        is the same either way.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - phone
+              properties:
+                phone:
+                  type: string
+      responses:
+        '200':
+          description: Asked; a code is on its way if the number is a driver's
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - ok
+                - message
+                properties:
+                  ok:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /driver/pin-reset/confirm:
+    post:
+      operationId: confirmDriverPINReset
+      tags:
+      - driver
+      summary: Set a new PIN with the code, and sign in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - phone
+              - code
+              - pin
+              properties:
+                phone:
+                  type: string
+                code:
+                  type: string
+                pin:
+                  type: string
+                device_id:
+                  type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/DriverSignedIn'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /driver/logout:
+    post:
+      operationId: driverSignOut
+      tags:
+      - driver
+      summary: Sign out this device
+      security:
+      - driverToken: []
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /driver/pin:
+    post:
+      operationId: changeDriverPIN
+      tags:
+      - driver
+      summary: Change the PIN
+      security:
+      - driverToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - current_pin
+              - new_pin
+              properties:
+                current_pin:
+                  type: string
+                new_pin:
+                  type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /driver/sync:
+    post:
+      operationId: driverSync
+      tags:
+      - driver
+      summary: Send what the phone did, and get what changed
+      description: 'One round trip: the statuses, deliveries, positions and messages
+        recorded on the phone go up, each with its client_id, and each gets a result;
+        a repeat of an item already taken gets the same result again. What changed
+        for the driver since the cursor comes back, with the cursor to send next
+        time (docs/architecture.md, section 11, "The driver sync"). The body may
+        be sent gzip-compressed, with Content-Encoding: gzip.'
+      security:
+      - driverToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncRequest'
+      responses:
+        '200':
+          description: What became of each item, and what changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+webhooks:
+  shipment.created:
+    post:
+      operationId: shipmentCreated
+      summary: A shipment is booked, from the dashboard, a CSV file or the API
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookMessage'
+      responses:
+        2XX:
+          description: Received. Anything else is tried again.
+  shipment.status_changed:
+    post:
+      operationId: shipmentStatusChanged
+      summary: A shipment's status changes; data.event has from_status and to_status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookMessage'
+      responses:
+        2XX:
+          description: Received. Anything else is tried again.
+  shipment.delivered:
+    post:
+      operationId: shipmentDelivered
+      summary: A shipment is delivered; sent as well as its status change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookMessage'
+      responses:
+        2XX:
+          description: Received. Anything else is tried again.
+  shipment.issue_reported:
+    post:
+      operationId: shipmentIssueReported
+      summary: The driver reports a problem (as well as the status change), or the
+        receiver does on the confirmation page (event type customer_issue)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookMessage'
+      responses:
+        2XX:
+          description: Received. Anything else is tried again.
+components:
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      description: A key from Settings → API keys. It starts with kf_.
+    driverToken:
+      type: http
+      scheme: bearer
+      description: The token from signing in on the driver app, one per device.
+  parameters:
+    Ref:
+      name: ref
+      in: path
+      required: true
+      description: The shipment's tracking number or its id.
+      schema:
+        type: string
+  responses:
+    Error:
+      description: 'An error. 400: the request is wrong (VALIDATION_ERROR). 401:
+        no working key (UNAUTHORIZED). 402: a plan limit (PLAN_LIMIT). 403: the
+        company is suspended or read-only until an invoice is paid (FORBIDDEN).
+        404: no such shipment for this company (NOT_FOUND). 409: the shipment is
+        in a status that doesn''t allow it (CONFLICT). 429: too many requests (RATE_LIMITED).'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    OK:
+      description: Done
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - ok
+            properties:
+              ok:
+                type: boolean
+    DriverSignedIn:
+      description: Signed in
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - token
+            - expires_at
+            - must_change_pin
+            - driver
+            properties:
+              token:
+                type: string
+              expires_at:
+                type: string
+                format: date-time
+              must_change_pin:
+                type: boolean
+                description: The PIN was set by the office and must be changed first.
+              driver:
+                type: object
+                required:
+                - id
+                - name
+                - phone
+                - company
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  phone:
+                    type: string
+                  company:
+                    type: string
+  schemas:
+    Error:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+              enum:
+              - VALIDATION_ERROR
+              - UNAUTHORIZED
+              - PLAN_LIMIT
+              - FORBIDDEN
+              - NOT_FOUND
+              - CONFLICT
+              - RATE_LIMITED
+              - INTERNAL
+            message:
+              type: string
+            field:
+              type: string
+    Status:
+      type: string
+      enum:
+      - pending
+      - assigned
+      - in_transit
+      - delayed
+      - arrived
+      - delivered
+      - issue
+      - cancelled
+    Priority:
+      type: string
+      enum:
+      - normal
+      - high
+      - urgent
+    Place:
+      type: object
+      additionalProperties: false
+      required:
+      - city
+      - address
+      properties:
+        city:
+          type: string
+          description: A town the service knows, such as Addis Ababa or Adama.
+        address:
+          type: string
+        lat:
+          type:
+          - number
+          - 'null'
+          description: Sent with lng to pin the place; otherwise the town's centre.
+        lng:
+          type:
+          - number
+          - 'null'
+    Party:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      - phone
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+          description: An Ethiopian mobile number, 09… or +251…
+    Cargo:
+      type: object
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+        weight_kg:
+          type: number
+          minimum: 0
+        value_santim:
+          type: integer
+          format: int64
+          minimum: 0
+          description: What the cargo is worth, in santim (100 to the birr); 0 when
+            not given.
+        pieces:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          description: How many pieces the load is; 0 when not counted.
+        unit:
+          type: string
+          maxLength: 30
+          description: What the pieces are, e.g. bales. Only with pieces.
+    Shipment:
+      type: object
+      required:
+      - id
+      - tracking_number
+      - status
+      - priority
+      - origin
+      - destination
+      - customer
+      - receiver
+      - cargo
+      - tracking_url
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        tracking_number:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status'
+        status_reason:
+          type: string
+          description: Why it is delayed, has an issue or was cancelled.
+        priority:
+          $ref: '#/components/schemas/Priority'
+        origin:
+          $ref: '#/components/schemas/Place'
+        destination:
+          $ref: '#/components/schemas/Place'
+        customer:
+          $ref: '#/components/schemas/Party'
+        receiver:
+          description: Who takes delivery, when that isn't the customer.
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Party'
+        cargo:
+          $ref: '#/components/schemas/Cargo'
+        instructions:
+          type: string
+        driver_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        vehicle_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        planned_pickup:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        estimated_delivery:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        picked_up_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        delivered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        receipt_confirmed:
+          type: boolean
+          description: The receiver confirmed the delivery from the link they were
+            texted.
+        tracking_url:
+          type: string
+          format: uri
+          description: The public tracking page.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ShipmentChange:
+      type: object
+      additionalProperties: false
+      properties:
+        priority:
+          $ref: '#/components/schemas/Priority'
+        origin:
+          $ref: '#/components/schemas/Place'
+        destination:
+          $ref: '#/components/schemas/Place'
+        customer:
+          $ref: '#/components/schemas/Party'
+        receiver:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Party'
+        cargo:
+          $ref: '#/components/schemas/Cargo'
+        instructions:
+          type: string
+        planned_pickup:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        estimated_delivery:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    ShipmentBooking:
+      allOf:
+      - $ref: '#/components/schemas/ShipmentChange'
+      - type: object
+        required:
+        - origin
+        - destination
+        - customer
+        properties:
+          driver_id:
+            type: string
+            format: uuid
+            description: Assign at once.
+          vehicle_id:
+            type: string
+            format: uuid
+    Event:
+      type: object
+      required:
+      - type
+      - source
+      - actor
+      - at
+      properties:
+        type:
+          type: string
+          description: created, edited, assigned, unassigned, status_changed, note,
+            message, pod_recorded, pod_held, pod_accepted, pod_dismissed, customer_confirmed,
+            customer_issue and others.
+        from_status:
+          type: string
+        to_status:
+          type: string
+        reason:
+          type: string
+        note:
+          type: string
+        source:
+          type: string
+          enum:
+          - dashboard
+          - app
+          - sms
+          - system
+          - customer
+          - api
+        actor:
+          type: string
+          description: 'Who did it: a person, "System", or "API: " and a key''s
+            name.'
+        lat:
+          type:
+          - number
+          - 'null'
+        lng:
+          type:
+          - number
+          - 'null'
+        at:
+          type: string
+          format: date-time
+    WebhookMessage:
+      type: object
+      required:
+      - type
+      - timestamp
+      - data
+      properties:
+        type:
+          type: string
+          enum:
+          - shipment.created
+          - shipment.status_changed
+          - shipment.delivered
+          - shipment.issue_reported
+          - test
+        timestamp:
+          type: string
+          format: date-time
+          description: When it happened.
+        data:
+          type: object
+          description: The shipment just after the change, and what happened. A
+            test carries a message instead.
+          properties:
+            shipment:
+              $ref: '#/components/schemas/Shipment'
+            event:
+              $ref: '#/components/schemas/Event'
+    Driver:
+      type: object
+      required:
+      - id
+      - name
+      - phone
+      - active
+      - vehicle_plate
+      - active_shipments
+      - last_sync_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        active:
+          type: boolean
+        vehicle_plate:
+          type: string
+        active_shipments:
+          type: integer
+        last_sync_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the driver's app last reached the server.
+    CodeLabel:
+      description: A code and its words.
+      type: object
+      required:
+      - code
+      - label
+      properties:
+        code:
+          type: string
+        label:
+          type: string
+    DriverConfig:
+      type: object
+      required:
+      - app_name
+      - version
+      - sms_number
+      - statuses
+      - transitions
+      - pod_from
+      - delay_reasons
+      - issue_reasons
+      - location_reasons
+      - max_photos
+      - tile_url
+      - tile_credit
+      properties:
+        app_name:
+          type: string
+        version:
+          type: string
+          description: The server's version
+        sms_number:
+          type: string
+          description: Where a driver without data sends status texts
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/CodeLabel'
+        transitions:
+          description: For each status, those a driver may move a load to from it.
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        pod_from:
+          description: The statuses a delivery may be recorded from.
+          type: array
+          items:
+            type: string
+        delay_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/CodeLabel'
+        issue_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/CodeLabel'
+        location_reasons:
+          description: Asked for when a delivery is recorded away from the destination.
+          type: array
+          items:
+            $ref: '#/components/schemas/CodeLabel'
+        max_photos:
+          type: integer
+        tile_url:
+          type: string
+        tile_credit:
+          type: string
+    SyncRequest:
+      type: object
+      properties:
+        device_id:
+          type: string
+        app_version:
+          type: string
+        device_time:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: The phone's clock when it sent this, to correct its times
+            by
+        battery:
+          type:
+          - integer
+          - 'null'
+        pending:
+          type:
+          - integer
+          - 'null'
+          description: Items still queued on the phone
+        storage_kb:
+          type:
+          - integer
+          - 'null'
+        tracking_paused:
+          type: boolean
+        power_saving:
+          type: boolean
+          description: The phone records a position only every 15 minutes.
+        settings:
+          $ref: '#/components/schemas/SettingsChange'
+        since:
+          type: string
+          description: The cursor from the last response; empty the first time
+        statuses:
+          type:
+          - array
+          - 'null'
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/SyncStatus'
+        pods:
+          type:
+          - array
+          - 'null'
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/SyncPOD'
+        locations:
+          type:
+          - array
+          - 'null'
+          maxItems: 5000
+          items:
+            $ref: '#/components/schemas/SyncLocation'
+        messages:
+          type:
+          - array
+          - 'null'
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SyncMessage'
+    SettingsChange:
+      description: The settings changed on this phone since the last sync; those
+        left out stay as they are.
+      type:
+      - object
+      - 'null'
+      properties:
+        language:
+          type:
+          - string
+          - 'null'
+          enum:
+          - en
+          - am
+          - ''
+          - null
+        battery_saver:
+          type:
+          - boolean
+          - 'null'
+        vibrate:
+          type:
+          - boolean
+          - 'null'
+    SyncStatus:
+      type: object
+      required:
+      - client_id
+      - shipment_id
+      - status
+      properties:
+        client_id:
+          type: string
+        shipment_id:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+        note:
+          type: string
+        lat:
+          type:
+          - number
+          - 'null'
+        lng:
+          type:
+          - number
+          - 'null'
+        recorded_at:
+          type: string
+          format: date-time
+    SyncPOD:
+      description: A proof of delivery. The signature and photos are data URLs.
+      type: object
+      required:
+      - client_id
+      - shipment_id
+      - recipient_name
+      - signature
+      properties:
+        client_id:
+          type: string
+        shipment_id:
+          type: string
+        recipient_name:
+          type: string
+        recipient_phone:
+          type: string
+        signature:
+          type: string
+        photos:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+        notes:
+          type: string
+        lat:
+          type:
+          - number
+          - 'null'
+        lng:
+          type:
+          - number
+          - 'null'
+        location_reason:
+          type: string
+          description: Why the driver delivered away from the destination
+        recorded_at:
+          type: string
+          format: date-time
+    SyncLocation:
+      type: object
+      required:
+      - client_id
+      - lat
+      - lng
+      properties:
+        client_id:
+          type: string
+        shipment_id:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        accuracy:
+          type:
+          - number
+          - 'null'
+        speed:
+          type:
+          - number
+          - 'null'
+        heading:
+          type:
+          - number
+          - 'null'
+        battery:
+          type:
+          - integer
+          - 'null'
+        recorded_at:
+          type: string
+          format: date-time
+    SyncMessage:
+      type: object
+      required:
+      - client_id
+      - shipment_id
+      - text
+      properties:
+        client_id:
+          type: string
+        shipment_id:
+          type: string
+        text:
+          type: string
+        recorded_at:
+          type: string
+          format: date-time
+    SyncResult:
+      description: What became of one item sent. ok and refused items leave the
+        phone's queue; retry ones stay for the next sync.
+      type: object
+      required:
+      - client_id
+      - kind
+      - ok
+      properties:
+        client_id:
+          type: string
+        kind:
+          type: string
+          description: status, pod, location or message
+        ok:
+          type: boolean
+        retry:
+          type: boolean
+        code:
+          type: string
+          description: Why it was refused; the app chooses its words by it
+        message:
+          type: string
+    SyncResponse:
+      type: object
+      required:
+      - server_time
+      - cursor
+      - full
+      - results
+      - locations_stored
+      - shipments
+      - removed
+      - removed_shipment_ids
+      - messages
+      properties:
+        server_time:
+          type: string
+          format: date-time
+        cursor:
+          type: string
+          description: Sent back as since next time. Opaque.
+        full:
+          type: boolean
+          description: 'A full download: shipments are all the driver should hold,
+            and the phone lets go of the others, keeping any with changes not yet
+            sent or a delivery draft.'
+        results:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/SyncResult'
+        locations_stored:
+          type: integer
+        shipments:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/DriverShipment'
+        removed:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/RemovedShipment'
+        removed_shipment_ids:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+        messages:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/DriverMessage'
+        driver:
+          $ref: '#/components/schemas/DriverProfile'
+        more:
+          type: boolean
+          description: There is more than one response carries; sync again at once.
+    RemovedShipment:
+      type: object
+      required:
+      - id
+      - reason
+      properties:
+        id:
+          type: string
+        reason:
+          type: string
+          description: reassigned, unassigned or cancelled
+    DriverShipment:
+      description: A shipment as the driver app holds it.
+      type: object
+      required:
+      - id
+      - tracking_number
+      - ref
+      - status
+      - priority
+      - origin_city
+      - origin_address
+      - destination_city
+      - destination_address
+      - destination_precise
+      - tolerance_m
+      - customer_name
+      - customer_phone
+      - consignee_name
+      - consignee_phone
+      - cargo
+      - weight_kg
+      - pieces
+      - instructions
+      - vehicle
+      - created_at
+      - updated_at
+      - recent_recipients
+      properties:
+        id:
+          type: string
+        tracking_number:
+          type: string
+        ref:
+          type: string
+          description: The tracking number's short form
+        status:
+          type: string
+        status_reason:
+          type: string
+        priority:
+          type: string
+        origin_city:
+          type: string
+        origin_address:
+          type: string
+        origin_lat:
+          type:
+          - number
+          - 'null'
+        origin_lng:
+          type:
+          - number
+          - 'null'
+        destination_city:
+          type: string
+        destination_address:
+          type: string
+        destination_lat:
+          type:
+          - number
+          - 'null'
+        destination_lng:
+          type:
+          - number
+          - 'null'
+        destination_precise:
+          type: boolean
+        tolerance_m:
+          type: number
+          description: How far from the destination a delivery may be recorded before
+            the app asks why
+        customer_name:
+          type: string
+        customer_phone:
+          type: string
+        consignee_name:
+          type: string
+          description: Who takes delivery; empty when that is the customer
+        consignee_phone:
+          type: string
+        cargo:
+          type: string
+        weight_kg:
+          type: number
+        pieces:
+          type: string
+          description: The piece count as written, "152 bales", or empty
+        instructions:
+          type: string
+        vehicle:
+          type: string
+        eta:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        planned_pickup:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        picked_up_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        delivered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        recent_recipients:
+          description: Who signed for this receiver before, newest first.
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+    DriverMessage:
+      description: A message from the office.
+      type: object
+      required:
+      - id
+      - shipment_id
+      - tracking_number
+      - text
+      - from
+      - at
+      properties:
+        id:
+          type: string
+        shipment_id:
+          type: string
+        tracking_number:
+          type: string
+        text:
+          type: string
+        kind:
+          type: string
+          description: cancelled or reopened when the office did that to the load,
+            for the app to say in the driver's language
+        note:
+          type: string
+          description: What the office wrote with it
+        from:
+          type: string
+        at:
+          type: string
+          format: date-time
+    DriverProfile:
+      description: Who the app is signed in as, sent when it changed.
+      type: object
+      required:
+      - id
+      - name
+      - phone
+      - company
+      - vehicle
+      - must_change_pin
+      - sms_number
+      - office_phone
+      - settings
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        company:
+          type: string
+        vehicle:
+          type: string
+        must_change_pin:
+          type: boolean
+        sms_number:
+          type: string
+        office_phone:
+          type: string
+        settings:
+          $ref: '#/components/schemas/DriverSettings'
+    DriverSettings:
+      type: object
+      required:
+      - language
+      - battery_saver
+      - vibrate
+      properties:
+        language:
+          type: string
+          enum:
+          - en
+          - am
+          - ''
+          description: Empty until the driver chooses
+        battery_saver:
+          type: boolean
+        vibrate:
+          type: boolean

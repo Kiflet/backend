@@ -115,6 +115,23 @@ What changed in each release, newest first.
 
 ### Added
 
+- **The API's specification** (`docs/migration.md`, phase 2, steps 1
+  and 3; audit A1). `api/openapi/v1.yaml` describes everything under
+  `/api/v1` but the providers' callbacks: the public API's 8 operations
+  and its own document, tagged `public`, and the driver app's 7, tagged
+  `driver`, as they are today. `api/asyncapi/live.yaml` describes the
+  dashboard's live updates, and `webhooks.yaml` what the webhooks send.
+  - **The contract test:** the integration tests' server checks every
+    answer under `/api/v1` against the specification: its status is
+    one the operation lists, and its body has the shape given. It found
+    one gap, the 403 a suspended company's key gets when it reads, now
+    listed in the specification and in `openapi.json`.
+  - **The other checks:** `TestSpecificationMatchesTheAPI` compares the
+    routes with the operations; `TestSpecificationHasThePublicAPI` keeps
+    the public part equal to the published `openapi.json`; and
+    `TestAsyncAPIMatchesTheCode` checks the live updates' kinds and the
+    webhooks' events against the code. `make lint` lints the
+    specification with Redocly's strict rules.
 - **Which tests cover each requirement** (`docs/migration.md`, phase 0,
   step 5; audit T4). Each integration and end-to-end test now names in its
   doc comment the requirement it covers, or says it is about operations,

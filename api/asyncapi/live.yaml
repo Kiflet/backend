@@ -1,0 +1,135 @@
+# The live updates a dashboard receives (docs/architecture.md, section 11).
+# TestAsyncAPIMatchesTheCode checks that every kind the code publishes is
+# here, and nothing else.
+asyncapi: 3.0.0
+info:
+  title: Kiflet live updates
+  version: '1'
+  description: >-
+    A dashboard keeps a WebSocket open, authenticated by the session
+    cookie, and is told when something of its company changes. A message
+    says what changed, not all of it: the page fetches again what it shows.
+    A message that names roles reaches only the dashboards of those roles;
+    one that names none reaches the whole company. The Go dashboard
+    connects at /app/live; Kiflet/web will at /ws.
+servers:
+  app:
+    host: app.kiflet.et
+    protocol: wss
+channels:
+  live:
+    address: /app/live
+    messages:
+      shipment:
+        $ref: '#/components/messages/shipment'
+      location:
+        $ref: '#/components/messages/location'
+      alert:
+        $ref: '#/components/messages/alert'
+      payment:
+        $ref: '#/components/messages/payment'
+      invoice:
+        $ref: '#/components/messages/invoice'
+operations:
+  receiveUpdates:
+    action: receive
+    channel:
+      $ref: '#/channels/live'
+components:
+  schemas:
+    roles:
+      description: The only roles that may receive the message; absent for every role.
+      type: array
+      items:
+        type: string
+  messages:
+    shipment:
+      title: A shipment changed
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type:
+            const: shipment
+          data:
+            type: object
+            required: [id, tracking_number, status, status_label, change]
+            properties:
+              id: {type: string, format: uuid}
+              tracking_number: {type: string}
+              status: {type: string}
+              status_label: {type: string}
+              change:
+                type: string
+                description: What happened, the history event's type (created, assigned, status_changed, …)
+    location:
+      title: A driver's position, the newest of a sync
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type:
+            const: location
+          data:
+            type: object
+            required: [driver_id, name, lat, lng, at]
+            properties:
+              driver_id: {type: string, format: uuid}
+              name: {type: string}
+              lat: {type: number}
+              lng: {type: number}
+              at: {type: string, format: date-time}
+              speed_kph: {type: [number, 'null']}
+              battery: {type: [integer, 'null']}
+    alert:
+      title: An alert was raised
+      payload:
+        type: object
+        required: [type, data]
+        properties:
+          type:
+            const: alert
+          data:
+            type: object
+            required: [id, type, label, severity, message, shipment_id]
+            properties:
+              id: {type: string, format: uuid}
+              type: {type: string}
+              label: {type: string}
+              severity: {type: string}
+              message: {type: string}
+              shipment_id: {type: string, description: Empty when the alert is about no shipment}
+    payment:
+      title: A payment's status changed
+      description: For the company's admins alone.
+      payload:
+        type: object
+        required: [type, data, roles]
+        properties:
+          type:
+            const: payment
+          roles:
+            $ref: '#/components/schemas/roles'
+          data:
+            type: object
+            required: [id, status]
+            properties:
+              id: {type: string, format: uuid}
+              status: {type: string}
+    invoice:
+      title: An invoice was paid
+      description: For the company's admins alone.
+      payload:
+        type: object
+        required: [type, data, roles]
+        properties:
+          type:
+            const: invoice
+          roles:
+            $ref: '#/components/schemas/roles'
+          data:
+            type: object
+            required: [id, status]
+            properties:
+              id: {type: string, format: uuid}
+              status: {type: string}
