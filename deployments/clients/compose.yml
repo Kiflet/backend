@@ -79,7 +79,8 @@ services:
   # Migrates and loads the demo company, once.
   seed:
     <<: *backend
-    command: seed
+    # Once: a restart keeps the data it loaded.
+    command: [seed, --if-empty]
     depends_on:
       postgres:
         condition: service_healthy
