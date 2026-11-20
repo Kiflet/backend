@@ -73,6 +73,42 @@ SET delivery = sqlc.arg(delivery),
 WHERE provider = sqlc.arg(provider) AND provider_message_id = sqlc.arg(provider_message_id)
   AND direction = 'outbound' AND (delivery IS NULL OR delivery = 'undelivered');
 
+-- name: KeepEarlySMSReport :exec
+-- tenant: none, a provider's report names its message, not a company.
+-- A report that found no text: kept until the text is recorded as sent.
+-- One for a text already recorded (a late failure after delivered) isn't
+-- kept. Delivered is final here too.
+INSERT INTO sms_early_reports (provider, provider_message_id, delivery, delivery_at, last_error)
+SELECT sqlc.arg(provider), sqlc.arg(provider_message_id), sqlc.arg(delivery), sqlc.arg(delivery_at), sqlc.narg(last_error)
+WHERE NOT EXISTS (
+    SELECT 1 FROM sms_messages
+    WHERE provider = sqlc.arg(provider) AND provider_message_id = sqlc.arg(provider_message_id) AND direction = 'outbound'
+)
+ON CONFLICT (provider, provider_message_id) DO UPDATE
+SET delivery = EXCLUDED.delivery, delivery_at = EXCLUDED.delivery_at,
+    last_error = EXCLUDED.last_error, received_at = NOW()
+WHERE sms_early_reports.delivery = 'undelivered';
+
+-- name: ApplyEarlySMSReports :execrows
+-- tenant: none, the reports are matched to their texts by message ID.
+-- The kept reports whose texts are now recorded as sent: applied as
+-- RecordSMSDelivery would have, then deleted.
+WITH applied AS (
+    UPDATE sms_messages m
+    SET delivery = r.delivery, delivery_at = r.delivery_at, last_error = r.last_error
+    FROM sms_early_reports r
+    WHERE m.provider = r.provider AND m.provider_message_id = r.provider_message_id
+      AND m.direction = 'outbound' AND (m.delivery IS NULL OR m.delivery = 'undelivered')
+    RETURNING r.provider, r.provider_message_id
+)
+DELETE FROM sms_early_reports r
+USING applied a
+WHERE r.provider = a.provider AND r.provider_message_id = a.provider_message_id;
+
+-- name: DeleteOldEarlySMSReports :exec
+-- tenant: none, retention of the platform's own table.
+DELETE FROM sms_early_reports WHERE received_at < sqlc.arg(before);
+
 -- name: MarkSMSRetry :exec
 UPDATE sms_messages
 SET status = 'queued', last_error = $2, next_attempt_at = $3

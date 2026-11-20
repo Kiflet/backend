@@ -471,7 +471,7 @@ func (c *Config) IsProduction() bool { return c.Environment == "production" }
 func (c *Config) SecureCookies() bool { return strings.HasPrefix(c.PublicURL, "https://") }
 
 func loadOrCreateSecret(path string) ([]byte, error) {
-	if b, err := os.ReadFile(path); err == nil {
+	if b, err := os.ReadFile(path); err == nil { //nolint:gosec // G304: the secret file the operator names
 		s := strings.TrimSpace(string(b))
 		if len(s) >= 32 {
 			return []byte(s), nil

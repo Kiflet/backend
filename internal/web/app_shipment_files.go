@@ -22,7 +22,7 @@ func (s *Server) shipmentDocumentAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	back := "/app/shipments/" + id.String() + "?tab=documents"
-	if err := r.ParseMultipartForm(1 << 20); err != nil {
+	if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // G120: the body is bounded by MaxBytesReader above
 		s.back(w, r, back, "error", "The file is larger than 10 MB. Scan it at a lower resolution, or split it.")
 		return
 	}

@@ -31,6 +31,8 @@ const (
 // already there, and returns the files it wrote. They are readable by all,
 // so that a sandbox in a container can read them: they are throwaway keys,
 // which only the sandbox and a Kiflet pointed at it trust.
+//
+//nolint:gosec // G301, G306: readable on purpose, as the comment above says
 func WriteKeys(dir string) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
@@ -78,6 +80,8 @@ func exists(path string) bool {
 // LoadKeys reads the sandbox's halves of the key pairs from dir: the
 // merchant's public key, to check Kiflet's signatures, and telebirr's
 // private key, to sign as telebirr.
+//
+//nolint:gosec // G304: the directory is the operator's choice
 func LoadKeys(dir string) (*rsa.PublicKey, *rsa.PrivateKey, error) {
 	hint := fmt.Sprintf(" (make them with `kiflet-sandbox keys` or `make sandbox-keys`, in %s)", dir)
 	b, err := os.ReadFile(filepath.Join(dir, MerchantPublicKey))

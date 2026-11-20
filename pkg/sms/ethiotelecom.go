@@ -73,9 +73,15 @@ func (e *EthioTelecomProvider) Send(ctx context.Context, to, message string, msg
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrRejected, err)
 	}
-	id, err := e.send(ctx, phone, message, false)
+	token, err := e.ensureToken(ctx, "")
+	if err != nil {
+		return "", err
+	}
+	id, err := e.send(ctx, token, phone, message)
 	if errors.Is(err, errTokenRefused) {
-		id, err = e.send(ctx, phone, message, true)
+		if token, err = e.ensureToken(ctx, token); err == nil {
+			id, err = e.send(ctx, token, phone, message)
+		}
 	}
 	if err != nil {
 		return "", err
@@ -87,11 +93,7 @@ func (e *EthioTelecomProvider) Send(ctx context.Context, to, message string, msg
 // errTokenRefused is the gateway answering 401 to a message.
 var errTokenRefused = errors.New("the gateway refused the token")
 
-func (e *EthioTelecomProvider) send(ctx context.Context, to, message string, freshToken bool) (string, error) {
-	token, err := e.ensureToken(ctx, freshToken)
-	if err != nil {
-		return "", err
-	}
+func (e *EthioTelecomProvider) send(ctx context.Context, token, to, message string) (string, error) {
 	body, err := json.Marshal(ethioTelecomSMSRequest{To: to, From: e.senderID, Message: message})
 	if err != nil {
 		return "", err
@@ -129,15 +131,17 @@ func (e *EthioTelecomProvider) send(ctx context.Context, to, message string, fre
 }
 
 // ensureToken returns a token valid for a few more minutes, asking for a
-// new one when there is none, it is about to expire, or fresh is set.
-func (e *EthioTelecomProvider) ensureToken(ctx context.Context, fresh bool) (string, error) {
+// new one when there is none, it is about to expire, or it is refused, the
+// one the gateway has just turned down. Messages refused together sign in
+// once: the first asks for a new token, and the others find it.
+func (e *EthioTelecomProvider) ensureToken(ctx context.Context, refused string) (string, error) {
 	e.tokenMutex.Lock()
 	defer e.tokenMutex.Unlock()
-	if !fresh && e.token != "" && time.Now().Before(e.tokenExpiry.Add(-time.Minute)) {
+	if e.token != "" && e.token != refused && time.Now().Before(e.tokenExpiry.Add(-time.Minute)) {
 		return e.token, nil
 	}
 
-	body, err := json.Marshal(ethioTelecomAuthRequest{APIKey: e.apiKey})
+	body, err := json.Marshal(ethioTelecomAuthRequest{APIKey: e.apiKey}) //nolint:gosec // G117: the key is what this request sends, to the gateway, over TLS
 	if err != nil {
 		return "", err
 	}

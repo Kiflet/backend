@@ -148,6 +148,40 @@ func TestEthioTelecomProvider_SignsInAgainWhenTheTokenIsRefused(t *testing.T) {
 	assert.Equal(t, 4, g.sends, "one retry, not more")
 }
 
+// Messages refused together, when the gateway ends its token early, sign
+// in again once between them, not once each.
+func TestEthioTelecomProvider_SignsInOnceForMessagesRefusedTogether(t *testing.T) {
+	g := &fakeGateway{expiresIn: 3600}
+	ended := false
+	g.send = func(n int) (int, any) {
+		if ended && g.tokens[n-1] == "Bearer token-1" {
+			return http.StatusUnauthorized, map[string]any{"error": "token expired"}
+		}
+		return http.StatusOK, map[string]any{"message_id": fmt.Sprintf("MSG%d", n), "status": "accepted"}
+	}
+	provider := NewEthioTelecomProvider(g.serve(t).URL, "api-key", "SENDER", &mockLogger{})
+	_, err := provider.Send(context.Background(), "0912345678", "First", MessageTypeNotification)
+	require.NoError(t, err)
+
+	ended = true
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for range 8 {
+		wg.Go(func() {
+			_, err := provider.Send(context.Background(), "0912345678", "Test", MessageTypeNotification)
+			errs <- err
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	assert.Equal(t, 2, g.logins, "one sign-in at first, one after the token ended")
+}
+
 func TestEthioTelecomProvider_RefusedKey(t *testing.T) {
 	g := &fakeGateway{expiresIn: 3600}
 	provider := NewEthioTelecomProvider(g.serve(t).URL, "wrong-key", "SENDER", &mockLogger{})

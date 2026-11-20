@@ -10,6 +10,7 @@ linters:
   default: none
   enable:
     - errcheck
+    - gosec
     - ineffassign
     - staticcheck
     - unused
@@ -43,6 +44,29 @@ linters:
         # De Morgan's law: !(a || b) often says what is meant better than
         # its expansion.
         - -QF1001
+    gosec:
+      excludes:
+        # Unchecked errors: errcheck checks them, with the exceptions above.
+        - G104
+        # Integer conversions: the values converted (limits, counts, page
+        # numbers, sizes) are bounded where they come in, which the rule
+        # can't see, so it flags every int32 a query takes.
+        - G115
+  exclusions:
+    rules:
+      # Tests run commands, read the files they are given and draw random
+      # data on purpose.
+      - path: (_test\.go$|^tests/)
+        linters: [gosec]
+        text: "G(204|304|404|703)"
+      # The server-rendered pages, frozen until Kiflet/web replaces them:
+      # every redirect goes to a path built here or checked by localPath
+      # and safeNext, each cookie's Secure comes from
+      # config.SecureCookies(), and assets come from an embedded FS. The
+      # rules can't follow that; new HTTP code is checked in full.
+      - path: ^internal/web/
+        linters: [gosec]
+        text: "G(124|602|703|710)"
 
 issues:
   # Everything, every time: there is no backlog of excused findings.

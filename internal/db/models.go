@@ -371,6 +371,15 @@ type ShipmentEvent struct {
 	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type SmsEarlyReport struct {
+	Provider          string             `db:"provider" json:"provider"`
+	ProviderMessageID string             `db:"provider_message_id" json:"provider_message_id"`
+	Delivery          string             `db:"delivery" json:"delivery"`
+	DeliveryAt        pgtype.Timestamptz `db:"delivery_at" json:"delivery_at"`
+	LastError         *string            `db:"last_error" json:"last_error"`
+	ReceivedAt        pgtype.Timestamptz `db:"received_at" json:"received_at"`
+}
+
 type SmsMessage struct {
 	ID                pgtype.UUID        `db:"id" json:"id"`
 	TenantID          pgtype.UUID        `db:"tenant_id" json:"tenant_id"`

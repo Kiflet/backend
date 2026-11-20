@@ -304,6 +304,13 @@ func (s *SMSService) deliver(ctx context.Context, m db.SmsMessage) {
 		}
 		if err != nil {
 			s.log.Error().Err(err).Msg("mark sms sent")
+			return
+		}
+		// A report that came before this was saved is waiting for it.
+		if sent.ProviderMessageID != nil {
+			if _, err := s.q.ApplyEarlySMSReports(ctx); err != nil {
+				s.log.Error().Err(err).Msg("apply early sms reports")
+			}
 		}
 		return
 	}
@@ -329,8 +336,10 @@ func (s *SMSService) deliver(ctx context.Context, m db.SmsMessage) {
 // DeliveryReport records what the provider says became of a text it
 // accepted. Status is the provider's word for it: delivered, or undelivered,
 // failed, rejected or expired with detail saying why. Anything else (queued,
-// sent to the network) is not final and is ignored, as are reports naming a
-// message this platform didn't send. It reports whether a message changed.
+// sent to the network) is not final and is ignored. A report naming no text
+// is kept for a day: the gateway may report before the sender has saved
+// its message ID, and saving it applies the report. It reports whether a
+// message changed.
 func (s *SMSService) DeliveryReport(ctx context.Context, messageID, status, detail string, at time.Time) (bool, error) {
 	if s.sender == nil || messageID == "" {
 		return false, nil
@@ -358,6 +367,20 @@ func (s *SMSService) DeliveryReport(ctx context.Context, messageID, status, deta
 	})
 	if err != nil {
 		return false, err
+	}
+	if n == 0 {
+		// Kept, then applied: the text may have been saved meanwhile, after
+		// the update above looked and before the sender looked for this.
+		keep := db.KeepEarlySMSReportParams{
+			Provider: provider, ProviderMessageID: messageID,
+			Delivery: delivery, DeliveryAt: toTimestamp(at), LastError: toText(truncate(detail, 300)),
+		}
+		if err := s.q.KeepEarlySMSReport(ctx, keep); err != nil {
+			return false, err
+		}
+		if n, err = s.q.ApplyEarlySMSReports(ctx); err != nil {
+			return false, err
+		}
 	}
 	if n > 0 {
 		metrics.SMSDeliveries.WithLabelValues(provider, delivery).Inc()
