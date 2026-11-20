@@ -82,7 +82,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] The driver sync's change feed, with an opaque cursor and full
       downloads (D1).
 - [x] The tenant in every reference between companies' tables (D2).
-- [ ] The per-driver load limit counted under a lock (D3).
+- [x] The per-driver load limit counted under a lock (D3).
 - [ ] Charges and cargo values in santim (D4).
 - [ ] Every query without `tenant_id` says why, checked in CI (D5).
 - [ ] `pod_media`, and signatures stored as files (D6).

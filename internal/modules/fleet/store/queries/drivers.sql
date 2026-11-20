@@ -19,6 +19,14 @@ SET language = COALESCE(sqlc.narg(language)::text, language),
     app_vibrate = COALESCE(sqlc.narg(vibrate)::boolean, app_vibrate)
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id) AND role = 'driver';
 
+-- name: LockDriver :execrows
+-- Holds a driver's row until the transaction ends, so that loads given to
+-- the driver are counted one transaction at a time. NO KEY UPDATE: it
+-- waits for another assignment, not for rows that refer to the driver.
+SELECT 1 FROM users
+WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id) AND role = 'driver'
+FOR NO KEY UPDATE;
+
 -- name: SetDriverLicence :exec
 UPDATE users SET licence_expires_on = sqlc.narg(licence_expires_on)
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id) AND role = 'driver';

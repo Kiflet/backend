@@ -76,6 +76,12 @@ What changed in each release, newest first.
 
 ### Fixed
 
+- **A driver's load limit holds when loads are given at once** (audit D3).
+  Two assignments to the same driver at the same moment each counted the
+  driver's loads before either was saved, so both could pass the
+  company's limit. The assignment now holds the driver's row while it
+  counts (`FOR NO KEY UPDATE`, which doesn't hold up rows that refer to
+  the driver), and the second waits for the first.
 - **Delivery reports that come early are no longer lost.** A gateway may
   report on a text before the sender has saved its message ID; the report
   matched nothing and was dropped, so the text never showed delivered or

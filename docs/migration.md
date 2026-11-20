@@ -372,7 +372,7 @@ with its tests; the IDs are the audit's.
    operator makes across companies stay on the ID. A test fails on a new
    reference without the tenant, and another writes with another
    company's IDs and expects the database to refuse.
-3. **The load limit under a lock** (D3): the assigning transaction locks
+3. **The load limit under a lock** (done; D3): the assigning transaction locks
    the driver's row before counting; a test assigns two loads at once to a
    driver with room for one.
 4. **Money in santim** (D4): `shipment_charges.amount` and
