@@ -397,7 +397,7 @@ with its tests; the IDs are the audit's.
    fails on a code without words for every audience in both languages.
 10. **Live updates by role** (done; P1): a live message names the roles that may
     receive it; payments and invoices go to admins.
-11. **Events carry what their subscribers read** (D9): the company and the
+11. **Events carry what their subscribers read** (done; D9): the company and the
     facts a subscriber needs ride on the event, so a transaction runs no
     look-ups for them.
 

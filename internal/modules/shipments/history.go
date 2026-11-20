@@ -8,6 +8,7 @@ import (
 
 	"github.com/kiflet/backend/internal/modules/identity"
 	"github.com/kiflet/backend/internal/modules/shipments/domain"
+	"github.com/kiflet/backend/internal/modules/tenancy"
 	"github.com/kiflet/backend/internal/platform/events"
 )
 
@@ -34,6 +35,10 @@ type Change struct {
 	Recipient      string       // status_changed: who took delivery, from the proof
 	By             domain.Actor // status_changed: how it was made
 	POD            *PODCheck    // pod_recorded: where the proof was recorded
+	// Company is the shipment's company as the publisher read it in this
+	// transaction: subscribers read its settings here instead of looking
+	// it up again (docs/audit-2026-11-19.md, D9).
+	Company tenancy.Tenant
 }
 
 // PODCheck is how the place a proof of delivery was recorded compares with

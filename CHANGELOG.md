@@ -239,6 +239,13 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **A shipment's change carries its company** (`docs/migration.md`,
+  phase 1, step 11; audit D9). The texting subscriber read the company
+  again inside every transaction that changed a shipment. A transaction
+  now reads its company once (`tenantIn`, kept in the transaction's
+  scope), and each change it records carries it on the event, so the
+  subscribers that run within it look nothing up for it. This completes
+  phase 1 but for the release that drops the old columns.
 - **One catalogue of words for codes** (`docs/migration.md`, phase 1,
   step 9; audit D8). `internal/platform/text` holds the office's and the
   driver's words for every code, beside the customer's. That covers

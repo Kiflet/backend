@@ -291,7 +291,7 @@ func (s *ShipmentService) Reopen(ctx context.Context, a Actor, id pgtype.UUID) (
 		}
 		// Reopening is new work: not in read-only mode, and the driver gets
 		// it back only if they could be assigned it now.
-		tenant, err := s.tenant(ctx, q, a.TenantID)
+		tenant, err := s.tenantIn(ctx, q, after, a.TenantID)
 		if err != nil {
 			return err
 		}
@@ -390,7 +390,7 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 		if bySMS || auto {
 			d, err := s.user(ctx, q, a.TenantID, sh.DriverID)
 			if err == nil && d.Phone != nil {
-				tenant, err := s.tenant(ctx, q, a.TenantID)
+				tenant, err := s.tenantIn(ctx, q, after, a.TenantID)
 				if err != nil {
 					return err
 				}

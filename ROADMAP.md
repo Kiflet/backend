@@ -95,7 +95,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] One catalogue of the words for codes, for the office, customers and
       drivers, in English and Amharic (D8).
 - [x] Live updates sent only to the roles that may see them (P1).
-- [ ] Events carry what their subscribers read (D9).
+- [x] Events carry what their subscribers read (D9).
 
 ### Phase 2: one API and its contract
 
