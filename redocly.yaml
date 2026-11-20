@@ -1,0 +1,7 @@
+# Redocly's lint of api/openapi/v1.yaml (make lint): its strict rules, so a
+# warning fails too.
+extends:
+  - recommended-strict
+rules:
+  # The API is Kiflet's own; it is not offered under a licence.
+  info-license: off

@@ -59,7 +59,7 @@ end-to-end test names one; unit tests may.
 | FR-043 Subscription Plans | TestCancelSubscription, TestCancelWithRenewalUnpaid, TestDowngradeWaitsForTheEndOfThePeriod, TestEnterpriseTerms, TestPayingForAPlan, TestTrialEndMakesTheAccountReadOnly, TestTrialNotices, TestUpgradeIsProrated |  |  |
 | FR-044 Billing Management | TestCancelWithRenewalUnpaid, TestPayingByReference, TestPayingByReferenceThroughCBEBirr, TestPayingForAPlan, TestPayingThroughTelebirr, TestPaymentForAPaidInvoiceIsRefunded, TestRenewalAfterSuspension, TestRenewalKeepsTheBillingDay, TestRenewalOverdueAndBankTransfer, TestSignupWithAPaidPlan, TestTelebirrNotificationFaults, TestTextOverageIsInvoiced, TestUpgradeIsProrated | TestPayingWithCBEBirr, TestPayingWithTelebirr |  |
 | FR-045 Usage Tracking | TestTextOverageIsInvoiced, TestTrialTextsStopAtTheAllowance, TestUsageAlerts |  |  |
-| FR-046 Public API (in part not built: Appendix D) | TestAPIKeysAreTheAdminsAlone, TestIdempotencyKeys, TestPublicAPI |  |  |
+| FR-046 Public API (in part not built: Appendix D) | TestAPIKeysAreTheAdminsAlone, TestIdempotencyKeys, TestPublicAPI, TestSpecificationMatchesTheAPI |  |  |
 | FR-047 Webhooks (in part not built: Appendix D) | TestWebhooks, TestWebhooksStayOnTheInternet |  |  |
 | FR-048 Company Onboarding | TestSignupConfirmsPhoneAndEmail, TestSignupWithAPaidPlan |  |  |
 | FR-049 Platform Admin Dashboard | TestDeleteCompany, TestPlatformAdminStaysOnPlatform, TestPlatformAuditAndHealth, TestSupportTickets |  |  |

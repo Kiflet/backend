@@ -1,0 +1,70 @@
+# What Kiflet sends a company's webhook endpoints (docs/architecture.md,
+# section 11). TestAsyncAPIMatchesTheCode checks the events against the
+# code's; the message is api/openapi/v1.yaml's WebhookMessage.
+asyncapi: 3.0.0
+info:
+  title: Kiflet webhooks
+  version: '1'
+  description: >-
+    A company's admin adds an address and the events it wants under
+    Settings → Webhooks. Each event is a POST of a WebhookMessage, signed as
+    Standard Webhooks (https://www.standardwebhooks.com) describes:
+    webhook-id (the same when a message is sent again), webhook-timestamp
+    and webhook-signature, with the endpoint's whsec_ secret. Answer 2xx
+    within 10 seconds; anything else is tried again after 1 and 5 minutes,
+    30 minutes, then 2, 6 and 12 hours. An address must be on the internet:
+    none on the server's own network is accepted.
+channels:
+  endpoint:
+    address: '{endpoint}'
+    parameters:
+      endpoint:
+        description: The address the company gave.
+    messages:
+      shipment.created:
+        $ref: '#/components/messages/shipment.created'
+      shipment.status_changed:
+        $ref: '#/components/messages/shipment.status_changed'
+      shipment.delivered:
+        $ref: '#/components/messages/shipment.delivered'
+      shipment.issue_reported:
+        $ref: '#/components/messages/shipment.issue_reported'
+      test:
+        $ref: '#/components/messages/test'
+operations:
+  sendEvents:
+    action: send
+    channel:
+      $ref: '#/channels/endpoint'
+components:
+  messages:
+    shipment.created:
+      title: A shipment is booked, from the dashboard, a CSV file or the API
+      payload:
+        $ref: '../openapi/v1.yaml#/components/schemas/WebhookMessage'
+    shipment.status_changed:
+      title: A shipment's status changes; data.event has from_status and to_status
+      payload:
+        $ref: '../openapi/v1.yaml#/components/schemas/WebhookMessage'
+    shipment.delivered:
+      title: A shipment is delivered; sent as well as its status change
+      payload:
+        $ref: '../openapi/v1.yaml#/components/schemas/WebhookMessage'
+    shipment.issue_reported:
+      title: The driver reports a problem (as well as the status change), or the receiver does on the confirmation page (event type customer_issue)
+      payload:
+        $ref: '../openapi/v1.yaml#/components/schemas/WebhookMessage'
+    test:
+      title: A test, sent from the endpoint's page on request
+      payload:
+        type: object
+        required: [type, timestamp, data]
+        properties:
+          type:
+            const: test
+          timestamp: {type: string, format: date-time}
+          data:
+            type: object
+            required: [message]
+            properties:
+              message: {type: string}

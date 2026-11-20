@@ -208,7 +208,7 @@ func newEnv(t *testing.T, options ...func(*setup)) *env {
 	e.work()
 	t.Cleanup(a.Close)
 	t.Cleanup(func() { e.stop() })
-	ts.Config.Handler = a.Handler()
+	ts.Config.Handler = contract(t, a.Handler())
 	ts.Start()
 	t.Cleanup(ts.Close)
 	return e

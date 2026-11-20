@@ -33,6 +33,7 @@ CLIENTS = KIFLET_BACKEND_IMAGE=kiflet KIFLET_SANDBOX_IMAGE=kiflet-sandbox KIFLET
 # The linters `make lint` runs. Dependabot doesn't see these.
 GOLANGCI_LINT_VERSION = v2.15.0
 GITLEAKS_VERSION = v8.30.1
+REDOCLY_VERSION = 2.76.0
 
 help:
 	@echo "Kiflet"
@@ -200,6 +201,7 @@ lint:
 		esac || exit 1; \
 	done
 	go run github.com/zricethezav/gitleaks/v8@$(GITLEAKS_VERSION) git --redact --no-banner .
+	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint --format=stylish api/openapi/v1.yaml
 
 sqlc:
 	sqlc generate -f sqlc/sqlc.yaml
