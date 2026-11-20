@@ -86,6 +86,7 @@ type BroadcastRecipient struct {
 	BroadcastID pgtype.UUID `db:"broadcast_id" json:"broadcast_id"`
 	DriverID    pgtype.UUID `db:"driver_id" json:"driver_id"`
 	BySms       bool        `db:"by_sms" json:"by_sms"`
+	TenantID    pgtype.UUID `db:"tenant_id" json:"tenant_id"`
 }
 
 type DriverFeed struct {

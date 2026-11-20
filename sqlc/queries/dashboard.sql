@@ -35,8 +35,8 @@ VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: AddBroadcastRecipient :exec
-INSERT INTO broadcast_recipients (broadcast_id, driver_id, by_sms)
-VALUES ($1, $2, $3)
+INSERT INTO broadcast_recipients (tenant_id, broadcast_id, driver_id, by_sms)
+VALUES (sqlc.arg(tenant_id), sqlc.arg(broadcast_id), sqlc.arg(driver_id), sqlc.arg(by_sms))
 ON CONFLICT DO NOTHING;
 
 -- name: ListBroadcasts :many
