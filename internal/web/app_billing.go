@@ -189,9 +189,9 @@ func (s *Server) paymentFail(w http.ResponseWriter, r *http.Request, err error) 
 	switch {
 	case errors.Is(err, payments.ErrBadSignature), errors.Is(err, payments.ErrUnauthorized):
 		s.log.Warn().Err(err).Str("path", r.RequestURI).Msg("payment provider call refused")
-		writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "The call could not be verified.")
+		writeJSONError(w, r, http.StatusUnauthorized, "unauthorized", "The call could not be verified.")
 	case errors.Is(err, payments.ErrMalformed):
-		writeJSONError(w, http.StatusBadRequest, "VALIDATION_ERROR", "The call could not be read.")
+		writeJSONError(w, r, http.StatusBadRequest, "validation_error", "The call could not be read.")
 	default:
 		s.apiError(w, r, err)
 	}

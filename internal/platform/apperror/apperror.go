@@ -20,9 +20,35 @@ type Error struct {
 	// Key is the message's key in internal/platform/text, set on the errors a
 	// customer can meet, so that their pages can say it in Amharic.
 	Key string
+	// Fields is every invalid field with its message, when there is more
+	// than one; Field and Message are then the first of them.
+	Fields map[string]string
+	// Code, when set, is more precise than the kind's code
+	// (idempotency_key_reused, version_mismatch).
+	Code string
 }
 
 func (e *Error) Error() string { return e.Message }
+
+// APICode is the error's code in the API: its own, or its kind's.
+func (e *Error) APICode() string {
+	if e.Code != "" {
+		return e.Code
+	}
+	return e.Kind.Code()
+}
+
+// FieldMessages is every invalid field with its message, for the API's
+// fields; nil when the error names no field.
+func (e *Error) FieldMessages() map[string]string {
+	if len(e.Fields) > 0 {
+		return e.Fields
+	}
+	if e.Field != "" {
+		return map[string]string{e.Field: e.Message}
+	}
+	return nil
+}
 
 // Kind classifies an Error for transport mapping.
 type Kind int
@@ -54,21 +80,22 @@ func (k Kind) HTTPStatus() int {
 	}
 }
 
-// Code is the stable machine-readable form of a Kind for API clients.
+// Code is the stable machine-readable form of a Kind for API clients, in
+// lowercase snake case (docs/architecture.md, section 11, "Conventions").
 func (k Kind) Code() string {
 	switch k {
 	case KindNotFound:
-		return "NOT_FOUND"
+		return "not_found"
 	case KindConflict:
-		return "CONFLICT"
+		return "conflict"
 	case KindForbidden:
-		return "FORBIDDEN"
+		return "forbidden"
 	case KindUnauthorized:
-		return "UNAUTHORIZED"
+		return "unauthorized"
 	case KindLimit:
-		return "PLAN_LIMIT"
+		return "plan_limit"
 	default:
-		return "VALIDATION_ERROR"
+		return "validation_error"
 	}
 }
 
@@ -89,15 +116,58 @@ func Limit(msg string) error { return &Error{Kind: KindLimit, Message: msg} }
 
 // As extracts an *Error, if err is one.
 func As(err error) (*Error, bool) {
-	var e *Error
-	if errors.As(err, &e) {
-		return e, true
-	}
-	return nil, false
+	return errors.AsType[*Error](err)
 }
 
 // IsNotFound reports whether err is a not-found domain error.
 func IsNotFound(err error) bool {
 	e, ok := As(err)
 	return ok && e.Kind == KindNotFound
+}
+
+// Problems collects every invalid field of an input, so that one answer
+// names them all. The zero value is ready to use.
+type Problems struct {
+	first  *Error
+	fields map[string]string
+}
+
+// Add records a field's problem; a field keeps its first.
+func (p *Problems) Add(field, msg string) {
+	if p.first == nil {
+		p.first = &Error{Kind: KindInvalid, Field: field, Message: msg}
+	}
+	if p.fields == nil {
+		p.fields = map[string]string{}
+	}
+	if _, ok := p.fields[field]; !ok {
+		p.fields[field] = msg
+	}
+}
+
+// AddErr records err when it is an invalid input naming a field, and says
+// whether it did; any other error is the caller's to return.
+func (p *Problems) AddErr(err error) bool {
+	e, ok := As(err)
+	if !ok || e.Kind != KindInvalid || e.Field == "" {
+		return false
+	}
+	p.Add(e.Field, e.Message)
+	for f, m := range e.Fields {
+		p.Add(f, m)
+	}
+	return true
+}
+
+// Err is nil when nothing was added, or an invalid-input error whose Field
+// and Message are the first problem and whose Fields are all of them.
+func (p *Problems) Err() error {
+	if p.first == nil {
+		return nil
+	}
+	e := *p.first
+	if len(p.fields) > 1 {
+		e.Fields = p.fields
+	}
+	return &e
 }

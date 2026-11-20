@@ -431,7 +431,8 @@ the code, the specification and the clients' types in step. The design is
    operation needs the `api-break` label on its pull request.
 3. **The contract test** (done): every response the API tests receive is
    validated against the specification.
-4. **The conventions,** in `internal/http`, once for every operation:
+4. **The conventions,** in `internal/http`, once for every operation
+   (the errors, request IDs and `Retry-After` done):
    - errors as `{ "error": { "code", "message", "fields", "request_id" } }`,
      with every invalid field at once; codes in lowercase snake case
      (`not_found`, `version_mismatch`; today's `VALIDATION_ERROR` and the

@@ -51,7 +51,7 @@ func TestOfficeDecisionWinsOverStaleDriverUpdate(t *testing.T) {
 
 	// Made before the cancellation, sent after it.
 	r := d.statusAt(clientID(), shipmentID, "in_transit", tappedOffline)
-	if r.OK || r.Retry || r.Code != "STALE" {
+	if r.OK || r.Retry || r.Code != "stale" {
 		t.Errorf("queued update: %+v, want a final STALE rejection", r)
 	}
 	if n := scalar[int64](t, `SELECT count(*) FROM shipment_events WHERE shipment_id = $1 AND event_type = 'conflict'`, shipmentID); n != 1 {
@@ -125,7 +125,7 @@ func TestResentSyncIsNotAConflict(t *testing.T) {
 	stale := clientID()
 	office.mustPost("/app/shipments/"+shipmentID+"/status", url.Values{"status": {"in_transit"}})
 	for i := range 2 {
-		if r := d.statusAt(stale, shipmentID, "issue", now.Add(-time.Minute)); r.OK || r.Code != "STALE" {
+		if r := d.statusAt(stale, shipmentID, "issue", now.Add(-time.Minute)); r.OK || r.Code != "stale" {
 			t.Errorf("attempt %d: %+v, want STALE", i+1, r)
 		}
 	}

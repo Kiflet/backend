@@ -3,7 +3,10 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/kiflet/backend/internal/platform/config"
 )
@@ -71,6 +74,34 @@ func TestCrossOrigin(t *testing.T) {
 		h.ServeHTTP(w, r)
 		if w.Code != c.want {
 			t.Errorf("%s: %d, want %d", c.name, w.Code, c.want)
+		}
+	}
+}
+
+// Every answer names its request's ID, which the handler sees too; a
+// caller's own is kept when it is a short token, and replaced otherwise.
+func TestRequestID(t *testing.T) {
+	var seen string
+	h := requestID(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { seen = chimw.GetReqID(r.Context()) }))
+	for _, c := range []struct{ sent, kept string }{
+		{"", ""},
+		{"web-7f3a9c21", "web-7f3a9c21"},
+		{"short", ""},
+		{"has spaces and\nnew lines", ""},
+		{strings.Repeat("a", 65), ""},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/driver/config", nil)
+		if c.sent != "" {
+			r.Header.Set("X-Request-Id", c.sent)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		got := w.Header().Get("X-Request-Id")
+		if got == "" || got != seen {
+			t.Errorf("sent %q: answered %q, the handler saw %q", c.sent, got, seen)
+		}
+		if c.kept != "" && got != c.kept || c.kept == "" && (got == c.sent || len(got) != 32) {
+			t.Errorf("sent %q: answered %q", c.sent, got)
 		}
 	}
 }

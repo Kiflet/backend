@@ -407,6 +407,13 @@ type driverApp struct {
 
 func (e *env) api(method, path, token string, body, out any) int {
 	e.t.Helper()
+	status, _ := e.apiWithHeaders(method, path, token, body, out)
+	return status
+}
+
+// apiWithHeaders is api, with the answer's headers.
+func (e *env) apiWithHeaders(method, path, token string, body, out any) (int, http.Header) {
+	e.t.Helper()
 	var r io.Reader
 	if body != nil {
 		buf, _ := json.Marshal(body)
@@ -428,7 +435,7 @@ func (e *env) api(method, path, token string, body, out any) int {
 			e.t.Fatalf("%s %s: decode %q: %v", method, path, raw, err)
 		}
 	}
-	return res.StatusCode
+	return res.StatusCode, res.Header
 }
 
 // signIn signs a driver in on a new phone and sets their own PIN.

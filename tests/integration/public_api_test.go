@@ -36,10 +36,27 @@ type apiShipment struct {
 	TrackingURL  string  `json:"tracking_url"`
 }
 
+// apiFailure is the API's error: its code, its message, every invalid
+// field and the request's ID.
 type apiFailure struct {
 	Error struct {
-		Code, Message, Field string
+		Code      string            `json:"code"`
+		Message   string            `json:"message"`
+		Fields    map[string]string `json:"fields"`
+		RequestID string            `json:"request_id"`
 	} `json:"error"`
+}
+
+// field is the one invalid field the error names, or "" when it names
+// none or several.
+func (f apiFailure) field() string {
+	if len(f.Error.Fields) != 1 {
+		return ""
+	}
+	for k := range f.Error.Fields {
+		return k
+	}
+	return ""
 }
 
 var apiKeyRe = regexp.MustCompile(`data-secret>(kf_[a-z0-9]+)<`)
@@ -66,7 +83,7 @@ func TestPublicAPI(t *testing.T) {
 	// Without a key, or with a wrong one, nothing is answered.
 	var fail apiFailure
 	for _, key := range []string{"", "kf_notakeyatallnotakeyatall", "the dashboard password"} {
-		if st := e.api(http.MethodGet, "/api/v1/shipments", key, nil, &fail); st != http.StatusUnauthorized || fail.Error.Code != "UNAUTHORIZED" {
+		if st := e.api(http.MethodGet, "/api/v1/shipments", key, nil, &fail); st != http.StatusUnauthorized || fail.Error.Code != "unauthorized" {
 			t.Errorf("key %q: status %d %+v", key, st, fail)
 		}
 	}
@@ -115,9 +132,23 @@ func TestPublicAPI(t *testing.T) {
 			body[k] = v
 		}
 		fail = apiFailure{}
-		if st := e.api(http.MethodPost, "/api/v1/shipments", key, body, &fail); st != http.StatusBadRequest || fail.Error.Field != c.field {
-			t.Errorf("%s: status %d, field %q, want %q: %s", why, st, fail.Error.Field, c.field, fail.Error.Message)
+		if st := e.api(http.MethodPost, "/api/v1/shipments", key, body, &fail); st != http.StatusBadRequest || fail.field() != c.field || fail.Error.Code != "validation_error" {
+			t.Errorf("%s: status %d, code %q, fields %v, want %q: %s", why, st, fail.Error.Code, fail.Error.Fields, c.field, fail.Error.Message)
 		}
+	}
+	// Every invalid field at once, and the request's ID to quote.
+	body := map[string]any{}
+	for k, v := range booking {
+		body[k] = v
+	}
+	body["priority"], body["customer"] = "whenever", map[string]any{"name": "", "phone": "12"}
+	fail = apiFailure{}
+	st, h := e.apiWithHeaders(http.MethodPost, "/api/v1/shipments", key, body, &fail)
+	if st != http.StatusBadRequest || len(fail.Error.Fields) != 3 || fail.Error.Fields["priority"] == "" || fail.Error.Fields["customer_name"] == "" || fail.Error.Fields["customer_phone"] == "" {
+		t.Errorf("three invalid fields: status %d, fields %v", st, fail.Error.Fields)
+	}
+	if fail.Error.RequestID == "" || fail.Error.RequestID != h.Get("X-Request-Id") {
+		t.Errorf("request_id %q, X-Request-Id %q", fail.Error.RequestID, h.Get("X-Request-Id"))
 	}
 	if n := scalar[int64](t, `SELECT count(*) FROM shipments WHERE customer_phone = $1`, "+251"+customer[1:]); n != 0 {
 		t.Fatalf("%d shipments booked by refused requests", n)
@@ -150,7 +181,7 @@ func TestPublicAPI(t *testing.T) {
 
 	// A change leaves out what it doesn't name, and null removes.
 	var changed apiShipment
-	st := e.api(http.MethodPatch, "/api/v1/shipments/"+sh.TrackingNumber, key, map[string]any{
+	st = e.api(http.MethodPatch, "/api/v1/shipments/"+sh.TrackingNumber, key, map[string]any{
 		"destination": map[string]any{"city": "Hawassa", "address": "Lake road"}, "receiver": nil, "instructions": "Call before arriving",
 	}, &changed)
 	if st != http.StatusOK || changed.Destination.City != "Hawassa" || changed.Receiver != nil || changed.Instructions != "Call before arriving" ||
@@ -192,7 +223,8 @@ func TestPublicAPI(t *testing.T) {
 	if st := e.api(http.MethodGet, "/api/v1/shipments?status=pending,assigned&per_page=1", key, nil, &list); st != http.StatusOK || list.Total != 2 || len(list.Data) != 1 {
 		t.Errorf("two statuses, a page of one: status %d %+v", st, list)
 	}
-	if st := e.api(http.MethodGet, "/api/v1/shipments?status=lost", key, nil, &fail); st != http.StatusBadRequest || fail.Error.Field != "status" {
+	fail = apiFailure{}
+	if st := e.api(http.MethodGet, "/api/v1/shipments?status=lost", key, nil, &fail); st != http.StatusBadRequest || fail.field() != "status" {
 		t.Errorf("an unknown status: status %d", st)
 	}
 

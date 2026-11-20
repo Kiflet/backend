@@ -18,6 +18,7 @@ import (
 	"github.com/kiflet/backend/internal/modules/fleet"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/modules/tenancy"
+	"github.com/kiflet/backend/internal/platform/apperror"
 	"github.com/kiflet/backend/internal/platform/events"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/platform/phone"
@@ -155,80 +156,95 @@ func (v validShipment) start(now time.Time) time.Time {
 	return now
 }
 
+// validateShipment checks a booking, naming every invalid field at once
+// (the error's Fields; its Field and Message are the first of them).
 func validateShipment(in ShipmentInput, now time.Time) (validShipment, error) {
 	var v validShipment
+	var p apperror.Problems
 	v.priority = strings.TrimSpace(in.Priority)
 	if v.priority == "" {
 		v.priority = model.PriorityNormal
 	}
 	if !contains(model.Priorities, v.priority) {
-		return v, invalid("priority", "Choose a priority.")
+		p.Add("priority", "Choose a priority.")
 	}
 
 	var err error
+	origin, dest := true, true
 	if v.origin, err = resolvePlace("origin", in.OriginCity, in.OriginAddress, in.OriginLat, in.OriginLng); err != nil {
-		return v, err
+		if !p.AddErr(err) {
+			return v, err
+		}
+		origin = false
 	}
 	if v.dest, err = resolvePlace("destination", in.DestinationCity, in.DestinationAddress, in.DestinationLat, in.DestinationLng); err != nil {
-		return v, err
+		if !p.AddErr(err) {
+			return v, err
+		}
+		dest = false
 	}
-	if geo.DistanceMeters(v.origin.Lat, v.origin.Lng, v.dest.Lat, v.dest.Lng) < 50 &&
+	if origin && dest && geo.DistanceMeters(v.origin.Lat, v.origin.Lng, v.dest.Lat, v.dest.Lng) < 50 &&
 		strings.EqualFold(v.origin.Address, v.dest.Address) {
-		return v, invalid("destination_city", "The destination is the same as the origin.")
+		p.Add("destination_city", "The destination is the same as the origin.")
 	}
 
 	v.customerName = strings.TrimSpace(in.CustomerName)
-	if v.customerName == "" {
-		return v, invalid("customer_name", "Enter the customer's name.")
-	}
-	if utf8.RuneCountInString(v.customerName) > 200 {
-		return v, invalid("customer_name", "That name is too long.")
+	switch {
+	case v.customerName == "":
+		p.Add("customer_name", "Enter the customer's name.")
+	case utf8.RuneCountInString(v.customerName) > 200:
+		p.Add("customer_name", "That name is too long.")
 	}
 	if v.customerPhone, err = phone.Normalize(in.CustomerPhone); err != nil {
-		return v, invalid("customer_phone", err.Error())
+		p.Add("customer_phone", err.Error())
 	}
 	name, number := strings.TrimSpace(in.ConsigneeName), strings.TrimSpace(in.ConsigneePhone)
 	switch {
 	case name == "" && number == "":
 	case name == "":
-		return v, invalid("consignee_name", "Enter the receiver's name, or clear their phone number.")
+		p.Add("consignee_name", "Enter the receiver's name, or clear their phone number.")
 	case utf8.RuneCountInString(name) > 200:
-		return v, invalid("consignee_name", "That name is too long.")
+		p.Add("consignee_name", "That name is too long.")
 	case number == "":
-		return v, invalid("consignee_phone", "Enter the receiver's phone number, or clear their name.")
+		p.Add("consignee_phone", "Enter the receiver's phone number, or clear their name.")
 	default:
 		if number, err = phone.Normalize(number); err != nil {
-			return v, invalid("consignee_phone", err.Error())
+			p.Add("consignee_phone", err.Error())
+		} else if number == v.customerPhone {
+			p.Add("consignee_phone", "That is the customer's number. Leave the receiver empty when the customer takes delivery.")
+		} else {
+			v.consigneeName, v.consigneePhone = &name, &number
 		}
-		if number == v.customerPhone {
-			return v, invalid("consignee_phone", "That is the customer's number. Leave the receiver empty when the customer takes delivery.")
-		}
-		v.consigneeName, v.consigneePhone = &name, &number
 	}
 
 	if in.CargoWeightKg < 0 || math.IsNaN(in.CargoWeightKg) || in.CargoWeightKg > 200000 {
-		return v, invalid("cargo_weight", "Enter a weight between 0 and 200,000 kg.")
+		p.Add("cargo_weight", "Enter a weight between 0 and 200,000 kg.")
 	}
 	if v.value, err = ParseBirr(in.CargoValue); err != nil || v.value < 0 || v.value >= maxCargoValue {
-		return v, invalid("cargo_value", "Enter the value in birr, with at most two decimals.")
+		p.Add("cargo_value", "Enter the value in birr, with at most two decimals.")
 	}
+	pieces := true
 	if in.CargoPiecesText != "" {
 		if in.CargoPieces, in.CargoUnit, err = ParsePieces(in.CargoPiecesText); err != nil {
-			return v, err
+			if !p.AddErr(err) {
+				return v, err
+			}
+			pieces = false
 		}
 	}
-	if in.CargoPieces < 0 || in.CargoPieces > 1_000_000 {
-		return v, invalid("cargo_pieces", "Enter a number of pieces up to 1,000,000.")
-	}
-	if unit := strings.TrimSpace(in.CargoUnit); in.CargoPieces > 0 {
+	unit := strings.TrimSpace(in.CargoUnit)
+	switch {
+	case !pieces:
+	case in.CargoPieces < 0 || in.CargoPieces > 1_000_000:
+		p.Add("cargo_pieces", "Enter a number of pieces up to 1,000,000.")
+	case in.CargoPieces > 0 && utf8.RuneCountInString(unit) > 30:
+		p.Add("cargo_pieces", "Name the pieces in 30 letters or fewer, e.g. bags or bales.")
+	case in.CargoPieces > 0:
 		n := int32(in.CargoPieces)
 		v.pieces = &n
-		if utf8.RuneCountInString(unit) > 30 {
-			return v, invalid("cargo_pieces", "Name the pieces in 30 letters or fewer, e.g. bags or bales.")
-		}
 		v.unit = toText(unit)
-	} else if unit != "" {
-		return v, invalid("cargo_pieces", "Enter how many, e.g. 152 bales.")
+	case unit != "":
+		p.Add("cargo_pieces", "Enter how many, e.g. 152 bales.")
 	}
 	v.weight = toNumericOmitZero(in.CargoWeightKg)
 	v.cargo = toText(strings.TrimSpace(truncate(in.CargoDescription, 500)))
@@ -236,22 +252,24 @@ func validateShipment(in ShipmentInput, now time.Time) (validShipment, error) {
 
 	if in.PlannedPickup != nil && !in.PlannedPickup.IsZero() {
 		if in.PlannedPickup.After(now.AddDate(1, 0, 0)) {
-			return v, invalid("planned_pickup", "The pickup is more than a year away.")
+			p.Add("planned_pickup", "The pickup is more than a year away.")
+		} else {
+			t := *in.PlannedPickup
+			v.pickup = &t
 		}
-		t := *in.PlannedPickup
-		v.pickup = &t
 	}
 	if in.EstimatedDelivery != nil && !in.EstimatedDelivery.IsZero() {
-		if in.EstimatedDelivery.Before(now.Add(-24 * time.Hour)) {
-			return v, invalid("estimated_delivery", "The estimated delivery is in the past.")
+		switch {
+		case in.EstimatedDelivery.Before(now.Add(-24 * time.Hour)):
+			p.Add("estimated_delivery", "The estimated delivery is in the past.")
+		case v.pickup != nil && in.EstimatedDelivery.Before(*v.pickup):
+			p.Add("estimated_delivery", "The estimated delivery is before the pickup.")
+		default:
+			t := *in.EstimatedDelivery
+			v.etaManual = &t
 		}
-		if v.pickup != nil && in.EstimatedDelivery.Before(*v.pickup) {
-			return v, invalid("estimated_delivery", "The estimated delivery is before the pickup.")
-		}
-		t := *in.EstimatedDelivery
-		v.etaManual = &t
 	}
-	return v, nil
+	return v, p.Err()
 }
 
 func timestampPtr(t *time.Time) pgtype.Timestamptz {

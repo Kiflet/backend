@@ -293,6 +293,18 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The API's errors take the conventions** (`docs/migration.md`, phase 2,
+  step 4). Codes are lowercase snake case (`validation_error`,
+  `not_found`, `rate_limited`; they were upper case) and open: the
+  specification lists them without an enum. `field` became `fields`,
+  every invalid field at once with its message; booking a shipment names
+  them all (the dashboard's form still shows the first). Each error has
+  its `request_id`, and every answer an `X-Request-Id`, the caller's own
+  when it is a short token. A 429 has always had `Retry-After`; the
+  specification says so now. The breaking change to the public and driver
+  operations is listed, with its reason, in `api/breaking-accepted.txt`,
+  which `make api-breaking` reads: no company integrates yet, and the PWA
+  ships with the server.
 - **The providers' callbacks moved to `/api/callbacks`** (`docs/migration.md`,
   phase 2, step 5): the SMS gateway's `/api/callbacks/sms/inbound` and
   `/sms/status`, and each payment provider's `/api/callbacks/payments/<code>/…`,
