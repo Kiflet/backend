@@ -126,9 +126,9 @@ type SyncResponse struct {
 	// Full says this is a full download: Shipments are all the driver
 	// should hold, and the phone lets go of the others, keeping any with
 	// changes not yet sent or a delivery draft.
-	Full            bool             `json:"full"`
-	Results         []SyncResult     `json:"results"`
-	LocationsStored int              `json:"locations_stored"`
+	Full            bool         `json:"full"`
+	Results         []SyncResult `json:"results"`
+	LocationsStored int          `json:"locations_stored"`
 	// Shipments are the loads that changed since the cursor, as they are
 	// now.
 	Shipments []DriverShipment `json:"shipments"`

@@ -93,9 +93,9 @@ type Deps struct {
 	// ShipmentFiles are shipments' documents and charges.
 	ShipmentFiles shipments.Files
 	// Feed is the driversync module's change feed, which the sync reads.
-	Feed driversync.Feed
-	Log           zerolog.Logger
-	Publisher     Publisher
+	Feed      driversync.Feed
+	Log       zerolog.Logger
+	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
 	// stores them at once.
 	Positions PositionQueue
