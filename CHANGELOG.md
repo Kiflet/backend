@@ -76,10 +76,15 @@ What changed in each release, newest first.
 
 ### Fixed
 
+- **Delivery reports that come early are no longer lost.** A gateway may
+  report on a text before the sender has saved its message ID; the report
+  matched nothing and was dropped, so the text never showed delivered or
+  undelivered. It is now kept (`sms_early_reports`, a day) and applied
+  when the text is saved. This made `TestGatewayFaults` fail now and then
+  on RabbitMQ (audit T5).
 - **Texts refused together sign in once.** When Ethio telecom's gateway
   ends its token early, every text in flight was refused and each asked
-  for a new token; now the first does and the others use it. This was the
-  likely cause of `TestGatewayFaults` failing now and then (audit T5).
+  for a new token; now the first does and the others use it.
 - **Local files can't leave their folder.** The local store (development
   and tests) opens every file through `os.Root`, so no name or link can
   reach outside `uploads/`; its folders are no longer readable by all.

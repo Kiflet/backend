@@ -20,6 +20,31 @@ func (q *Queries) AddSMSOptOut(ctx context.Context, phone string) error {
 	return err
 }
 
+const applyEarlySMSReports = `-- name: ApplyEarlySMSReports :execrows
+WITH applied AS (
+    UPDATE sms_messages m
+    SET delivery = r.delivery, delivery_at = r.delivery_at, last_error = r.last_error
+    FROM sms_early_reports r
+    WHERE m.provider = r.provider AND m.provider_message_id = r.provider_message_id
+      AND m.direction = 'outbound' AND (m.delivery IS NULL OR m.delivery = 'undelivered')
+    RETURNING r.provider, r.provider_message_id
+)
+DELETE FROM sms_early_reports r
+USING applied a
+WHERE r.provider = a.provider AND r.provider_message_id = a.provider_message_id
+`
+
+// tenant: none, the reports are matched to their texts by message ID.
+// The kept reports whose texts are now recorded as sent: applied as
+// RecordSMSDelivery would have, then deleted.
+func (q *Queries) ApplyEarlySMSReports(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, applyEarlySMSReports)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const claimQueuedSMS = `-- name: ClaimQueuedSMS :many
 UPDATE sms_messages
 SET status = 'sending', attempts = attempts + 1, next_attempt_at = NOW() + INTERVAL '5 minutes'
@@ -211,6 +236,16 @@ func (q *Queries) CountTenantSMSSegmentsSince(ctx context.Context, arg CountTena
 	return column_1, err
 }
 
+const deleteOldEarlySMSReports = `-- name: DeleteOldEarlySMSReports :exec
+DELETE FROM sms_early_reports WHERE received_at < $1
+`
+
+// tenant: none, retention of the platform's own table.
+func (q *Queries) DeleteOldEarlySMSReports(ctx context.Context, before pgtype.Timestamptz) error {
+	_, err := q.db.Exec(ctx, deleteOldEarlySMSReports, before)
+	return err
+}
+
 const deleteOldSMS = `-- name: DeleteOldSMS :exec
 DELETE FROM sms_messages WHERE created_at < $1
 `
@@ -309,6 +344,42 @@ func (q *Queries) IsPhoneOptedOut(ctx context.Context, phone string) (bool, erro
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const keepEarlySMSReport = `-- name: KeepEarlySMSReport :exec
+INSERT INTO sms_early_reports (provider, provider_message_id, delivery, delivery_at, last_error)
+SELECT $1, $2, $3, $4, $5
+WHERE NOT EXISTS (
+    SELECT 1 FROM sms_messages
+    WHERE provider = $1 AND provider_message_id = $2 AND direction = 'outbound'
+)
+ON CONFLICT (provider, provider_message_id) DO UPDATE
+SET delivery = EXCLUDED.delivery, delivery_at = EXCLUDED.delivery_at,
+    last_error = EXCLUDED.last_error, received_at = NOW()
+WHERE sms_early_reports.delivery = 'undelivered'
+`
+
+type KeepEarlySMSReportParams struct {
+	Provider          string             `db:"provider" json:"provider"`
+	ProviderMessageID string             `db:"provider_message_id" json:"provider_message_id"`
+	Delivery          string             `db:"delivery" json:"delivery"`
+	DeliveryAt        pgtype.Timestamptz `db:"delivery_at" json:"delivery_at"`
+	LastError         *string            `db:"last_error" json:"last_error"`
+}
+
+// tenant: none, a provider's report names its message, not a company.
+// A report that found no text: kept until the text is recorded as sent.
+// One for a text already recorded (a late failure after delivered) isn't
+// kept. Delivered is final here too.
+func (q *Queries) KeepEarlySMSReport(ctx context.Context, arg KeepEarlySMSReportParams) error {
+	_, err := q.db.Exec(ctx, keepEarlySMSReport,
+		arg.Provider,
+		arg.ProviderMessageID,
+		arg.Delivery,
+		arg.DeliveryAt,
+		arg.LastError,
+	)
+	return err
 }
 
 const listSMSByTenant = `-- name: ListSMSByTenant :many

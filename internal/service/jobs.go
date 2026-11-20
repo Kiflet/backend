@@ -38,8 +38,10 @@ const (
 	retainProcessed = 7 * 24 * time.Hour
 	retainAlerts    = 90 * 24 * time.Hour
 	retainSMS       = 180 * 24 * time.Hour //nolint:staticcheck // SMS, not milliseconds
-	retainEmail     = 180 * 24 * time.Hour
-	retainLinks     = 30 * 24 * time.Hour
+	// A delivery report no text has claimed in a day never will be.
+	retainEarlySMSReports = 24 * time.Hour
+	retainEmail           = 180 * 24 * time.Hour
+	retainLinks           = 30 * 24 * time.Hour
 
 	// usageEvery spaces out the plan-limit checks, which count every
 	// company's texts this month.
@@ -245,6 +247,9 @@ func (j *Jobs) Retention(ctx context.Context) error {
 		return err
 	}
 	if err := j.q.DeleteOldAlerts(ctx, toTimestamp(now.Add(-retainAlerts))); err != nil {
+		return err
+	}
+	if err := j.q.DeleteOldEarlySMSReports(ctx, toTimestamp(now.Add(-retainEarlySMSReports))); err != nil {
 		return err
 	}
 	if err := j.q.DeleteOldSMS(ctx, toTimestamp(now.Add(-retainSMS))); err != nil {

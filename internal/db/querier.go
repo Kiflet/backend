@@ -44,6 +44,10 @@ type Querier interface {
 	// A person who has left: what identifies them goes, their history stays
 	// (AC-041.6).
 	AnonymiseUser(ctx context.Context, arg AnonymiseUserParams) (pgtype.UUID, error)
+	// tenant: none, the reports are matched to their texts by message ID.
+	// The kept reports whose texts are now recorded as sent: applied as
+	// RecordSMSDelivery would have, then deleted.
+	ApplyEarlySMSReports(ctx context.Context) (int64, error)
 	// As ClaimSMSByIDs (notify.email).
 	ClaimEmailsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Email, error)
 	// The next events to publish, oldest first. Run in a transaction that
@@ -124,6 +128,8 @@ type Querier interface {
 	DeleteMessagesToPerson(ctx context.Context, arg DeleteMessagesToPersonParams) error
 	DeleteOldAlerts(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldBroadcasts(ctx context.Context, createdAt pgtype.Timestamptz) error
+	// tenant: none, retention of the platform's own table.
+	DeleteOldEarlySMSReports(ctx context.Context, before pgtype.Timestamptz) error
 	DeleteOldEmails(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldProcessedMessages(ctx context.Context, before pgtype.Timestamptz) error
 	DeleteOldSMS(ctx context.Context, createdAt pgtype.Timestamptz) error
@@ -209,6 +215,11 @@ type Querier interface {
 	// secret applies to messages still waiting.
 	GetWebhookTarget(ctx context.Context, id pgtype.UUID) (GetWebhookTargetRow, error)
 	IsPhoneOptedOut(ctx context.Context, phone string) (bool, error)
+	// tenant: none, a provider's report names its message, not a company.
+	// A report that found no text: kept until the text is recorded as sent.
+	// One for a text already recorded (a late failure after delivered) isn't
+	// kept. Delivered is final here too.
+	KeepEarlySMSReport(ctx context.Context, arg KeepEarlySMSReportParams) error
 	// Takes a timed job's lease unless another worker holds it. true when
 	// taken.
 	LeaseJob(ctx context.Context, arg LeaseJobParams) (bool, error)
