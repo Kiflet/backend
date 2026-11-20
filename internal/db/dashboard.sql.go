@@ -12,19 +12,25 @@ import (
 )
 
 const addBroadcastRecipient = `-- name: AddBroadcastRecipient :exec
-INSERT INTO broadcast_recipients (broadcast_id, driver_id, by_sms)
-VALUES ($1, $2, $3)
+INSERT INTO broadcast_recipients (tenant_id, broadcast_id, driver_id, by_sms)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT DO NOTHING
 `
 
 type AddBroadcastRecipientParams struct {
+	TenantID    pgtype.UUID `db:"tenant_id" json:"tenant_id"`
 	BroadcastID pgtype.UUID `db:"broadcast_id" json:"broadcast_id"`
 	DriverID    pgtype.UUID `db:"driver_id" json:"driver_id"`
 	BySms       bool        `db:"by_sms" json:"by_sms"`
 }
 
 func (q *Queries) AddBroadcastRecipient(ctx context.Context, arg AddBroadcastRecipientParams) error {
-	_, err := q.db.Exec(ctx, addBroadcastRecipient, arg.BroadcastID, arg.DriverID, arg.BySms)
+	_, err := q.db.Exec(ctx, addBroadcastRecipient,
+		arg.TenantID,
+		arg.BroadcastID,
+		arg.DriverID,
+		arg.BySms,
+	)
 	return err
 }
 

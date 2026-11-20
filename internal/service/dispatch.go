@@ -195,7 +195,7 @@ func (s *ShipmentService) Broadcast(ctx context.Context, a Actor, text string) (
 				})
 				res.BySMS++
 			}
-			if err := q.AddBroadcastRecipient(ctx, db.AddBroadcastRecipientParams{BroadcastID: b.ID, DriverID: d.ID, BySms: sms}); err != nil {
+			if err := q.AddBroadcastRecipient(ctx, db.AddBroadcastRecipientParams{TenantID: a.TenantID, BroadcastID: b.ID, DriverID: d.ID, BySms: sms}); err != nil {
 				return err
 			}
 			entries = append(entries, driversync.Entry{

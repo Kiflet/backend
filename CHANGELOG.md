@@ -76,6 +76,12 @@ What changed in each release, newest first.
 
 ### Fixed
 
+- **A driver's load limit holds when loads are given at once** (audit D3).
+  Two assignments to the same driver at the same moment each counted the
+  driver's loads before either was saved, so both could pass the
+  company's limit. The assignment now holds the driver's row while it
+  counts (`FOR NO KEY UPDATE`, which doesn't hold up rows that refer to
+  the driver), and the second waits for the first.
 - **Delivery reports that come early are no longer lost.** A gateway may
   report on a text before the sender has saved its message ID; the report
   matched nothing and was dropped, so the text never showed delivered or
@@ -205,6 +211,16 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The tenant in every reference** (`docs/migration.md`, phase 1, step 2;
+  audit D2). Each of the 39 references between companies' tables is now
+  `(tenant_id, x_id) REFERENCES x (tenant_id, id)`, so the database
+  refuses a row pointing at another company's, where before only the code
+  kept them apart. Deletes do as before; a `SET NULL` clears only its
+  column. `broadcast_recipients` gains `tenant_id`. The four references
+  the platform's operators make across companies (the audit log's user,
+  an invoice's maker, a payment's recorder, a support answer's author)
+  stay on the ID. `TestReferencesCarryTheTenant` fails on a new
+  reference without the tenant.
 - **The driver sync reads a change feed** (`docs/migration.md`, phase 1,
   step 1; audit D1). Every change a driver's phone must hear of writes an
   entry in `driver_feed`, in the transaction of the change, numbered in

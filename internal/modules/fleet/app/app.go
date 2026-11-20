@@ -72,6 +72,14 @@ func (Service) SetDriverVehicle(ctx context.Context, conn database.Conn, tenantI
 	return store.New(conn).SetDriverVehicle(ctx, store.SetDriverVehicleParams{ID: driverID, TenantID: tenantID, VehicleID: vehicleID})
 }
 
+func (Service) LockDriver(ctx context.Context, conn database.Conn, tenantID, driverID pgtype.UUID) error {
+	n, err := store.New(conn).LockDriver(ctx, store.LockDriverParams{ID: driverID, TenantID: tenantID})
+	if err == nil && n == 0 {
+		return fleet.ErrNoDriver
+	}
+	return err
+}
+
 func (Service) SetDriverLicence(ctx context.Context, conn database.Conn, tenantID, driverID pgtype.UUID, expires pgtype.Date) error {
 	return store.New(conn).SetDriverLicence(ctx, store.SetDriverLicenceParams{ID: driverID, TenantID: tenantID, LicenceExpiresOn: expires})
 }

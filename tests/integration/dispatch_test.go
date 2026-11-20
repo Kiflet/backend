@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -781,5 +782,43 @@ func TestVehicleOnOneTripWithinCapacity(t *testing.T) {
 	}
 	if !scalar[bool](t, `SELECT driver_id = $2 AND vehicle_id IS NULL FROM shipments WHERE id = $1`, b, second) {
 		t.Error("the busy usual truck should have been left off")
+	}
+}
+
+// TestLoadLimitUnderALock (audit D3): two loads given at once to a driver
+// with room for one: one is given, the other refused. The test holds the
+// driver's row while both assignments start, so they reach the count
+// together; without the lock both would count none and both be given.
+func TestLoadLimitUnderALock(t *testing.T) {
+	e := newEnv(t)
+	office := e.company("Busy Driver Freight")
+	driverID, _, _ := office.addDriver("Kebede Mekonnen")
+	exec(t, `UPDATE tenants SET max_active_per_driver = 1 WHERE id = $1`, office.tenant())
+	first, _ := office.book("Addis Ababa", "Adama", "")
+	second, _ := office.book("Addis Ababa", "Hawassa", "")
+
+	ctx := context.Background()
+	hold, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hold.Rollback(ctx) //nolint:errcheck // no-op after commit
+	if _, err := hold.Exec(ctx, `SELECT 1 FROM users WHERE id = $1 FOR NO KEY UPDATE`, driverID); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for _, id := range []string{first, second} {
+		wg.Go(func() { office.post("/app/shipments/"+id+"/assign", url.Values{"driver_id": {driverID}}) })
+	}
+	time.Sleep(300 * time.Millisecond)
+	if n := scalar[int64](t, `SELECT count(*) FROM shipments WHERE driver_id = $1`, driverID); n != 0 {
+		t.Fatalf("%d loads given while the driver's row was held: the assignment doesn't wait for it", n)
+	}
+	if err := hold.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	if n := scalar[int64](t, `SELECT count(*) FROM shipments WHERE driver_id = $1 AND status = 'assigned'`, driverID); n != 1 {
+		t.Errorf("%d loads given to a driver with room for one", n)
 	}
 }
