@@ -64,8 +64,9 @@ type Changed struct {
 	Lng            *float64  `json:"lng,omitempty"`
 	OccurredAt     time.Time `json:"occurred_at"`
 
-	// For the subscribers in this process: the shipment as it is after the
-	// change, who made it, and the change in full.
+	// For the subscribers in this process: the history's row, the shipment
+	// as it is after the change, who made it, and the change in full.
+	EventID  pgtype.UUID    `json:"-"`
 	Shipment Shipment       `json:"-"`
 	Actor    identity.Actor `json:"-"`
 	Change   Change         `json:"-"`

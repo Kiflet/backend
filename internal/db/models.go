@@ -88,6 +88,24 @@ type BroadcastRecipient struct {
 	BySms       bool        `db:"by_sms" json:"by_sms"`
 }
 
+type DriverFeed struct {
+	DriverID  pgtype.UUID        `db:"driver_id" json:"driver_id"`
+	Seq       int64              `db:"seq" json:"seq"`
+	TenantID  pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	Kind      string             `db:"kind" json:"kind"`
+	RefID     pgtype.UUID        `db:"ref_id" json:"ref_id"`
+	Op        string             `db:"op" json:"op"`
+	Reason    *string            `db:"reason" json:"reason"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
+type DriverFeedHead struct {
+	DriverID      pgtype.UUID `db:"driver_id" json:"driver_id"`
+	TenantID      pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	Seq           int64       `db:"seq" json:"seq"`
+	PrunedThrough int64       `db:"pruned_through" json:"pruned_through"`
+}
+
 type DriverPosition struct {
 	DriverID     pgtype.UUID        `db:"driver_id" json:"driver_id"`
 	TenantID     pgtype.UUID        `db:"tenant_id" json:"tenant_id"`

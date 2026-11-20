@@ -117,26 +117,29 @@ func (q *Queries) GetShipmentEventByClientID(ctx context.Context, arg GetShipmen
 	return event_type, err
 }
 
-const listDriverMessagesSince = `-- name: ListDriverMessagesSince :many
+const listDriverMessages = `-- name: ListDriverMessages :many
 SELECT e.id, e.shipment_id, e.event_type, e.to_status, e.note, e.actor_name, e.created_at, s.tracking_number
 FROM shipment_events e
-JOIN shipments s ON s.id = e.shipment_id
+JOIN shipments s ON s.id = e.shipment_id AND s.tenant_id = e.tenant_id
 WHERE e.tenant_id = $1
   AND e.driver_id = $2
   AND e.visible_to_driver
   AND e.actor_id IS DISTINCT FROM $2
-  AND e.created_at > $3
-ORDER BY e.created_at ASC
-LIMIT 200
+  AND ($3::uuid[] IS NULL OR e.id = ANY($3::uuid[]))
+  AND e.created_at > $4
+ORDER BY e.created_at DESC
+LIMIT $5
 `
 
-type ListDriverMessagesSinceParams struct {
-	TenantID pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
-	DriverID pgtype.UUID        `db:"driver_id" json:"driver_id"`
-	Since    pgtype.Timestamptz `db:"since" json:"since"`
+type ListDriverMessagesParams struct {
+	TenantID    pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	DriverID    pgtype.UUID        `db:"driver_id" json:"driver_id"`
+	Ids         []pgtype.UUID      `db:"ids" json:"ids"`
+	Since       pgtype.Timestamptz `db:"since" json:"since"`
+	MaxMessages int32              `db:"max_messages" json:"max_messages"`
 }
 
-type ListDriverMessagesSinceRow struct {
+type ListDriverMessagesRow struct {
 	ID             pgtype.UUID        `db:"id" json:"id"`
 	ShipmentID     pgtype.UUID        `db:"shipment_id" json:"shipment_id"`
 	EventType      string             `db:"event_type" json:"event_type"`
@@ -147,17 +150,24 @@ type ListDriverMessagesSinceRow struct {
 	TrackingNumber string             `db:"tracking_number" json:"tracking_number"`
 }
 
-// Notes and messages a dispatcher addressed to this driver: not the
-// driver's own. The LIMIT is maxDriverMessages in the sync service.
-func (q *Queries) ListDriverMessagesSince(ctx context.Context, arg ListDriverMessagesSinceParams) ([]ListDriverMessagesSinceRow, error) {
-	rows, err := q.db.Query(ctx, listDriverMessagesSince, arg.TenantID, arg.DriverID, arg.Since)
+// Notes and messages a dispatcher addressed to this driver, not the
+// driver's own: those the driver's feed names (ids), or with none named
+// the newest since a time, for a full download.
+func (q *Queries) ListDriverMessages(ctx context.Context, arg ListDriverMessagesParams) ([]ListDriverMessagesRow, error) {
+	rows, err := q.db.Query(ctx, listDriverMessages,
+		arg.TenantID,
+		arg.DriverID,
+		arg.Ids,
+		arg.Since,
+		arg.MaxMessages,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListDriverMessagesSinceRow{}
+	items := []ListDriverMessagesRow{}
 	for rows.Next() {
-		var i ListDriverMessagesSinceRow
+		var i ListDriverMessagesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ShipmentID,

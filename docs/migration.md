@@ -341,15 +341,16 @@ it and expensive after the pilot; every later phase builds on them. The
 Go pages and the PWA keep working throughout. Each step is a pull request
 with its tests; the IDs are the audit's.
 
-1. **The driver sync's change feed** (D1; the protocol is
+1. **The driver sync's change feed** (done; D1; the protocol is
    `docs/architecture.md`, section 11, "The driver sync"):
    - `driver_feed` (driver, sequence number, kind, the record's ID, upsert
      or remove, a reason) and `driver_feed_heads` (each driver's last
      number), in a new driversync module;
    - a subscriber within the transaction on `shipment.*` writes the
      entries for the load's driver, and a removal for the driver it was
-     taken from; office messages, broadcasts and the driver's settings
-     write theirs where they are made, until messaging moves (phase 3);
+     taken from, and the office's notes for the driver they address;
+     broadcasts write theirs where they are sent, until messaging moves
+     (phase 3); the profile is sent when a digest in the cursor differs;
    - the sync reads the entries after the cursor and sends each changed
      load's current state once, the removals with their reasons, and the
      new messages, with `more` when there are more; a full download

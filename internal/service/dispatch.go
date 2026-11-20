@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kiflet/backend/internal/db"
+	"github.com/kiflet/backend/internal/modules/driversync"
 )
 
 // Dispatch tools on top of single shipments: assigning several at once,
@@ -184,6 +185,7 @@ func (s *ShipmentService) Broadcast(ctx context.Context, a Actor, text string) (
 			return err
 		}
 		now := s.now()
+		entries := make([]driversync.Entry, 0, len(drivers))
 		for _, d := range drivers {
 			sms := d.Phone != nil && (!d.LastSyncAt.Valid || now.Sub(d.LastSyncAt.Time) > messageBySMSAfter)
 			if sms {
@@ -196,6 +198,12 @@ func (s *ShipmentService) Broadcast(ctx context.Context, a Actor, text string) (
 			if err := q.AddBroadcastRecipient(ctx, db.AddBroadcastRecipientParams{BroadcastID: b.ID, DriverID: d.ID, BySms: sms}); err != nil {
 				return err
 			}
+			entries = append(entries, driversync.Entry{
+				TenantID: a.TenantID, DriverID: d.ID, Kind: driversync.KindBroadcast, RefID: b.ID, Op: driversync.OpUpsert,
+			})
+		}
+		if err := s.feed.Add(ctx, eventTx(q, after), entries...); err != nil {
+			return err
 		}
 		res.Drivers = len(drivers)
 		s.audit(ctx, q, a, "drivers_messaged", "broadcast", b.ID, nil,

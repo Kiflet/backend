@@ -612,6 +612,79 @@ func (q *Queries) ListRecentShipmentsByDriver(ctx context.Context, arg ListRecen
 	return items, nil
 }
 
+const listShipmentsByIDs = `-- name: ListShipmentsByIDs :many
+SELECT id, tenant_id, tracking_number, origin_address, destination_address, customer_name, customer_phone, cargo_description, cargo_weight, cargo_value, special_instructions, driver_id, vehicle_id, status, status_note, status_reason, estimated_delivery, actual_delivery, created_at, updated_at, created_by, status_changed_at, priority, origin_city, destination_city, origin_lat, origin_lng, destination_lat, destination_lng, destination_precise, picked_up_at, confirm_token, customer_confirmed_at, customer_feedback, eta_manual, planned_pickup_at, anonymised_at, consignee_name, consignee_phone, cargo_pieces, cargo_unit FROM shipments
+WHERE tenant_id = $1 AND id = ANY($2::uuid[])
+`
+
+type ListShipmentsByIDsParams struct {
+	TenantID pgtype.UUID   `db:"tenant_id" json:"tenant_id"`
+	Ids      []pgtype.UUID `db:"ids" json:"ids"`
+}
+
+// The loads a driver's feed names, as they are now.
+func (q *Queries) ListShipmentsByIDs(ctx context.Context, arg ListShipmentsByIDsParams) ([]Shipment, error) {
+	rows, err := q.db.Query(ctx, listShipmentsByIDs, arg.TenantID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Shipment{}
+	for rows.Next() {
+		var i Shipment
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.TrackingNumber,
+			&i.OriginAddress,
+			&i.DestinationAddress,
+			&i.CustomerName,
+			&i.CustomerPhone,
+			&i.CargoDescription,
+			&i.CargoWeight,
+			&i.CargoValue,
+			&i.SpecialInstructions,
+			&i.DriverID,
+			&i.VehicleID,
+			&i.Status,
+			&i.StatusNote,
+			&i.StatusReason,
+			&i.EstimatedDelivery,
+			&i.ActualDelivery,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.StatusChangedAt,
+			&i.Priority,
+			&i.OriginCity,
+			&i.DestinationCity,
+			&i.OriginLat,
+			&i.OriginLng,
+			&i.DestinationLat,
+			&i.DestinationLng,
+			&i.DestinationPrecise,
+			&i.PickedUpAt,
+			&i.ConfirmToken,
+			&i.CustomerConfirmedAt,
+			&i.CustomerFeedback,
+			&i.EtaManual,
+			&i.PlannedPickupAt,
+			&i.AnonymisedAt,
+			&i.ConsigneeName,
+			&i.ConsigneePhone,
+			&i.CargoPieces,
+			&i.CargoUnit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listShipmentsForDriverSync = `-- name: ListShipmentsForDriverSync :many
 SELECT id, tenant_id, tracking_number, origin_address, destination_address, customer_name, customer_phone, cargo_description, cargo_weight, cargo_value, special_instructions, driver_id, vehicle_id, status, status_note, status_reason, estimated_delivery, actual_delivery, created_at, updated_at, created_by, status_changed_at, priority, origin_city, destination_city, origin_lat, origin_lng, destination_lat, destination_lng, destination_precise, picked_up_at, confirm_token, customer_confirmed_at, customer_feedback, eta_manual, planned_pickup_at, anonymised_at, consignee_name, consignee_phone, cargo_pieces, cargo_unit FROM shipments
 WHERE driver_id = $1
@@ -619,24 +692,21 @@ WHERE driver_id = $1
   AND (
     status IN ('assigned', 'in_transit', 'delayed', 'arrived', 'issue')
     OR updated_at > NOW() - INTERVAL '7 days'
-    OR ($3::timestamptz IS NOT NULL AND updated_at > $3::timestamptz)
   )
 ORDER BY created_at DESC
 LIMIT 200
 `
 
 type ListShipmentsForDriverSyncParams struct {
-	DriverID pgtype.UUID        `db:"driver_id" json:"driver_id"`
-	TenantID pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
-	Since    pgtype.Timestamptz `db:"since" json:"since"`
+	DriverID pgtype.UUID `db:"driver_id" json:"driver_id"`
+	TenantID pgtype.UUID `db:"tenant_id" json:"tenant_id"`
 }
 
-// Everything the driver's device should hold: active work, plus recently
-// finished work so the completed list survives a reinstall. On an incremental
-// sync anything changed since the cursor is included as well, so a
-// cancellation or a dispatcher edit reaches the device.
+// Everything the driver's device should hold, for a full download: active
+// work, plus recently finished work so the completed list survives a
+// reinstall. Later changes reach the device through the driver feed.
 func (q *Queries) ListShipmentsForDriverSync(ctx context.Context, arg ListShipmentsForDriverSyncParams) ([]Shipment, error) {
-	rows, err := q.db.Query(ctx, listShipmentsForDriverSync, arg.DriverID, arg.TenantID, arg.Since)
+	rows, err := q.db.Query(ctx, listShipmentsForDriverSync, arg.DriverID, arg.TenantID)
 	if err != nil {
 		return nil, err
 	}

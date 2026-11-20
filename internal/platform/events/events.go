@@ -45,6 +45,65 @@ type Tx struct {
 	// After runs f once the transaction has committed. Nil runs f at once,
 	// for a publisher without a transaction.
 	After func(f func())
+	// Scope is what the transaction's subscribers keep until it ends. Nil
+	// for a publisher without a transaction: a subscriber writes at once.
+	Scope *Scope
+}
+
+// Scope is what one transaction's subscribers share: values they gather
+// as its events are published, and work to do with them just before it
+// commits. A subscriber that must write once per transaction, or take its
+// locks last (the driver feed, which locks each driver's head), gathers
+// in a value and writes in BeforeCommit.
+type Scope struct {
+	mu     sync.Mutex
+	values map[any]any
+	before []func(context.Context) error
+}
+
+// Value is what is kept under key, made by init the first time. init may
+// call BeforeCommit.
+func (s *Scope) Value(key any, init func() any) any {
+	s.mu.Lock()
+	v, ok := s.values[key]
+	s.mu.Unlock()
+	if ok {
+		return v
+	}
+	v = init()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.values == nil {
+		s.values = map[any]any{}
+	}
+	s.values[key] = v
+	return v
+}
+
+// BeforeCommit adds f to run at the end of the transaction, just before it
+// commits, after those added before it.
+func (s *Scope) BeforeCommit(f func(context.Context) error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.before = append(s.before, f)
+}
+
+// Finish runs what BeforeCommit added; whoever owns the transaction calls
+// it just before committing, and rolls back on an error. Work added while
+// it runs runs too.
+func (s *Scope) Finish(ctx context.Context) error {
+	for i := 0; ; i++ {
+		s.mu.Lock()
+		if i >= len(s.before) {
+			s.mu.Unlock()
+			return nil
+		}
+		f := s.before[i]
+		s.mu.Unlock()
+		if err := f(ctx); err != nil {
+			return err
+		}
+	}
 }
 
 // Handler reacts to an event within the publisher's transaction.

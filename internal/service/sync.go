@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/kiflet/backend/internal/modules/fleet"
-	"github.com/kiflet/backend/internal/modules/shipments"
 	"sort"
 	"time"
 
@@ -12,6 +10,9 @@ import (
 
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/driversync"
+	"github.com/kiflet/backend/internal/modules/fleet"
+	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/pkg/metrics"
 )
@@ -41,7 +42,9 @@ type SyncRequest struct {
 	// the last sync.
 	Settings *SettingsChange `json:"settings,omitempty"`
 	// Since is the cursor from the previous response; empty on first sync.
-	Since *time.Time `json:"since"`
+	// A timestamp, from a PWA loaded before the driver feed, gets a full
+	// download.
+	Since string `json:"since"`
 	// ReceivedAt is when the request reached the server, set by the handler
 	// before it reads the body: the moment to compare DeviceTime with.
 	ReceivedAt time.Time `json:"-"`
@@ -114,20 +117,38 @@ type SyncResult struct {
 	Message  string `json:"message,omitempty"`
 }
 
-// SyncResponse is the server's half of the round trip.
+// SyncResponse is the server's half of the round trip (docs/architecture.md,
+// section 11, "The driver sync").
 type SyncResponse struct {
 	ServerTime time.Time `json:"server_time"`
-	// Cursor is passed back as Since next time.
-	Cursor             time.Time        `json:"cursor"`
-	Results            []SyncResult     `json:"results"`
-	LocationsStored    int              `json:"locations_stored"`
-	Shipments          []DriverShipment `json:"shipments"`
-	RemovedShipmentIDs []string         `json:"removed_shipment_ids"`
-	Messages           []DriverMessage  `json:"messages"`
-	Driver             DriverProfile    `json:"driver"`
-	// More says there were more messages than one response carries: the
-	// cursor stops at the last one sent, and the app asks again at once.
+	// Cursor is passed back as Since next time: an opaque string.
+	Cursor string `json:"cursor"`
+	// Full says this is a full download: Shipments are all the driver
+	// should hold, and the phone lets go of the others, keeping any with
+	// changes not yet sent or a delivery draft.
+	Full            bool             `json:"full"`
+	Results         []SyncResult     `json:"results"`
+	LocationsStored int              `json:"locations_stored"`
+	// Shipments are the loads that changed since the cursor, as they are
+	// now.
+	Shipments []DriverShipment `json:"shipments"`
+	// Removed are the loads taken from the driver since the cursor, and
+	// why; RemovedShipmentIDs are their IDs alone, for the PWA.
+	Removed            []RemovedShipment `json:"removed"`
+	RemovedShipmentIDs []string          `json:"removed_shipment_ids"`
+	Messages           []DriverMessage   `json:"messages"`
+	// Driver is the profile, when it changed since the cursor.
+	Driver *DriverProfile `json:"driver,omitempty"`
+	// More says there is more than one response carries: the app syncs
+	// again at once.
 	More bool `json:"more,omitempty"`
+}
+
+// RemovedShipment is a load taken off the driver's phone.
+type RemovedShipment struct {
+	ID string `json:"id"`
+	// Reason is reassigned, unassigned or cancelled.
+	Reason string `json:"reason"`
 }
 
 // DriverShipment is a shipment as the driver app holds it.
@@ -268,7 +289,7 @@ func (s *SyncService) Sync(ctx context.Context, p *Principal, req SyncRequest, c
 	}
 
 	resp := &SyncResponse{ServerTime: now, Results: []SyncResult{}, Shipments: []DriverShipment{},
-		RemovedShipmentIDs: []string{}, Messages: []DriverMessage{}}
+		Removed: []RemovedShipment{}, RemovedShipmentIDs: []string{}, Messages: []DriverMessage{}}
 
 	// Status changes and deliveries are applied in the order they happened,
 	// so "arrived" lands before the POD that completes the shipment.
@@ -488,25 +509,162 @@ func resultFor(r SyncResult, err error) SyncResult {
 	return r
 }
 
-// pull fills in what the device should now hold.
-func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, resp *SyncResponse) error {
-	// The cursor trails the clock slightly so that a write committing as this
-	// read runs is picked up next time; the device upserts, so seeing a
-	// change twice is harmless.
-	resp.Cursor = resp.ServerTime.Add(-5 * time.Second)
+// feedPage is the most feed entries one sync reads; with more, the app
+// syncs again at once.
+const feedPage = 500
 
-	var sinceTS pgtype.Timestamptz
-	if since != nil {
-		sinceTS = toTimestamp(*since)
-	}
-	ships, err := s.shipmentData.ForDriverSync(ctx, s.q.Conn(), shipments.SyncQuery{
-		DriverID: p.UserID, TenantID: p.TenantID, Since: sinceTS,
+// fullMessages is how many of the newest messages, and of the newest
+// broadcasts, from the last week a full download carries: the PWA keeps
+// 50.
+const fullMessages = 50
+
+// pull fills in what the device should now hold, read in one snapshot:
+// what changed since the cursor, from the driver's feed, or everything
+// when the cursor can't be carried on from (docs/architecture.md, section
+// 11, "The driver sync").
+func (s *SyncService) pull(ctx context.Context, p *Principal, since string, resp *SyncResponse) error {
+	return s.snapshot(ctx, func(q *db.Queries) error {
+		head, err := s.feed.Head(ctx, q.Conn(), p.TenantID, p.UserID)
+		if err != nil {
+			return err
+		}
+		profile, err := s.profile(ctx, q, p)
+		if err != nil {
+			return err
+		}
+		digest := profileDigest(profile)
+		if c, ok := parseSyncCursor(since); ok && c.driver == p.UserID.Bytes && head.Honours(c.seq) {
+			return s.pullChanges(ctx, q, p, c, profile, digest, resp)
+		}
+		var legacy *time.Time
+		if t, err := time.Parse(time.RFC3339Nano, since); err == nil {
+			legacy = &t
+		}
+		return s.pullAll(ctx, q, p, head, legacy, profile, digest, resp)
 	})
+}
+
+// pullChanges sends what the feed says changed after the cursor: each load
+// once, as it is now, those no longer the driver's as removed, and the new
+// messages.
+func (s *SyncService) pullChanges(ctx context.Context, q *db.Queries, p *Principal, c syncCursor, profile DriverProfile, digest uint64, resp *SyncResponse) error {
+	items, err := s.feed.Since(ctx, q.Conn(), p.TenantID, p.UserID, c.seq, feedPage)
 	if err != nil {
 		return err
 	}
+	resp.More = len(items) == feedPage
+	last := c.seq
+	type record struct {
+		kind string
+		ref  pgtype.UUID
+	}
+	latest := map[record]driversync.Item{}
+	var order []record
+	for _, it := range items {
+		r := record{it.Kind, it.RefID}
+		if _, seen := latest[r]; !seen {
+			order = append(order, r)
+		}
+		latest[r] = it
+		last = it.Seq
+	}
+	var loads, notes, broadcasts []pgtype.UUID
+	for _, r := range order {
+		switch r.kind {
+		case driversync.KindShipment:
+			loads = append(loads, r.ref)
+		case driversync.KindMessage:
+			notes = append(notes, r.ref)
+		case driversync.KindBroadcast:
+			broadcasts = append(broadcasts, r.ref)
+		}
+	}
+
+	if len(loads) > 0 {
+		ships, err := s.shipmentData.ByIDs(ctx, q.Conn(), p.TenantID, loads)
+		if err != nil {
+			return err
+		}
+		byID := make(map[pgtype.UUID]shipments.Shipment, len(ships))
+		for _, sh := range ships {
+			byID[sh.ID] = sh
+		}
+		var mine []shipments.Shipment
+		for _, id := range loads {
+			sh, ok := byID[id]
+			switch {
+			case ok && sh.DriverID == p.UserID:
+				mine = append(mine, sh)
+			case !ok:
+				// Deleted since: gone from every phone.
+				s.removed(resp, id, driversync.Unassigned)
+			default:
+				why := latest[record{driversync.KindShipment, id}].Reason
+				if why == "" {
+					// Taken away after this page's entries.
+					why = driversync.RemovalReason(sh.Status, sh.DriverID.Valid)
+				}
+				s.removed(resp, id, why)
+			}
+		}
+		if err := s.addShipments(ctx, q, p, mine, resp); err != nil {
+			return err
+		}
+	}
+	if err := s.addMessages(ctx, q, p, notes, broadcasts, time.Unix(0, 0), max(len(notes), len(broadcasts)), resp); err != nil {
+		return err
+	}
+	if digest != c.profile {
+		resp.Driver = &profile
+	}
+	resp.Cursor = syncCursor{driver: p.UserID.Bytes, seq: last, profile: digest}.String()
+	return nil
+}
+
+// pullAll is a full download: everything the driver should hold, as of the
+// feed's head. A timestamp cursor, from a PWA loaded before the feed, also
+// gets the loads taken from the driver since then, which that PWA reads.
+func (s *SyncService) pullAll(ctx context.Context, q *db.Queries, p *Principal, head driversync.Head, legacy *time.Time, profile DriverProfile, digest uint64, resp *SyncResponse) error {
+	resp.Full = true
+	ships, err := s.shipmentData.ForDriverSync(ctx, q.Conn(), shipments.SyncQuery{DriverID: p.UserID, TenantID: p.TenantID})
+	if err != nil {
+		return err
+	}
+	if err := s.addShipments(ctx, q, p, ships, resp); err != nil {
+		return err
+	}
+	if legacy != nil {
+		removed, err := s.shipmentData.UnassignedFromDriverSince(ctx, q.Conn(), shipments.UnassignedQuery{
+			TenantID: p.TenantID, DriverID: p.UserID, Since: toTimestamp(*legacy),
+		})
+		if err != nil {
+			return err
+		}
+		for _, id := range removed {
+			resp.RemovedShipmentIDs = append(resp.RemovedShipmentIDs, id.String())
+		}
+	}
+	if err := s.addMessages(ctx, q, p, nil, nil, resp.ServerTime.Add(-7*24*time.Hour), fullMessages, resp); err != nil {
+		return err
+	}
+	resp.Driver = &profile
+	resp.Cursor = syncCursor{driver: p.UserID.Bytes, seq: head.Seq, profile: digest}.String()
+	return nil
+}
+
+func (s *SyncService) removed(resp *SyncResponse, id pgtype.UUID, reason string) {
+	resp.Removed = append(resp.Removed, RemovedShipment{ID: id.String(), Reason: reason})
+	resp.RemovedShipmentIDs = append(resp.RemovedShipmentIDs, id.String())
+}
+
+// addShipments adds loads as the app holds them, with the vehicle's plate
+// and the people who signed for each receiver before.
+func (s *SyncService) addShipments(ctx context.Context, q *db.Queries, p *Principal, ships []shipments.Shipment, resp *SyncResponse) error {
+	if len(ships) == 0 {
+		return nil
+	}
 	plates := map[pgtype.UUID]string{}
-	if vs, err := s.activeVehicles(ctx, s.q, p.TenantID); err == nil {
+	if vs, err := s.activeVehicles(ctx, q, p.TenantID); err == nil {
 		for _, v := range vs {
 			plates[v.ID] = v.PlateNumber
 		}
@@ -517,15 +675,13 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 		phones = append(phones, to)
 	}
 	signed := map[string][]string{}
-	if len(phones) > 0 {
-		rows, err := s.q.ListRecentRecipients(ctx, db.ListRecentRecipientsParams{TenantID: p.TenantID, Phones: phones})
-		if err != nil {
-			return err
-		}
-		for _, r := range rows {
-			if len(signed[r.ReceiverPhone]) < recentRecipients {
-				signed[r.ReceiverPhone] = append(signed[r.ReceiverPhone], r.RecipientName)
-			}
+	rows, err := q.ListRecentRecipients(ctx, db.ListRecentRecipientsParams{TenantID: p.TenantID, Phones: phones})
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if len(signed[r.ReceiverPhone]) < recentRecipients {
+			signed[r.ReceiverPhone] = append(signed[r.ReceiverPhone], r.RecipientName)
 		}
 	}
 	for _, sh := range ships {
@@ -537,108 +693,82 @@ func (s *SyncService) pull(ctx context.Context, p *Principal, since *time.Time, 
 		}
 		resp.Shipments = append(resp.Shipments, ds)
 	}
+	return nil
+}
 
-	if since != nil {
-		removed, err := s.shipmentData.UnassignedFromDriverSince(ctx, s.q.Conn(), shipments.UnassignedQuery{
-			TenantID: p.TenantID, DriverID: p.UserID, Since: sinceTS,
+// addMessages adds the office's notes and broadcasts: those of the IDs
+// given, or with none given (nil) the newest since a time, up to limit of
+// each.
+func (s *SyncService) addMessages(ctx context.Context, q *db.Queries, p *Principal, notes, broadcasts []pgtype.UUID, since time.Time, limit int, resp *SyncResponse) error {
+	full := notes == nil && broadcasts == nil
+	if full || len(notes) > 0 {
+		msgs, err := s.shipmentData.DriverMessages(ctx, q.Conn(), shipments.DriverMessagesQuery{
+			TenantID: p.TenantID, DriverID: p.UserID, Ids: notes, Since: toTimestamp(since), MaxMessages: int32(limit),
 		})
 		if err != nil {
 			return err
 		}
-		for _, id := range removed {
-			resp.RemovedShipmentIDs = append(resp.RemovedShipmentIDs, id.String())
+		for _, m := range msgs {
+			resp.Messages = append(resp.Messages, toDriverMessage(m))
 		}
 	}
-
-	msgSince := resp.ServerTime.Add(-7 * 24 * time.Hour)
-	if since != nil {
-		msgSince = *since
-	}
-	msgs, err := s.shipmentData.DriverMessagesSince(ctx, s.q.Conn(), shipments.DriverMessagesQuery{
-		TenantID: p.TenantID, DriverID: p.UserID, Since: toTimestamp(msgSince),
-	})
-	if err != nil {
-		return err
-	}
-	for _, m := range msgs {
-		dm := DriverMessage{
-			ID: m.ID.String(), ShipmentID: m.ShipmentID.String(), TrackingNumber: m.TrackingNumber,
-			Text: deref(m.Note), From: m.ActorName, At: m.CreatedAt.Time,
+	if full || len(broadcasts) > 0 {
+		// Messages to every driver on the road belong to no shipment.
+		all, err := q.ListDriverBroadcasts(ctx, db.ListDriverBroadcastsParams{
+			TenantID: p.TenantID, DriverID: p.UserID, Ids: broadcasts, Since: toTimestamp(since), MaxMessages: int32(limit),
+		})
+		if err != nil {
+			return err
 		}
-		if m.EventType == "status_changed" {
-			// The office cancelled or reopened the shipment: said even
-			// when it wrote nothing.
-			if deref(m.ToStatus) == model.StatusCancelled {
-				dm.Kind, dm.Note = "cancelled", dm.Text
-				dm.Text = "The office cancelled this shipment."
-			} else {
-				dm.Kind = "reopened"
-				dm.Text = "The office reopened this shipment."
-			}
-			if dm.Note != "" {
-				dm.Text += " " + dm.Note
-			}
-		}
-		resp.Messages = append(resp.Messages, dm)
-	}
-	if len(msgs) == maxDriverMessages {
-		s.cutCursor(resp, msgSince, msgs[len(msgs)-1].CreatedAt.Time)
-	}
-	// Messages to every driver on the road belong to no shipment.
-	all, err := s.q.ListDriverBroadcastsSince(ctx, db.ListDriverBroadcastsSinceParams{
-		TenantID: p.TenantID, DriverID: p.UserID, Since: toTimestamp(msgSince),
-	})
-	if err != nil {
-		return err
-	}
-	for _, m := range all {
-		resp.Messages = append(resp.Messages, DriverMessage{ID: m.ID.String(), Text: m.Body, From: m.SenderName, At: m.CreatedAt.Time})
-	}
-	if len(all) == maxDriverBroadcasts {
-		s.cutCursor(resp, msgSince, all[len(all)-1].CreatedAt.Time)
-	}
-
-	u, err := s.user(ctx, s.q, p.TenantID, p.UserID)
-	if err != nil {
-		return err
-	}
-	resp.Driver = DriverProfile{
-		ID: u.ID.String(), Name: u.FullName, Phone: deref(u.Phone), Company: p.TenantName,
-		MustChangePIN: u.PasswordResetRequired, SMSNumber: s.cfg.SMSNumber,
-		Settings: DriverSettings{Language: deref(u.Language), BatterySaver: u.AppBatterySaver, Vibrate: u.AppVibrate},
-	}
-	if t, err := s.tenant(ctx, s.q, p.TenantID); err == nil {
-		resp.Driver.OfficePhone = deref(t.ContactPhone)
-	}
-	if u.VehicleID.Valid {
-		if v, err := s.vehicle(ctx, s.q, p.TenantID, u.VehicleID); err == nil {
-			resp.Driver.Vehicle = v.PlateNumber
+		for _, m := range all {
+			resp.Messages = append(resp.Messages, DriverMessage{ID: m.ID.String(), Text: m.Body, From: m.SenderName, At: m.CreatedAt.Time})
 		}
 	}
 	return nil
 }
 
-// The most messages and broadcasts one sync returns: the LIMITs of
-// ListDriverMessagesSince and ListDriverBroadcastsSince.
-const (
-	maxDriverMessages   = 200
-	maxDriverBroadcasts = 50
-)
+func toDriverMessage(m shipments.DriverMessage) DriverMessage {
+	dm := DriverMessage{
+		ID: m.ID.String(), ShipmentID: m.ShipmentID.String(), TrackingNumber: m.TrackingNumber,
+		Text: deref(m.Note), From: m.ActorName, At: m.CreatedAt.Time,
+	}
+	if m.EventType == "status_changed" {
+		// The office cancelled or reopened the shipment: said even when it
+		// wrote nothing.
+		if deref(m.ToStatus) == model.StatusCancelled {
+			dm.Kind, dm.Note = "cancelled", dm.Text
+			dm.Text = "The office cancelled this shipment."
+		} else {
+			dm.Kind = "reopened"
+			dm.Text = "The office reopened this shipment."
+		}
+		if dm.Note != "" {
+			dm.Text += " " + dm.Note
+		}
+	}
+	return dm
+}
 
-// cutCursor stops the cursor just before the last of a full page of
-// messages, so the next sync, made at once, carries on from there instead
-// of skipping the rest. Messages seen twice are dropped by the app. A page
-// whose rows all share one time moves on past it, or it would come back
-// for ever.
-func (s *SyncService) cutCursor(resp *SyncResponse, since, last time.Time) {
-	c := last.Add(-time.Microsecond)
-	if !c.After(since) {
-		c = last
+// profile is who the app is signed in as.
+func (s *SyncService) profile(ctx context.Context, q *db.Queries, p *Principal) (DriverProfile, error) {
+	u, err := s.user(ctx, q, p.TenantID, p.UserID)
+	if err != nil {
+		return DriverProfile{}, err
 	}
-	if c.Before(resp.Cursor) {
-		resp.Cursor = c
+	d := DriverProfile{
+		ID: u.ID.String(), Name: u.FullName, Phone: deref(u.Phone), Company: p.TenantName,
+		MustChangePIN: u.PasswordResetRequired, SMSNumber: s.cfg.SMSNumber,
+		Settings: DriverSettings{Language: deref(u.Language), BatterySaver: u.AppBatterySaver, Vibrate: u.AppVibrate},
 	}
-	resp.More = true
+	if t, err := s.tenant(ctx, q, p.TenantID); err == nil {
+		d.OfficePhone = deref(t.ContactPhone)
+	}
+	if u.VehicleID.Valid {
+		if v, err := s.vehicle(ctx, q, p.TenantID, u.VehicleID); err == nil {
+			d.Vehicle = v.PlateNumber
+		}
+	}
+	return d, nil
 }
 
 func toDriverShipment(sh shipments.Shipment, plate string) DriverShipment {
