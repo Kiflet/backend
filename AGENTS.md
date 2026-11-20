@@ -158,7 +158,12 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   checked against it. `api/asyncapi/live.yaml` and `webhooks.yaml` say
   what the live socket and the webhooks send; a new kind of live update
   or webhook event goes there too (`TestAsyncAPIMatchesTheCode`).
-  `make lint` lints the specification.
+  `make lint` lints the specification. `make api` generates from it the
+  Go types and strict server interface (`internal/platform/api`) and
+  `@kiflet/api`'s TypeScript (`api/typescript`), published from `main`;
+  CI fails if they differ from it, and on a breaking change to a `public`
+  or `driver` operation (`make api-breaking`). One to an `app` operation
+  needs the pull request's `api-break` label.
 - The public API (`api_public.go`) acts as its key's `service.Actor`
   through the same services as the dashboard; it has no rules of its own.
   `static/openapi.json` describes it, and `TestOpenAPIMatchesTheAPI` checks

@@ -115,6 +115,22 @@ What changed in each release, newest first.
 
 ### Added
 
+- **The code generated from the API's specification, and
+  `@kiflet/api`** (`docs/migration.md`, phase 2, step 2; audit A1).
+  `make api` generates two things from `api/openapi/v1.yaml`:
+  - the Go types and strict server interface, into
+    `internal/platform/api` (oapi-codegen, numbers as `float64`), which
+    the operations implement as they move to it;
+  - `@kiflet/api`'s TypeScript types (openapi-typescript), with a
+    client typed by them (openapi-fetch), in `api/typescript`.
+
+  CI runs `make api` and fails on a difference. It also fails on a
+  breaking change to a `public` or `driver` operation against the base
+  branch (oasdiff, `make api-breaking`); one to an `app` operation needs
+  the pull request's `api-break` label.
+  `.github/workflows/api-package.yml` publishes the package to GitHub
+  Packages from `main`, as `1.0.<run>`, whenever the specification or
+  the package changes.
 - **The API's specification** (`docs/migration.md`, phase 2, steps 1
   and 3; audit A1). `api/openapi/v1.yaml` describes everything under
   `/api/v1` but the providers' callbacks: the public API's 8 operations

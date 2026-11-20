@@ -1,4 +1,4 @@
-.PHONY: help db db-stop run dev build migrate seed test test-integration cover coverage-floor requirements test-e2e vet lint sqlc docker-build clean \
+.PHONY: help db db-stop run dev build migrate seed test test-integration cover coverage-floor requirements api api-breaking test-e2e vet lint sqlc docker-build clean \
 	sandbox sandbox-keys run-sandbox \
 	staging-up staging-down staging-ca staging-logs load-seed test-load \
 	clients-up clients-down clients-logs
@@ -34,6 +34,9 @@ CLIENTS = KIFLET_BACKEND_IMAGE=kiflet KIFLET_SANDBOX_IMAGE=kiflet-sandbox KIFLET
 GOLANGCI_LINT_VERSION = v2.15.0
 GITLEAKS_VERSION = v8.30.1
 REDOCLY_VERSION = 2.76.0
+# The generators make api runs.
+OAPI_CODEGEN_VERSION = v2.8.2
+OASDIFF_VERSION = v1.35.0
 
 help:
 	@echo "Kiflet"
@@ -48,6 +51,8 @@ help:
 	@echo "  make cover              both, with what they cover of each package, checked against its floor"
 	@echo "  make coverage-floor     raise each package's floor to what make cover measured"
 	@echo "  make requirements       write docs/requirements.md, which tests cover each requirement"
+	@echo "  make api                generate the Go and TypeScript code of api/openapi/v1.yaml"
+	@echo "  make api-breaking       compare api/openapi/v1.yaml with BASE (origin/main) for breaking changes"
 	@echo "  make staging-up         run staging at https://kiflet.localhost:8443"
 	@echo "  make test-e2e           end-to-end tests against staging"
 	@echo "  make load-seed          add LOAD_PHONES drivers on the road to staging, for the load test"
@@ -205,6 +210,20 @@ lint:
 
 sqlc:
 	sqlc generate -f sqlc/sqlc.yaml
+
+# What is generated from the API's specification: the Go types and server
+# interface (internal/platform/api) and @kiflet/api's TypeScript types
+# (api/typescript). CI runs it and fails on a difference.
+api:
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) \
+		-config internal/platform/api/oapi-codegen.yaml api/openapi/v1.yaml
+	cd api/typescript && npm ci --silent && npm run --silent generate
+
+# Breaking changes to the API's specification since BASE (CI: the pull
+# request's base): scripts/api-breaking.sh.
+BASE ?= origin/main
+api-breaking:
+	OASDIFF_VERSION=$(OASDIFF_VERSION) scripts/api-breaking.sh $(BASE)
 
 docker-build:
 	docker build -t kiflet:latest .

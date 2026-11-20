@@ -1,0 +1,33 @@
+{
+  "name": "@kiflet/api",
+  "version": "0.0.0",
+  "description": "The types and client of Kiflet's API, generated from api/openapi/v1.yaml",
+  "license": "UNLICENSED",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kiflet/backend.git",
+    "directory": "api/typescript"
+  },
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": ["index.js", "index.d.ts", "schema.d.ts"],
+  "scripts": {
+    "generate": "openapi-typescript ../openapi/v1.yaml --output schema.d.ts && tsc",
+    "check": "tsc"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}
