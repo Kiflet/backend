@@ -296,6 +296,14 @@ sandbox, from `deployments/clients/compose.yml`:
 docker compose -f deployments/clients/compose.yml up -d --wait   # http://localhost:8080
 ```
 
+While Kiflet/web and Kiflet/mobile are built, `make clients-up` runs the
+same stack from this working tree, with no registry: it builds the
+images, then starts the app on :8080 with the demo company (the logins
+above; driver 0912345601, PIN 2580) and the provider sandbox on :8091,
+where the texts the phones get show. The database is in memory, so each
+run starts from a fresh demo company. `make clients-logs` follows it and
+`make clients-down` removes it.
+
 ## Deploy
 
 One machine with Docker runs it: the app, PostGIS, and Caddy, which gets a
