@@ -9,7 +9,7 @@ SELECT s.tracking_number, s.status, COALESCE(s.status_reason, '')::text AS statu
        s.customer_name, s.customer_phone,
        COALESCE(s.consignee_name, '')::text AS consignee_name, COALESCE(s.consignee_phone, '')::text AS consignee_phone,
        COALESCE(s.cargo_description, '')::text AS cargo_description,
-       COALESCE(s.cargo_weight, 0)::float8 AS cargo_weight_kg, COALESCE(s.cargo_value, 0)::float8 AS cargo_value,
+       COALESCE(s.cargo_weight, 0)::float8 AS cargo_weight_kg, s.cargo_value_santim,
        COALESCE(s.cargo_pieces, 0)::int AS cargo_pieces, COALESCE(s.cargo_unit, '')::text AS cargo_unit,
        COALESCE(s.special_instructions, '')::text AS special_instructions,
        COALESCE(u.full_name, '')::text AS driver_name, COALESCE(v.plate_number, '')::text AS vehicle_plate,
@@ -178,7 +178,7 @@ WHERE d.tenant_id = $1
 ORDER BY s.created_at, d.created_at;
 
 -- name: ExportCharges :many
-SELECT s.tracking_number, c.description, c.amount::float8 AS amount, c.created_at
+SELECT s.tracking_number, c.description, c.amount_santim, c.created_at
 FROM shipment_charges c
 JOIN shipments s ON s.id = c.shipment_id AND s.tenant_id = c.tenant_id
 WHERE c.tenant_id = $1

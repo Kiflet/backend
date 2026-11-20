@@ -28,7 +28,8 @@ type apiShipment struct {
 		Phone string `json:"phone"`
 	} `json:"receiver"`
 	Cargo struct {
-		WeightKg float64 `json:"weight_kg"`
+		WeightKg    float64 `json:"weight_kg"`
+		ValueSantim int64   `json:"value_santim"`
 	} `json:"cargo"`
 	Instructions string  `json:"instructions"`
 	DriverID     *string `json:"driver_id"`
@@ -93,7 +94,7 @@ func TestPublicAPI(t *testing.T) {
 		"destination": map[string]any{"city": "Adama", "address": "Customer warehouse"},
 		"customer":    map[string]any{"name": "Abyssinia Traders", "phone": customer},
 		"receiver":    map[string]any{"name": "Adama Wholesale", "phone": receiver},
-		"cargo":       map[string]any{"description": "Cement, 200 bags", "weight_kg": 10000},
+		"cargo":       map[string]any{"description": "Cement, 200 bags", "weight_kg": 10000, "value_santim": 125000050},
 	}
 	for why, c := range map[string]struct {
 		change map[string]any
@@ -104,6 +105,7 @@ func TestPublicAPI(t *testing.T) {
 		"misspelt field":   {map[string]any{"recevier": map[string]any{}}, ""},
 		"unknown driver":   {map[string]any{"driver_id": "00000000-0000-0000-0000-000000000000"}, "driver_id"},
 		"unknown priority": {map[string]any{"priority": "whenever"}, "priority"},
+		"negative value":   {map[string]any{"cargo": map[string]any{"description": "Cement", "value_santim": -1}}, "cargo_value"},
 	} {
 		body := map[string]any{}
 		for k, v := range booking {
@@ -124,6 +126,10 @@ func TestPublicAPI(t *testing.T) {
 	var sh apiShipment
 	if st := e.api(http.MethodPost, "/api/v1/shipments", key, booking, &sh); st != http.StatusCreated {
 		t.Fatalf("book: status %d", st)
+	}
+	// Money is whole santim, in and out (audit D4).
+	if sh.Cargo.ValueSantim != 125000050 || scalar[int64](t, `SELECT cargo_value_santim FROM shipments WHERE id = $1`, sh.ID) != 125000050 {
+		t.Errorf("cargo value %d santim, want 125000050", sh.Cargo.ValueSantim)
 	}
 	if sh.Status != "pending" || sh.TrackingNumber == "" || sh.Receiver == nil || sh.Receiver.Name != "Adama Wholesale" || !strings.HasSuffix(sh.TrackingURL, "/track/"+sh.TrackingNumber) {
 		t.Errorf("booked: %+v", sh)

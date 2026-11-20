@@ -375,7 +375,7 @@ with its tests; the IDs are the audit's.
 3. **The load limit under a lock** (done; D3): the assigning transaction locks
    the driver's row before counting; a test assigns two loads at once to a
    driver with room for one.
-4. **Money in santim** (D4): `shipment_charges.amount` and
+4. **Money in santim** (done; D4): `shipment_charges.amount` and
    `shipments.cargo_value` become `bigint` santim, as billing is; the pages
    and the public API change with them (no company uses it yet).
 5. **Tenancy checked** (D5): every query without `tenant_id` says why

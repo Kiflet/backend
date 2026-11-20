@@ -340,16 +340,18 @@ type Shipment struct {
 	ConsigneePhone      *string            `db:"consignee_phone" json:"consignee_phone"`
 	CargoPieces         *int32             `db:"cargo_pieces" json:"cargo_pieces"`
 	CargoUnit           *string            `db:"cargo_unit" json:"cargo_unit"`
+	CargoValueSantim    int64              `db:"cargo_value_santim" json:"cargo_value_santim"`
 }
 
 type ShipmentCharge struct {
-	ID          pgtype.UUID        `db:"id" json:"id"`
-	TenantID    pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
-	ShipmentID  pgtype.UUID        `db:"shipment_id" json:"shipment_id"`
-	Description string             `db:"description" json:"description"`
-	Amount      pgtype.Numeric     `db:"amount" json:"amount"`
-	CreatedBy   pgtype.UUID        `db:"created_by" json:"created_by"`
-	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ID           pgtype.UUID        `db:"id" json:"id"`
+	TenantID     pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	ShipmentID   pgtype.UUID        `db:"shipment_id" json:"shipment_id"`
+	Description  string             `db:"description" json:"description"`
+	Amount       pgtype.Numeric     `db:"amount" json:"amount"`
+	CreatedBy    pgtype.UUID        `db:"created_by" json:"created_by"`
+	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	AmountSantim int64              `db:"amount_santim" json:"amount_santim"`
 }
 
 type ShipmentDocument struct {

@@ -137,11 +137,15 @@ func TestShipmentCharges(t *testing.T) {
 	add("Freight", "12,500")
 	add("Loading", "750.25")
 	add("Discount", "-500")
-	for _, bad := range [][2]string{{"Nothing", "0"}, {"", "100"}, {"Words", "lots"}, {strings.Repeat("x", 121), "5"}} {
+	for _, bad := range [][2]string{{"Nothing", "0"}, {"", "100"}, {"Words", "lots"}, {strings.Repeat("x", 121), "5"}, {"Fractions", "12.345"}} {
 		add(bad[0], bad[1])
 	}
 	if n := scalar[int64](t, `SELECT count(*) FROM shipment_charges WHERE shipment_id = $1`, id); n != 3 {
 		t.Fatalf("%d charges, want 3", n)
+	}
+	// Stored in whole santim (audit D4).
+	if sum := scalar[int64](t, `SELECT sum(amount_santim) FROM shipment_charges WHERE shipment_id = $1`, id); sum != 1275025 {
+		t.Errorf("the charges add up to %d santim, want 1275025", sum)
 	}
 	p := office.get("/app/shipments/" + id + "?tab=charges")
 	if !strings.Contains(p.Body, "ETB\u00a012,750.25") || !strings.Contains(p.Body, "ETB\u00a0-500.00") {
@@ -171,4 +175,34 @@ func (b *browser) fetch(path string) (*http.Response, []byte) {
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
 	return res, body
+}
+
+// TestCargoValueInSantim (audit D4): a value typed in birr is kept in whole
+// santim, shown back in birr, and one with more than two decimals refused.
+func TestCargoValueInSantim(t *testing.T) {
+	e := newEnv(t)
+	office := e.company("Valuable Cargo")
+	booking := url.Values{
+		"priority": {"normal"}, "origin_city": {"Addis Ababa"}, "origin_address": {"Main depot"},
+		"destination_city": {"Adama"}, "destination_address": {"Customer warehouse"},
+		"customer_name": {"Abyssinia Traders"}, "customer_phone": {phoneNumber()},
+		"cargo_description": {"Coffee, 300 bags"}, "cargo_value": {"1,250,000.50"},
+	}
+	p := office.mustPost("/app/shipments", booking)
+	id := strings.TrimPrefix(p.Location, "/app/shipments/")
+	if got := scalar[int64](t, `SELECT cargo_value_santim FROM shipments WHERE id = $1`, id); got != 125000050 {
+		t.Errorf("stored %d santim, want 125000050", got)
+	}
+	if page := office.get("/app/shipments/" + id); !strings.Contains(page.Body, "ETB 1,250,000.50") {
+		t.Error("the shipment page doesn't show the value in birr")
+	}
+	if page := office.get("/app/shipments/" + id + "/edit"); !strings.Contains(page.Body, `value="1250000.50"`) {
+		t.Error("the edit form doesn't offer the value as typed")
+	}
+
+	booking.Set("cargo_value", "12.345")
+	booking.Set("customer_phone", phoneNumber())
+	if p := office.post("/app/shipments", booking); !strings.Contains(errorText(p.Body), "at most two decimals") {
+		t.Errorf("a value with three decimals: %d %q", p.Status, errorText(p.Body))
+	}
 }
