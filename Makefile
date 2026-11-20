@@ -1,6 +1,7 @@
 .PHONY: help db db-stop run dev build migrate seed test test-integration test-integration-cover test-e2e vet lint sqlc docker-build clean \
 	sandbox sandbox-keys run-sandbox \
-	staging-up staging-down staging-ca staging-logs load-seed test-load
+	staging-up staging-down staging-ca staging-logs load-seed test-load \
+	clients-up clients-down clients-logs
 
 DB_PORT ?= 5434
 DATABASE_URL ?= postgres://logistics:logistics@localhost:$(DB_PORT)/logistics?sslmode=disable
@@ -24,6 +25,11 @@ WITH_SANDBOX_ENV = set -a && . deployments/dev/sandbox.env && set +a &&
 STAGING = docker compose -f deployments/docker-compose.prod.yml -f deployments/staging/compose.yml \
 	--env-file deployments/staging/staging.env
 STAGING_CA = tmp/staging-ca.crt
+# The backend as Kiflet/web and Kiflet/mobile use it while they are built
+# (deployments/clients/compose.yml), from images built from this working
+# tree: no registry needed.
+CLIENTS = KIFLET_BACKEND_IMAGE=kiflet KIFLET_SANDBOX_IMAGE=kiflet-sandbox KIFLET_TAG=latest \
+	docker compose -f deployments/clients/compose.yml
 # The linters `make lint` runs. Dependabot doesn't see these.
 GOLANGCI_LINT_VERSION = v2.15.0
 GITLEAKS_VERSION = v8.30.1
@@ -44,6 +50,8 @@ help:
 	@echo "  make load-seed          add LOAD_PHONES drivers on the road to staging, for the load test"
 	@echo "  make test-load          the load test against staging (k6), then how long positions waited"
 	@echo "  make staging-down       remove staging and its data"
+	@echo "  make clients-up         build and run the backend for Kiflet/web and Kiflet/mobile: the app on :8080"
+	@echo "                         with the demo company, the provider sandbox on :8091 (clients-down, clients-logs)"
 	@echo "  make build              build bin/kiflet and bin/kiflet-sandbox"
 	@echo "  make migrate            apply migrations"
 	@echo "  make vet                go vet, the tests included"
@@ -140,6 +148,19 @@ staging-ca:
 
 staging-logs:
 	$(STAGING) logs --follow --tail=100
+
+# Rebuilt from this working tree on every run, with a fresh demo company:
+# the database is in memory.
+clients-up: docker-build
+	$(CLIENTS) up -d --wait --wait-timeout 300
+	@echo "The backend is up: http://localhost:$${KIFLET_PORT:-8080} (demo logins in README),"
+	@echo "the provider sandbox, with the texts the phones get, at http://localhost:$${SANDBOX_PORT:-8091}."
+
+clients-down:
+	$(CLIENTS) down --volumes
+
+clients-logs:
+	$(CLIENTS) logs --follow --tail=100
 
 vet:
 	go vet ./...
