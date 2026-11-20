@@ -3,7 +3,7 @@
   "info": {
     "title": "Kiflet API",
     "version": "1",
-    "description": "Book and follow a company's shipments from its own systems. Every request sends one of the company's API keys, made under Settings → API keys: `Authorization: Bearer kf_…`. A key acts for the whole company with the dashboard's rules, and what it does is recorded under the key's name in each shipment's history.\n\nEach key may make 300 requests a minute; past that, requests are answered 429 until the minute is over. Times are RFC 3339 and answered in UTC. Weights are in kilograms and values in birr.\n\nAn error is answered with its HTTP status and `{\"error\": {\"code\": …, \"message\": …, \"field\": …}}`. `message` is written to be shown to a person; `field` names the field at fault, when there is one.\n\nWebhooks tell a company's system when its shipments change, without asking: an admin adds an address and the events it wants under Settings → Webhooks. Each is a POST of a `WebhookMessage`, signed as Standard Webhooks (https://www.standardwebhooks.com) describes: `webhook-id` (the same when a message is sent again), `webhook-timestamp` and `webhook-signature`. Answer 2xx within 10 seconds; anything else is tried again after 1 and 5 minutes, 30 minutes, then 2, 6 and 12 hours."
+    "description": "Book and follow a company's shipments from its own systems. Every request sends one of the company's API keys, made under Settings → API keys: `Authorization: Bearer kf_…`. A key acts for the whole company with the dashboard's rules, and what it does is recorded under the key's name in each shipment's history.\n\nEach key may make 300 requests a minute; past that, requests are answered 429, with `Retry-After`, until the minute is over. Times are RFC 3339 and answered in UTC. Weights are in kilograms and values in birr.\n\nAn error is answered with its HTTP status and `{\"error\": {\"code\": …, \"message\": …, \"fields\": …, \"request_id\": …}}`. `code` is in lowercase snake case (`validation_error`, `not_found`); `message` is written to be shown to a person; `fields` names every field at fault, each with its message; `request_id` is the answer's `X-Request-Id`, to quote when asking for help.\n\nWebhooks tell a company's system when its shipments change, without asking: an admin adds an address and the events it wants under Settings → Webhooks. Each is a POST of a `WebhookMessage`, signed as Standard Webhooks (https://www.standardwebhooks.com) describes: `webhook-id` (the same when a message is sent again), `webhook-timestamp` and `webhook-signature`. Answer 2xx within 10 seconds; anything else is tried again after 1 and 5 minutes, 30 minutes, then 2, 6 and 12 hours."
   },
   "servers": [{ "url": "/api/v1" }],
   "security": [{ "apiKey": [] }],
@@ -238,7 +238,7 @@
     },
     "responses": {
       "Error": {
-        "description": "An error. 400: the request is wrong (VALIDATION_ERROR). 401: no working key (UNAUTHORIZED). 402: a plan limit (PLAN_LIMIT). 403: the company is suspended or read-only until an invoice is paid (FORBIDDEN). 404: no such shipment for this company (NOT_FOUND). 409: the shipment is in a status that doesn't allow it (CONFLICT). 429: too many requests (RATE_LIMITED).",
+        "description": "An error. 400: the request is wrong (validation_error). 401: no working key (unauthorized). 402: a plan limit (plan_limit). 403: the company is suspended or read-only until an invoice is paid (forbidden). 404: no such shipment for this company (not_found). 409: the shipment is in a status that doesn't allow it (conflict). 429: too many requests (rate_limited).",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
       }
     },
@@ -251,9 +251,10 @@
             "type": "object",
             "required": ["code", "message"],
             "properties": {
-              "code": { "type": "string", "enum": ["VALIDATION_ERROR", "UNAUTHORIZED", "PLAN_LIMIT", "FORBIDDEN", "NOT_FOUND", "CONFLICT", "RATE_LIMITED", "INTERNAL"] },
-              "message": { "type": "string" },
-              "field": { "type": "string" }
+              "code": { "type": "string", "description": "Stable, in lowercase snake case: validation_error, unauthorized, plan_limit, forbidden, not_found, conflict, rate_limited, internal, and more precise ones an operation names. Open: a client treats one it doesn't know by the status.", "examples": ["not_found"] },
+              "message": { "type": "string", "description": "What went wrong, for the person using the product." },
+              "fields": { "type": "object", "description": "Every invalid field at once, with its message.", "additionalProperties": { "type": "string" } },
+              "request_id": { "type": "string", "description": "The request's ID, as in the answer's X-Request-Id, to quote when asking for help." }
             }
           }
         }

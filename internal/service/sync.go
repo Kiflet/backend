@@ -497,7 +497,7 @@ func resultFor(r SyncResult, err error) SyncResult {
 	}
 	r.OK = false
 	if errors.Is(err, ErrStaleUpdate) {
-		r.Code, r.Message = "STALE", ErrStaleUpdate.Message
+		r.Code, r.Message = "stale", ErrStaleUpdate.Message
 		return r
 	}
 	if de, ok := AsError(err); ok {
@@ -505,7 +505,7 @@ func resultFor(r SyncResult, err error) SyncResult {
 		return r
 	}
 	r.Retry = true
-	r.Code, r.Message = "ERROR", "The server couldn't save this. It will be retried."
+	r.Code, r.Message = "server_error", "The server couldn't save this. It will be retried."
 	return r
 }
 

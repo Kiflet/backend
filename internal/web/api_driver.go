@@ -187,7 +187,7 @@ func (s *Server) apiSMSInbound(w http.ResponseWriter, r *http.Request) {
 	from := pick(fields, "from", "phone", "msisdn", "sender")
 	body := pick(fields, "body", "message", "text", "content")
 	if from == "" || body == "" {
-		writeJSONError(w, http.StatusBadRequest, "VALIDATION_ERROR", "from and body are required.")
+		writeJSONError(w, r, http.StatusBadRequest, "validation_error", "from and body are required.")
 		return
 	}
 	res, err := s.svc.SMS.Inbound(r.Context(), service.InboundSMS{
@@ -220,7 +220,7 @@ func (s *Server) apiSMSStatus(w http.ResponseWriter, r *http.Request) {
 	id := pick(fields, "message_id", "messageid", "messagesid", "id")
 	status := pick(fields, "status", "messagestatus")
 	if id == "" || status == "" {
-		writeJSONError(w, http.StatusBadRequest, "VALIDATION_ERROR", "message_id and status are required.")
+		writeJSONError(w, r, http.StatusBadRequest, "validation_error", "message_id and status are required.")
 		return
 	}
 	at, _ := time.Parse(time.RFC3339, pick(fields, "done_at", "delivered_at", "timestamp"))
@@ -250,7 +250,7 @@ func (s *Server) smsWebhook(w http.ResponseWriter, r *http.Request) bool {
 			got = r.URL.Query().Get("secret")
 		}
 		if subtle.ConstantTimeCompare([]byte(got), []byte(secret)) != 1 {
-			writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Bad webhook secret.")
+			writeJSONError(w, r, http.StatusUnauthorized, "unauthorized", "Bad webhook secret.")
 			return false
 		}
 	}
@@ -267,7 +267,7 @@ func webhookFields(w http.ResponseWriter, r *http.Request) (map[string]string, b
 		dec := json.NewDecoder(r.Body)
 		dec.UseNumber()
 		if err := dec.Decode(&m); err != nil {
-			writeJSONError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Bad JSON.")
+			writeJSONError(w, r, http.StatusBadRequest, "validation_error", "Bad JSON.")
 			return nil, false
 		}
 		for k, v := range m {
@@ -281,7 +281,7 @@ func webhookFields(w http.ResponseWriter, r *http.Request) (map[string]string, b
 		return fields, true
 	}
 	if err := r.ParseForm(); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Bad form body.")
+		writeJSONError(w, r, http.StatusBadRequest, "validation_error", "Bad form body.")
 		return nil, false
 	}
 	for k := range r.PostForm {

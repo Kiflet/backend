@@ -10,10 +10,10 @@ func TestSyncResultClassification(t *testing.T) {
 	if r := resultFor(base, nil); !r.OK || r.Retry {
 		t.Errorf("success: %+v", r)
 	}
-	if r := resultFor(base, ErrStaleUpdate); r.OK || r.Retry || r.Code != "STALE" {
+	if r := resultFor(base, ErrStaleUpdate); r.OK || r.Retry || r.Code != "stale" {
 		t.Errorf("stale: %+v", r)
 	}
-	if r := resultFor(base, conflict("no")); r.OK || r.Retry || r.Code != "CONFLICT" {
+	if r := resultFor(base, conflict("no")); r.OK || r.Retry || r.Code != "conflict" {
 		t.Errorf("domain error should be final: %+v", r)
 	}
 	if r := resultFor(base, errors.New("connection reset")); r.OK || !r.Retry {

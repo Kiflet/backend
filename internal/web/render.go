@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	chimw "github.com/go-chi/chi/v5/middleware"
+
 	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/internal/service"
 )
@@ -290,7 +292,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
-		writeJSONError(w, http.StatusNotFound, "NOT_FOUND", "Not found.")
+		writeJSONError(w, r, http.StatusNotFound, "not_found", "Not found.")
 		return
 	}
 	lang := s.errorLang(r)
@@ -337,19 +339,30 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeJSONError(w http.ResponseWriter, status int, code, msg string) {
-	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": msg}})
+// apiFailure is the API's error (docs/architecture.md, section 11,
+// "Conventions"): a code in lowercase snake case, the message, every
+// invalid field with its message, and the request's ID, as in its
+// X-Request-Id, to quote when asking for help.
+type apiFailure struct {
+	Code      string            `json:"code"`
+	Message   string            `json:"message"`
+	Fields    map[string]string `json:"fields,omitempty"`
+	RequestID string            `json:"request_id,omitempty"`
+}
+
+func writeJSONError(w http.ResponseWriter, r *http.Request, status int, code, msg string) {
+	writeJSON(w, status, map[string]apiFailure{"error": {Code: code, Message: msg, RequestID: chimw.GetReqID(r.Context())}})
 }
 
 func (s *Server) apiError(w http.ResponseWriter, r *http.Request, err error) {
 	if de, ok := service.AsError(err); ok {
-		writeJSON(w, de.Kind.HTTPStatus(), map[string]any{"error": map[string]string{
-			"code": de.Kind.Code(), "message": de.Message, "field": de.Field,
+		writeJSON(w, de.Kind.HTTPStatus(), map[string]apiFailure{"error": {
+			Code: de.APICode(), Message: de.Message, Fields: de.FieldMessages(), RequestID: chimw.GetReqID(r.Context()),
 		}})
 		return
 	}
 	s.log.Error().Err(err).Str("path", r.URL.Path).Msg("api request failed")
-	writeJSONError(w, http.StatusInternalServerError, "INTERNAL", "Something went wrong on our side. Please try again.")
+	writeJSONError(w, r, http.StatusInternalServerError, "internal", "Something went wrong on our side. Please try again.")
 }
 
 func decodeJSON(r *http.Request, v any) error {

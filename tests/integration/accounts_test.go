@@ -255,13 +255,13 @@ func TestRateLimits(t *testing.T) {
 		if p.Status != http.StatusTooManyRequests || !strings.Contains(p.Body, "Wait a minute") {
 			return fmt.Sprintf("the 31st sign-in in a minute: status %d, want 429", p.Status)
 		}
-		var api struct {
-			Error struct {
-				Code string `json:"code"`
-			} `json:"error"`
-		}
-		if code := e.api("POST", "/api/v1/driver/login", "", map[string]string{"phone": phoneNumber(), "pin": "1234", "device_id": "d"}, &api); code != http.StatusTooManyRequests || api.Error.Code != "RATE_LIMITED" {
+		var api apiFailure
+		code, h := e.apiWithHeaders("POST", "/api/v1/driver/login", "", map[string]string{"phone": phoneNumber(), "pin": "1234", "device_id": "d"}, &api)
+		if code != http.StatusTooManyRequests || api.Error.Code != "rate_limited" {
 			return fmt.Sprintf("a driver signing in from the same address: status %d %q, want 429", code, api.Error.Code)
+		}
+		if h.Get("Retry-After") != "60" || api.Error.RequestID == "" || api.Error.RequestID != h.Get("X-Request-Id") {
+			return fmt.Sprintf("the API's 429: Retry-After %q, request_id %q, X-Request-Id %q", h.Get("Retry-After"), api.Error.RequestID, h.Get("X-Request-Id"))
 		}
 
 		for i := range 10 {

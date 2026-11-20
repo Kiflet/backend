@@ -1,0 +1,71 @@
+# Breaking changes to the public and driver operations accepted on purpose,
+# for scripts/api-breaking.sh (oasdiff's --err-ignore: one line per change,
+# its method, path and words). Each group says why. Empty this file in the
+# first pull request after the change reaches main, so that it never hides
+# a later one.
+#
+# The error codes in lowercase snake case, and open (docs/migration.md,
+# phase 2, step 4), changed while no company integrates and no phone runs
+# an app on the API; the PWA ships with the server and reads no code.
+GET /driver/config removed the enum constraint from the `error/code` response property for the response status `429`
+GET /drivers removed the enum constraint from the `error/code` response property for the response status `401`
+GET /drivers removed the enum constraint from the `error/code` response property for the response status `403`
+GET /drivers removed the enum constraint from the `error/code` response property for the response status `429`
+GET /openapi.json removed the enum constraint from the `error/code` response property for the response status `429`
+GET /shipments/{ref}/events removed the enum constraint from the `error/code` response property for the response status `401`
+GET /shipments/{ref}/events removed the enum constraint from the `error/code` response property for the response status `403`
+GET /shipments/{ref}/events removed the enum constraint from the `error/code` response property for the response status `404`
+GET /shipments/{ref}/events removed the enum constraint from the `error/code` response property for the response status `429`
+GET /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `401`
+GET /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `403`
+GET /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `404`
+GET /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `429`
+GET /shipments removed the enum constraint from the `error/code` response property for the response status `400`
+GET /shipments removed the enum constraint from the `error/code` response property for the response status `401`
+GET /shipments removed the enum constraint from the `error/code` response property for the response status `403`
+GET /shipments removed the enum constraint from the `error/code` response property for the response status `429`
+PATCH /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `400`
+PATCH /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `401`
+PATCH /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `403`
+PATCH /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `404`
+PATCH /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `409`
+PATCH /shipments/{ref} removed the enum constraint from the `error/code` response property for the response status `429`
+POST /driver/login removed the enum constraint from the `error/code` response property for the response status `400`
+POST /driver/login removed the enum constraint from the `error/code` response property for the response status `401`
+POST /driver/login removed the enum constraint from the `error/code` response property for the response status `403`
+POST /driver/login removed the enum constraint from the `error/code` response property for the response status `429`
+POST /driver/logout removed the enum constraint from the `error/code` response property for the response status `401`
+POST /driver/logout removed the enum constraint from the `error/code` response property for the response status `429`
+POST /driver/pin removed the enum constraint from the `error/code` response property for the response status `400`
+POST /driver/pin removed the enum constraint from the `error/code` response property for the response status `401`
+POST /driver/pin removed the enum constraint from the `error/code` response property for the response status `429`
+POST /driver/pin-reset/confirm removed the enum constraint from the `error/code` response property for the response status `400`
+POST /driver/pin-reset/confirm removed the enum constraint from the `error/code` response property for the response status `401`
+POST /driver/pin-reset/confirm removed the enum constraint from the `error/code` response property for the response status `403`
+POST /driver/pin-reset/confirm removed the enum constraint from the `error/code` response property for the response status `429`
+POST /driver/pin-reset/request removed the enum constraint from the `error/code` response property for the response status `400`
+POST /driver/pin-reset/request removed the enum constraint from the `error/code` response property for the response status `429`
+POST /driver/sync removed the enum constraint from the `error/code` response property for the response status `400`
+POST /driver/sync removed the enum constraint from the `error/code` response property for the response status `401`
+POST /driver/sync removed the enum constraint from the `error/code` response property for the response status `403`
+POST /driver/sync removed the enum constraint from the `error/code` response property for the response status `413`
+POST /driver/sync removed the enum constraint from the `error/code` response property for the response status `429`
+POST /shipments/{ref}/assign removed the enum constraint from the `error/code` response property for the response status `400`
+POST /shipments/{ref}/assign removed the enum constraint from the `error/code` response property for the response status `401`
+POST /shipments/{ref}/assign removed the enum constraint from the `error/code` response property for the response status `402`
+POST /shipments/{ref}/assign removed the enum constraint from the `error/code` response property for the response status `403`
+POST /shipments/{ref}/assign removed the enum constraint from the `error/code` response property for the response status `404`
+POST /shipments/{ref}/assign removed the enum constraint from the `error/code` response property for the response status `409`
+POST /shipments/{ref}/assign removed the enum constraint from the `error/code` response property for the response status `429`
+POST /shipments/{ref}/cancel removed the enum constraint from the `error/code` response property for the response status `400`
+POST /shipments/{ref}/cancel removed the enum constraint from the `error/code` response property for the response status `401`
+POST /shipments/{ref}/cancel removed the enum constraint from the `error/code` response property for the response status `403`
+POST /shipments/{ref}/cancel removed the enum constraint from the `error/code` response property for the response status `404`
+POST /shipments/{ref}/cancel removed the enum constraint from the `error/code` response property for the response status `409`
+POST /shipments/{ref}/cancel removed the enum constraint from the `error/code` response property for the response status `429`
+POST /shipments removed the enum constraint from the `error/code` response property for the response status `400`
+POST /shipments removed the enum constraint from the `error/code` response property for the response status `401`
+POST /shipments removed the enum constraint from the `error/code` response property for the response status `402`
+POST /shipments removed the enum constraint from the `error/code` response property for the response status `403`
+POST /shipments removed the enum constraint from the `error/code` response property for the response status `409`
+POST /shipments removed the enum constraint from the `error/code` response property for the response status `429`

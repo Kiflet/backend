@@ -104,8 +104,10 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] Go types and server interface generated from it; `@kiflet/api`
       published; lint, regeneration and oasdiff in CI; every response in
       the API tests validated against it.
-- [ ] The conventions in `internal/http`: errors, labels, actions, lists,
-      idempotency keys, versions, request IDs.
+- [x] The conventions' errors (lowercase codes, every invalid field,
+      the request's ID), `X-Request-Id` on every answer, `Retry-After`.
+- [ ] The conventions' idempotency keys and versions (`ETag`,
+      `If-Match`), then labels, actions and lists with each operation.
 - [x] The cross-origin check on every request a cookie may authenticate,
       the API's included (A2).
 - [ ] Who is calling: an API key or a driver token by `Authorization`,

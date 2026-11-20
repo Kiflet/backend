@@ -3,6 +3,7 @@ package web
 import (
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -206,7 +208,7 @@ func (s *Server) decompressBody(next http.Handler) http.Handler {
 		if strings.EqualFold(r.Header.Get("Content-Encoding"), "gzip") {
 			gz, err := gzip.NewReader(r.Body)
 			if err != nil {
-				writeJSONError(w, http.StatusBadRequest, "VALIDATION_ERROR", "The request body is not valid gzip.")
+				writeJSONError(w, r, http.StatusBadRequest, "validation_error", "The request body is not valid gzip.")
 				return
 			}
 			defer gz.Close()
@@ -319,7 +321,7 @@ func (s *Server) requireDriver(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok || token == "" {
-			writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Sign in required.")
+			writeJSONError(w, r, http.StatusUnauthorized, "unauthorized", "Sign in required.")
 			return
 		}
 		p, err := s.svc.Auth.Authenticate(r.Context(), token, service.SessionAPI)
@@ -348,7 +350,7 @@ func (s *Server) requireMetricsToken(next http.Handler) http.Handler {
 
 func (s *Server) tooManyRequests(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
-		writeJSONError(w, http.StatusTooManyRequests, "RATE_LIMITED", "Too many requests. Wait a minute and try again.")
+		writeJSONError(w, r, http.StatusTooManyRequests, "rate_limited", "Too many requests. Wait a minute and try again.")
 		return
 	}
 	lang := s.errorLang(r)
@@ -428,3 +430,22 @@ func crossOrigin(next http.Handler) http.Handler {
 		checked.ServeHTTP(w, r)
 	})
 }
+
+// requestID gives every request an ID, which the log and an API error
+// carry and every answer names in X-Request-Id. A caller's own
+// X-Request-Id is kept when it is a short token (the web app's server
+// passing its own along); anything else is replaced.
+func requestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-Id")
+		if !requestIDPattern.MatchString(id) {
+			var b [16]byte
+			_, _ = rand.Read(b[:])
+			id = hex.EncodeToString(b[:])
+		}
+		w.Header().Set("X-Request-Id", id)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), chimw.RequestIDKey, id)))
+	})
+}
+
+var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{8,64}$`)

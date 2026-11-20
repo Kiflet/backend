@@ -4,6 +4,7 @@
 # to a public or driver operation fails: those are promised to integrations
 # and to the app versions on phones. One to an app operation fails unless
 # API_BREAK=true, which CI sets from the pull request's api-break label.
+# A break listed in api/breaking-accepted.txt, with its reason, passes.
 #
 #   scripts/api-breaking.sh origin/main
 set -euo pipefail
@@ -23,10 +24,10 @@ promised() { go run ./internal/tools/apisurface -tags public,driver "$1" > "$2";
 promised "$tmp/base.yaml" "$tmp/base-promised.json"
 promised api/openapi/v1.yaml "$tmp/promised.json"
 echo "The public and driver operations, against $base:"
-oasdiff breaking "$tmp/base-promised.json" "$tmp/promised.json" --fail-on ERR
+oasdiff breaking "$tmp/base-promised.json" "$tmp/promised.json" --fail-on ERR --err-ignore api/breaking-accepted.txt
 
 echo "Every operation, against $base:"
-if ! oasdiff breaking "$tmp/base.yaml" api/openapi/v1.yaml --fail-on ERR; then
+if ! oasdiff breaking "$tmp/base.yaml" api/openapi/v1.yaml --fail-on ERR --err-ignore api/breaking-accepted.txt; then
 	if [ "${API_BREAK:-false}" = true ]; then
 		echo "An app operation changed incompatibly; the api-break label allows it."
 	else

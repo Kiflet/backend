@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
 	gorillaws "github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -123,7 +122,7 @@ func (s *Server) OpsHandler() http.Handler {
 func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(s.clientIP)
-	r.Use(chimw.RequestID)
+	r.Use(requestID)
 	r.Use(s.recoverer)
 	r.Use(s.logRequests)
 	r.Use(s.securityHeaders)

@@ -358,10 +358,19 @@ export interface components {
     schemas: {
         Error: {
             error: {
-                /** @enum {string} */
-                code: "VALIDATION_ERROR" | "UNAUTHORIZED" | "PLAN_LIMIT" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "RATE_LIMITED" | "INTERNAL";
+                /**
+                 * @description Stable, in lowercase snake case: validation_error, unauthorized, plan_limit, forbidden, not_found, conflict, rate_limited, internal, and more precise ones an operation names. Open: a client treats one it doesn't know by the status.
+                 * @example not_found
+                 */
+                code: string;
+                /** @description What went wrong, for the person using the product. */
                 message: string;
-                field?: string;
+                /** @description Every invalid field at once, with its message. */
+                fields?: {
+                    [key: string]: string;
+                };
+                /** @description The request's ID, as in the answer's X-Request-Id, to quote when asking for help. */
+                request_id?: string;
             };
         };
         /** @enum {string} */
@@ -717,7 +726,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description An error. 400: the request is wrong (VALIDATION_ERROR). 401: no working key (UNAUTHORIZED). 402: a plan limit (PLAN_LIMIT). 403: the company is suspended or read-only until an invoice is paid (FORBIDDEN). 404: no such shipment for this company (NOT_FOUND). 409: the shipment is in a status that doesn't allow it (CONFLICT). 429: too many requests (RATE_LIMITED). */
+        /** @description An error. 400: the request is wrong (validation_error). 401: no working key (unauthorized). 402: a plan limit (plan_limit). 403: the company is suspended or read-only until an invoice is paid (forbidden). 404: no such shipment for this company (not_found). 409: the shipment is in a status that doesn't allow it (conflict). 429: too many requests (rate_limited). */
         Error: {
             headers: {
                 [name: string]: unknown;
