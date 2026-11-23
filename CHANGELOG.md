@@ -136,6 +136,9 @@ What changed in each release, newest first.
   Uploads no delivery names are removed, with their files, by the hourly
   retention 30 days after they were prepared (`proof.Retention`), long
   enough for a driver offline for days.
+  gitleaks no longer mistakes the specification embedded, gzipped, in
+  `internal/platform/api/api.gen.go` for keys: an exception for its base64
+  lines in that file only (`.gitleaks.toml`).
 - **Uploads for the driver app** (`docs/migration.md`, phase 3, M5):
   `POST /api/v1/driver/uploads` takes each file of a delivery (its kind,
   size and MD5) and answers with a storage key, prefixed by the company,

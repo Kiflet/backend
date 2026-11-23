@@ -30,3 +30,13 @@ regexes = [
   # Example tokens, cut short, in an old version of the test guide.
   '''"(access|refresh)_token": "eyJhbGciOiJSUzI1NiIs\.\.\."''',
 ]
+
+[[allowlists]]
+description = "The specification, compressed, in the code generated from it"
+# oapi-codegen embeds api/openapi/v1.yaml as gzipped base64 lines, which
+# change with every change to it, and some look like keys. The
+# specification itself is scanned. Only such lines, and only in that file.
+condition = "AND"
+regexTarget = "line"
+paths = ['''^internal/platform/api/api\.gen\.go$''']
+regexes = ['''"[A-Za-z0-9+/=]{20,}",''']
