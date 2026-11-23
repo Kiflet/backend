@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/internal/service"
 )
 
@@ -109,8 +110,17 @@ type (
 	apiEvent    = service.EventJSON
 )
 
-func (s *Server) toAPIShipment(sh shipments.Shipment) apiShipment {
-	return service.AsJSON(sh, s.cfg.PublicURL)
+func (s *Server) toAPIShipment(r *http.Request, sh shipments.Shipment) apiShipment {
+	return service.AsJSON(sh, s.cfg.PublicURL, apiLang(r))
+}
+
+// apiLang is the language of the API's labels: Accept-Language's, or
+// English.
+func apiLang(r *http.Request) string {
+	if l := text.Accept(r.Header.Get("Accept-Language")); l != "" {
+		return l
+	}
+	return text.English
 }
 
 func timeOf(t pgtype.Timestamptz) *time.Time {
@@ -261,7 +271,7 @@ func (s *Server) apiShipmentList(w http.ResponseWriter, r *http.Request) {
 	}
 	data := make([]apiShipment, 0, len(rows))
 	for _, row := range rows {
-		data = append(data, s.toAPIShipment(shipments.Shipment(row.Shipment)))
+		data = append(data, s.toAPIShipment(r, shipments.Shipment(row.Shipment)))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": data, "page": page, "per_page": perPage, "total": total})
 }
@@ -280,7 +290,7 @@ func (s *Server) apiShipmentCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Location", "/api/v1/shipments/"+sh.TrackingNumber)
-	s.writeShipment(w, http.StatusCreated, sh)
+	s.writeShipment(w, r, http.StatusCreated, sh)
 }
 
 func (s *Server) apiShipmentGet(w http.ResponseWriter, r *http.Request) {
@@ -289,7 +299,7 @@ func (s *Server) apiShipmentGet(w http.ResponseWriter, r *http.Request) {
 		s.apiError(w, r, err)
 		return
 	}
-	s.writeShipment(w, http.StatusOK, sh)
+	s.writeShipment(w, r, http.StatusOK, sh)
 }
 
 func (s *Server) apiShipmentUpdate(w http.ResponseWriter, r *http.Request) {
@@ -314,7 +324,7 @@ func (s *Server) apiShipmentUpdate(w http.ResponseWriter, r *http.Request) {
 		s.apiChangeError(w, r, sh.ID, err)
 		return
 	}
-	s.writeShipment(w, http.StatusOK, out)
+	s.writeShipment(w, r, http.StatusOK, out)
 }
 
 func (s *Server) apiShipmentAssign(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +351,7 @@ func (s *Server) apiShipmentAssign(w http.ResponseWriter, r *http.Request) {
 		s.apiChangeError(w, r, sh.ID, err)
 		return
 	}
-	s.writeShipment(w, http.StatusOK, out)
+	s.writeShipment(w, r, http.StatusOK, out)
 }
 
 func (s *Server) apiShipmentCancel(w http.ResponseWriter, r *http.Request) {
@@ -363,7 +373,7 @@ func (s *Server) apiShipmentCancel(w http.ResponseWriter, r *http.Request) {
 		s.apiChangeError(w, r, sh.ID, err)
 		return
 	}
-	s.writeShipment(w, http.StatusOK, out)
+	s.writeShipment(w, r, http.StatusOK, out)
 }
 
 type apiPosition struct {
@@ -387,10 +397,9 @@ func (s *Server) apiShipmentEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	events := make([]apiEvent, 0, len(d.Events))
 	for _, e := range d.Events {
-		events = append(events, apiEvent{
-			Type: e.EventType, FromStatus: deref(e.FromStatus), ToStatus: deref(e.ToStatus), Reason: deref(e.Reason), Note: deref(e.Note),
-			Source: e.Source, Actor: e.ActorName, Lat: e.Latitude, Lng: e.Longitude, At: e.OccurredAt.Time.UTC(),
-		})
+		ev := service.NewEventJSON(apiLang(r), e.EventType, deref(e.FromStatus), deref(e.ToStatus), deref(e.Reason))
+		ev.Note, ev.Source, ev.Actor, ev.Lat, ev.Lng, ev.At = deref(e.Note), e.Source, e.ActorName, e.Latitude, e.Longitude, e.OccurredAt.Time.UTC()
+		events = append(events, ev)
 	}
 	// Detail lists the newest first; an integration reads a history forwards.
 	if len(events) > 1 && events[0].At.After(events[len(events)-1].At) {

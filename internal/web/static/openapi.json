@@ -110,6 +110,22 @@
         },
         "type": "object"
       },
+      "Code": {
+        "description": "A code with its words for the office, in the language of Accept-Language (English or Amharic; English without it). Act on the code and show the label; show a code you don't know by its label.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "type": "object"
+      },
       "Driver": {
         "properties": {
           "active": {
@@ -201,7 +217,14 @@
             "type": "string"
           },
           "from_status": {
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Code"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "lat": {
             "type": [
@@ -219,7 +242,14 @@
             "type": "string"
           },
           "reason": {
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Code"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "source": {
             "enum": [
@@ -233,7 +263,14 @@
             "type": "string"
           },
           "to_status": {
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Code"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "type": {
             "description": "created, edited, assigned, unassigned, status_changed, note, message, pod_recorded, pod_held, pod_accepted, pod_dismissed, customer_confirmed, customer_issue and others.",
@@ -305,6 +342,20 @@
       },
       "Shipment": {
         "properties": {
+          "actions": {
+            "description": "The operations the shipment allows now: update, assign, unassign and cancel. Show what this allows; open, so another may come.",
+            "examples": [
+              [
+                "update",
+                "assign",
+                "cancel"
+              ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "cargo": {
             "$ref": "#/components/schemas/Cargo"
           },
@@ -364,7 +415,8 @@
             ]
           },
           "priority": {
-            "$ref": "#/components/schemas/Priority"
+            "$ref": "#/components/schemas/Code",
+            "description": "normal, high or urgent."
           },
           "receipt_confirmed": {
             "description": "The receiver confirmed the delivery from the link they were texted.",
@@ -382,11 +434,19 @@
             ]
           },
           "status": {
-            "$ref": "#/components/schemas/Status"
+            "$ref": "#/components/schemas/Code",
+            "description": "pending, assigned, in_transit, delayed, arrived, delivered, issue or cancelled."
           },
           "status_reason": {
-            "description": "Why it is delayed, has an issue or was cancelled.",
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Code"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is delayed, has an issue or was cancelled."
           },
           "tracking_number": {
             "type": "string"
@@ -406,6 +466,11 @@
               "string",
               "null"
             ]
+          },
+          "version": {
+            "description": "Raised by every change; the ETag, for If-Match.",
+            "format": "int32",
+            "type": "integer"
           }
         },
         "required": [
@@ -419,6 +484,8 @@
           "receiver",
           "cargo",
           "tracking_url",
+          "actions",
+          "version",
           "created_at",
           "updated_at"
         ],
@@ -498,19 +565,6 @@
         },
         "type": "object"
       },
-      "Status": {
-        "enum": [
-          "pending",
-          "assigned",
-          "in_transit",
-          "delayed",
-          "arrived",
-          "delivered",
-          "issue",
-          "cancelled"
-        ],
-        "type": "string"
-      },
       "WebhookMessage": {
         "properties": {
           "data": {
@@ -558,7 +612,7 @@
     }
   },
   "info": {
-    "description": "Book and follow a company's shipments from its own systems. Every request sends one of the company's API keys, made under Settings → API keys: `Authorization: Bearer kf_…`. A key acts for the whole company with the dashboard's rules, and what it does is recorded under the key's name in each shipment's history.\n\nEach key may make 300 requests a minute; past that, requests are answered 429, with `Retry-After`, until the minute is over. Times are RFC 3339 and answered in UTC. Weights are in kilograms and values in birr.\n\nAn error is answered with its HTTP status and `{\"error\": {\"code\": …, \"message\": …, \"fields\": …, \"request_id\": …}}`. `code` is in lowercase snake case (`validation_error`, `not_found`); `message` is written to be shown to a person; `fields` names every field at fault, each with its message; `request_id` is the answer's `X-Request-Id`, to quote when asking for help.\n\nWebhooks tell a company's system when its shipments change, without asking: an admin adds an address and the events it wants under Settings → Webhooks. Each is a POST of a `WebhookMessage`, signed as Standard Webhooks (https://www.standardwebhooks.com) describes: `webhook-id` (the same when a message is sent again), `webhook-timestamp` and `webhook-signature`. Answer 2xx within 10 seconds; anything else is tried again after 1 and 5 minutes, 30 minutes, then 2, 6 and 12 hours.",
+    "description": "Book and follow a company's shipments from its own systems. Every request sends one of the company's API keys, made under Settings → API keys: `Authorization: Bearer kf_…`. A key acts for the whole company with the dashboard's rules, and what it does is recorded under the key's name in each shipment's history.\n\nEach key may make 300 requests a minute; past that, requests are answered 429, with `Retry-After`, until the minute is over. Times are RFC 3339 and answered in UTC. Weights are in kilograms and values in santim.\n\nA code comes with its words, `{\"code\": \"in_transit\", \"label\": \"In transit\"}`, in the language `Accept-Language` asks for (English or Amharic; English without it): act on the code, show the label, and show a code you don't know by its label. A shipment's `actions` are the operations it allows now; show what they allow rather than working it out.\n\nAn error is answered with its HTTP status and `{\"error\": {\"code\": …, \"message\": …, \"fields\": …, \"request_id\": …}}`. `code` is in lowercase snake case (`validation_error`, `not_found`); `message` is written to be shown to a person; `fields` names every field at fault, each with its message; `request_id` is the answer's `X-Request-Id`, to quote when asking for help.\n\nWebhooks tell a company's system when its shipments change, without asking: an admin adds an address and the events it wants under Settings → Webhooks. Each is a POST of a `WebhookMessage`, signed as Standard Webhooks (https://www.standardwebhooks.com) describes: `webhook-id` (the same when a message is sent again), `webhook-timestamp` and `webhook-signature`. Answer 2xx within 10 seconds; anything else is tried again after 1 and 5 minutes, 30 minutes, then 2, 6 and 12 hours.",
     "title": "Kiflet API",
     "version": "1"
   },

@@ -48,9 +48,9 @@ func ifMatch(r *http.Request) context.Context {
 }
 
 // writeShipment answers with a shipment and its ETag.
-func (s *Server) writeShipment(w http.ResponseWriter, status int, sh shipments.Shipment) {
+func (s *Server) writeShipment(w http.ResponseWriter, r *http.Request, status int, sh shipments.Shipment) {
 	w.Header().Set("ETag", etag(sh.Version))
-	writeJSON(w, status, s.toAPIShipment(sh))
+	writeJSON(w, status, s.toAPIShipment(r, sh))
 }
 
 // apiChangeError answers a change the service refused. A version
@@ -65,7 +65,7 @@ func (s *Server) apiChangeError(w http.ResponseWriter, r *http.Request, id pgtyp
 					Code: service.ErrVersionMismatch.APICode(), Message: service.ErrVersionMismatch.Message,
 					RequestID: chimw.GetReqID(r.Context()),
 				},
-				"current": s.toAPIShipment(cur),
+				"current": s.toAPIShipment(r, cur),
 			})
 			return
 		}

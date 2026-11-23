@@ -28,17 +28,17 @@ type hook struct {
 		Type string `json:"type"`
 		Data struct {
 			Shipment struct {
-				ID             string `json:"id"`
-				Status         string `json:"status"`
-				TrackingNumber string `json:"tracking_number"`
+				ID             string  `json:"id"`
+				Status         apiCode `json:"status"`
+				TrackingNumber string  `json:"tracking_number"`
 			} `json:"shipment"`
 			Event struct {
-				Type   string `json:"type"`
-				From   string `json:"from_status"`
-				To     string `json:"to_status"`
-				Source string `json:"source"`
-				Actor  string `json:"actor"`
-				Note   string `json:"note"`
+				Type   string   `json:"type"`
+				From   *apiCode `json:"from_status"`
+				To     *apiCode `json:"to_status"`
+				Source string   `json:"source"`
+				Actor  string   `json:"actor"`
+				Note   string   `json:"note"`
 			} `json:"event"`
 			Message string `json:"message"`
 		} `json:"data"`
@@ -151,7 +151,7 @@ func TestWebhooks(t *testing.T) {
 	id, tracking := office.book("Addis Ababa", "Hawassa", driverID)
 	h := rc.next(service.WebhookShipmentCreated)
 	h.verify(t, secret)
-	if s := h.payload.Data.Shipment; s.ID != id || s.TrackingNumber != tracking || s.Status != "assigned" {
+	if s := h.payload.Data.Shipment; s.ID != id || s.TrackingNumber != tracking || s.Status.Code != "assigned" {
 		t.Errorf("created: %s", h.Body)
 	}
 	if ev := h.payload.Data.Event; ev.Source != "dashboard" || ev.Actor != "Owner of Hooked Freight" {
@@ -164,7 +164,7 @@ func TestWebhooks(t *testing.T) {
 		t.Fatalf("depart: %+v", r)
 	}
 	h = rc.next(service.WebhookStatusChanged)
-	if ev := h.payload.Data.Event; ev.From != "assigned" || ev.To != "in_transit" || ev.Source != "app" || ev.Actor != "Hana Girma" {
+	if ev := h.payload.Data.Event; code(ev.From) != "assigned" || code(ev.To) != "in_transit" || ev.Source != "app" || ev.Actor != "Hana Girma" {
 		t.Errorf("departed: %s", h.Body)
 	}
 
@@ -193,7 +193,7 @@ func TestWebhooks(t *testing.T) {
 	for range 3 {
 		select {
 		case h := <-rc.got:
-			seen[h.Type+" "+h.payload.Data.Event.To] = h
+			seen[h.Type+" "+code(h.payload.Data.Event.To)] = h
 			h.verify(t, secret)
 		case <-time.After(15 * time.Second):
 			t.Fatalf("only %d of 3 webhooks: %v", len(seen), seen)
@@ -205,7 +205,7 @@ func TestWebhooks(t *testing.T) {
 	if _, ok := seen["shipment.status_changed delivered"]; !ok {
 		t.Errorf("no status change to delivered: %v", seen)
 	}
-	if h, ok := seen["shipment.delivered delivered"]; !ok || h.payload.Data.Shipment.Status != "delivered" {
+	if h, ok := seen["shipment.delivered delivered"]; !ok || h.payload.Data.Shipment.Status.Code != "delivered" {
 		t.Errorf("no delivery: %v", seen)
 	}
 

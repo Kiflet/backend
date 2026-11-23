@@ -317,6 +317,17 @@ What changed in each release, newest first.
   API key too), and a request too large `413 too_large`, also when it is
   only too large unzipped: a gzipped sync was cut short at 32 MB and
   answered as bad JSON.
+- **The public API's shipments and webhooks take the conventions**
+  (`docs/migration.md`, phase 2, step 6). A shipment's `status`,
+  `status_reason` and `priority`, and an event's `from_status`, `to_status`
+  and `reason`, are `{code, label}`, the label the office's words in the
+  language of `Accept-Language` (English or Amharic; the webhooks' in
+  English). A shipment has its `actions` (`update`, `assign`, `unassign`,
+  `cancel`, as its status allows, from `shipments/domain.Actions`) and its
+  `version`. Priorities have words in both languages. The breaking change
+  is listed in `api/breaking-accepted.txt`, whose new `webhooks:` line
+  leaves the webhooks out of `make api-breaking` (oasdiff can't list a
+  webhook's change): no company integrates yet.
 - **The public API's `openapi.json` is generated** from
   `api/openapi/v1.yaml` (`docs/migration.md`, phase 2, step 6): `make api`
   writes its public operations, the webhooks and the components they use,

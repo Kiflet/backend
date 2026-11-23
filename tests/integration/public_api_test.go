@@ -10,11 +10,28 @@ import (
 	"testing"
 )
 
+// apiCode is a code with its words, as the API sends them.
+type apiCode struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
+}
+
+// code is c's code, or "" for none.
+func code(c *apiCode) string {
+	if c == nil {
+		return ""
+	}
+	return c.Code
+}
+
 type apiShipment struct {
-	ID             string `json:"id"`
-	TrackingNumber string `json:"tracking_number"`
-	Status         string `json:"status"`
-	StatusReason   string `json:"status_reason"`
+	ID             string   `json:"id"`
+	TrackingNumber string   `json:"tracking_number"`
+	Status         apiCode  `json:"status"`
+	StatusReason   *apiCode `json:"status_reason"`
+	Priority       apiCode  `json:"priority"`
+	Actions        []string `json:"actions"`
+	Version        int32    `json:"version"`
 	Destination    struct {
 		City    string `json:"city"`
 		Address string `json:"address"`
@@ -162,7 +179,7 @@ func TestPublicAPI(t *testing.T) {
 	if sh.Cargo.ValueSantim != 125000050 || scalar[int64](t, `SELECT cargo_value_santim FROM shipments WHERE id = $1`, sh.ID) != 125000050 {
 		t.Errorf("cargo value %d santim, want 125000050", sh.Cargo.ValueSantim)
 	}
-	if sh.Status != "pending" || sh.TrackingNumber == "" || sh.Receiver == nil || sh.Receiver.Name != "Adama Wholesale" || !strings.HasSuffix(sh.TrackingURL, "/track/"+sh.TrackingNumber) {
+	if sh.Status.Code != "pending" || sh.TrackingNumber == "" || sh.Receiver == nil || sh.Receiver.Name != "Adama Wholesale" || !strings.HasSuffix(sh.TrackingURL, "/track/"+sh.TrackingNumber) {
 		t.Errorf("booked: %+v", sh)
 	}
 	e.received("sms", customer, "is booked")
@@ -194,7 +211,7 @@ func TestPublicAPI(t *testing.T) {
 
 	// Assigning, and taking the driver off again.
 	var assigned apiShipment
-	if st := e.api(http.MethodPost, "/api/v1/shipments/"+sh.ID+"/assign", key, map[string]any{"driver_id": driverID}, &assigned); st != http.StatusOK || assigned.Status != "assigned" || assigned.DriverID == nil || *assigned.DriverID != driverID {
+	if st := e.api(http.MethodPost, "/api/v1/shipments/"+sh.ID+"/assign", key, map[string]any{"driver_id": driverID}, &assigned); st != http.StatusOK || assigned.Status.Code != "assigned" || assigned.DriverID == nil || *assigned.DriverID != driverID {
 		t.Errorf("assign: status %d %+v", st, assigned)
 	}
 	var drivers struct {
@@ -207,7 +224,7 @@ func TestPublicAPI(t *testing.T) {
 	if st := e.api(http.MethodGet, "/api/v1/drivers", key, nil, &drivers); st != http.StatusOK || len(drivers.Data) != 1 || drivers.Data[0].Name != "Abebe Kebede" || drivers.Data[0].ActiveShipments != 1 {
 		t.Errorf("drivers: status %d %+v", st, drivers)
 	}
-	if st := e.api(http.MethodPost, "/api/v1/shipments/"+sh.ID+"/assign", key, map[string]any{"driver_id": nil}, &assigned); st != http.StatusOK || assigned.Status != "pending" || assigned.DriverID != nil {
+	if st := e.api(http.MethodPost, "/api/v1/shipments/"+sh.ID+"/assign", key, map[string]any{"driver_id": nil}, &assigned); st != http.StatusOK || assigned.Status.Code != "pending" || assigned.DriverID != nil {
 		t.Errorf("unassign: status %d %+v", st, assigned)
 	}
 
@@ -233,7 +250,7 @@ func TestPublicAPI(t *testing.T) {
 		t.Errorf("a reason for the road, before departure: status %d", st)
 	}
 	var cancelled apiShipment
-	if st := e.api(http.MethodPost, "/api/v1/shipments/"+sh.ID+"/cancel", key, map[string]any{"reason": "duplicate", "note": "Booked twice"}, &cancelled); st != http.StatusOK || cancelled.Status != "cancelled" || cancelled.StatusReason != "duplicate" {
+	if st := e.api(http.MethodPost, "/api/v1/shipments/"+sh.ID+"/cancel", key, map[string]any{"reason": "duplicate", "note": "Booked twice"}, &cancelled); st != http.StatusOK || cancelled.Status.Code != "cancelled" || code(cancelled.StatusReason) != "duplicate" {
 		t.Errorf("cancel: status %d %+v", st, cancelled)
 	}
 	if st := e.api(http.MethodPost, "/api/v1/shipments/"+sh.ID+"/cancel", key, map[string]any{"reason": "duplicate"}, &fail); st != http.StatusConflict {
@@ -243,16 +260,16 @@ func TestPublicAPI(t *testing.T) {
 	// The history, oldest first.
 	var history struct {
 		Data []struct {
-			Type     string `json:"type"`
-			ToStatus string `json:"to_status"`
-			Source   string `json:"source"`
-			Actor    string `json:"actor"`
+			Type     string   `json:"type"`
+			ToStatus *apiCode `json:"to_status"`
+			Source   string   `json:"source"`
+			Actor    string   `json:"actor"`
 		} `json:"data"`
 	}
 	if st := e.api(http.MethodGet, "/api/v1/shipments/"+sh.TrackingNumber+"/events", key, nil, &history); st != http.StatusOK || len(history.Data) < 4 {
 		t.Fatalf("events: status %d %+v", st, history)
 	}
-	if first, last := history.Data[0], history.Data[len(history.Data)-1]; first.Type != "created" || last.ToStatus != "cancelled" || last.Actor != "API: Warehouse system" || last.Source != "api" {
+	if first, last := history.Data[0], history.Data[len(history.Data)-1]; first.Type != "created" || code(last.ToStatus) != "cancelled" || last.Actor != "API: Warehouse system" || last.Source != "api" {
 		t.Errorf("history from %+v to %+v", first, last)
 	}
 

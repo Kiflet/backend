@@ -46,6 +46,7 @@ func TestEveryCodeHasWords(t *testing.T) {
 		{text.Office, text.KindPayment, PaymentStates},
 		{text.Driver, text.KindMove, moves},
 		{text.Driver, text.KindRefusal, driversync.Refusals},
+		{text.Office, text.KindPriority, model.Priorities},
 	} {
 		for _, code := range set.codes {
 			for _, l := range text.Languages {

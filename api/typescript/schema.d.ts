@@ -374,8 +374,6 @@ export interface components {
             };
         };
         /** @enum {string} */
-        Status: "pending" | "assigned" | "in_transit" | "delayed" | "arrived" | "delivered" | "issue" | "cancelled";
-        /** @enum {string} */
         Priority: "normal" | "high" | "urgent";
         Place: {
             /** @description A town the service knows, such as Addis Ababa or Adama. */
@@ -407,10 +405,26 @@ export interface components {
             /** Format: uuid */
             id: string;
             tracking_number: string;
-            status: components["schemas"]["Status"];
+            /** @description pending, assigned, in_transit, delayed, arrived, delivered, issue or cancelled. */
+            status: components["schemas"]["Code"];
             /** @description Why it is delayed, has an issue or was cancelled. */
-            status_reason?: string;
-            priority: components["schemas"]["Priority"];
+            status_reason?: components["schemas"]["Code"] | null;
+            /** @description normal, high or urgent. */
+            priority: components["schemas"]["Code"];
+            /**
+             * @description The operations the shipment allows now: update, assign, unassign and cancel. Show what this allows; open, so another may come.
+             * @example [
+             *       "update",
+             *       "assign",
+             *       "cancel"
+             *     ]
+             */
+            actions: string[];
+            /**
+             * Format: int32
+             * @description Raised by every change; the ETag, for If-Match.
+             */
+            version: number;
             origin: components["schemas"]["Place"];
             destination: components["schemas"]["Place"];
             customer: components["schemas"]["Party"];
@@ -464,12 +478,17 @@ export interface components {
             /** Format: uuid */
             vehicle_id?: string;
         };
+        /** @description A code with its words for the office, in the language of Accept-Language (English or Amharic; English without it). Act on the code and show the label; show a code you don't know by its label. */
+        Code: {
+            code: string;
+            label: string;
+        };
         Event: {
             /** @description created, edited, assigned, unassigned, status_changed, note, message, pod_recorded, pod_held, pod_accepted, pod_dismissed, customer_confirmed, customer_issue and others. */
             type: string;
-            from_status?: string;
-            to_status?: string;
-            reason?: string;
+            from_status?: components["schemas"]["Code"] | null;
+            to_status?: components["schemas"]["Code"] | null;
+            reason?: components["schemas"]["Code"] | null;
             note?: string;
             /** @enum {string} */
             source: "dashboard" | "app" | "sms" | "system" | "customer" | "api";
