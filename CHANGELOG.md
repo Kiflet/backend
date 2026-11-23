@@ -124,6 +124,15 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Deliveries name their uploaded files** (`docs/migration.md`, phase 3,
+  M5): a sync's delivery may give `signature_file` and `photo_files`, each
+  a storage key from `POST /api/v1/driver/uploads` with when and where it
+  was taken, instead of data URLs (the PWA's way, still taken; not both).
+  Each file must be the driver's, of its kind, and in storage; one not
+  there yet answers the new code `files_missing`, with `retry`, in place
+  of refusing the delivery. The files become the proof's `pod_media` with
+  their size, MD5, time and place (AC-021.3, AC-021.4), and a refused or
+  replayed proof leaves them where they are. `geo.Valid` checks a place.
 - **Uploads for the driver app** (`docs/migration.md`, phase 3, M5):
   `POST /api/v1/driver/uploads` takes each file of a delivery (its kind,
   size and MD5) and answers with a storage key, prefixed by the company,

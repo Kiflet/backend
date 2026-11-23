@@ -49,6 +49,10 @@ type PODFile struct {
 	storage.File
 	TakenAt  time.Time
 	Lat, Lng *float64
+	// Uploaded is a file the app put in storage itself (the proof
+	// module's uploads): the proof doesn't own it until it is kept, so a
+	// refused or replayed proof leaves it where it is.
+	Uploaded bool
 }
 
 // SavePOD stores a signature and photos given as data URLs, and describes

@@ -34,7 +34,7 @@ end-to-end test names one; unit tests may.
 | FR-018 Status Update (Driver) | TestDeliveredStraightFromAssigned, TestDeliveryLifecycle, TestRepeatDelayIsRecorded | TestDelivery, TestDriverAppInABrowser |  |
 | FR-019 GPS Tracking | TestHeadingAwayFromTheDestination, TestPositionsKeptAfterReassignment, TestTrackingPartitions |  |  |
 | FR-020 Proof of Delivery - Signature | TestDeliveredStraightFromAssigned, TestDeliveriesStoredInS3, TestDeliveryLifecycle, TestDeliveryMediaRecorded, TestHeldPODAfterReassignment, TestRecentRecipientsAreSuggested | TestDelivery |  |
-| FR-021 Proof of Delivery - Photo | TestDeliveriesStoredInS3, TestDeliveryMediaRecorded, TestHugePhotoRefused, TestPresignedURLs, TestPresignedUploads, TestRefusedPODLeavesNoFiles, TestUploadsThroughTheAPI | TestDelivery |  |
+| FR-021 Proof of Delivery - Photo | TestDeliveriesStoredInS3, TestDeliveryByPresignedFiles, TestDeliveryByUploadedFiles, TestDeliveryMediaRecorded, TestHugePhotoRefused, TestPresignedURLs, TestPresignedUploads, TestRefusedPODLeavesNoFiles, TestUploadsThroughTheAPI | TestDelivery |  |
 | FR-022 Delivery Location Verification | TestDeliveryAwayFromTheDestination |  |  |
 | FR-023 Delivery Notes | TestDeliveryNotes |  |  |
 | FR-024 SMS Fallback for Status Updates | TestDriverSMSCommands, TestInboundSMSOnceAndRepliesLimited, TestTextsThroughTheGateway |  |  |

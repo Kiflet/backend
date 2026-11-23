@@ -16,3 +16,6 @@ UPDATE uploads SET stored_at = now() WHERE tenant_id = $1 AND id = $2 AND stored
 -- name: ListTenantUploadKeys :many
 -- A company's files, removed from storage when it is deleted.
 SELECT storage_key FROM uploads WHERE tenant_id = $1;
+
+-- name: GetDriverUploadByKey :one
+SELECT * FROM uploads WHERE tenant_id = $1 AND driver_id = $2 AND storage_key = $3;

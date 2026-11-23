@@ -122,3 +122,16 @@ func TestDeliveryTolerance(t *testing.T) {
 		t.Error("city-level tolerance should be generous")
 	}
 }
+
+func TestValid(t *testing.T) {
+	for _, c := range []struct {
+		lat, lng float64
+		ok       bool
+	}{
+		{9.03, 38.74, true}, {-90, 180, true}, {91, 0, false}, {0, -181, false}, {math.NaN(), 0, false},
+	} {
+		if Valid(c.lat, c.lng) != c.ok {
+			t.Errorf("Valid(%v, %v) != %v", c.lat, c.lng, c.ok)
+		}
+	}
+}

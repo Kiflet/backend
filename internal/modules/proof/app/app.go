@@ -186,6 +186,31 @@ func (u *Uploads) Receive(ctx context.Context, id pgtype.UUID, token, contentTyp
 	return u.q.MarkUploadStored(ctx, store.MarkUploadStoredParams{TenantID: row.TenantID, ID: row.ID})
 }
 
+func (u *Uploads) Find(ctx context.Context, d proof.Driver, kind, key string) (proof.Upload, error) {
+	row, err := u.q.GetDriverUploadByKey(ctx, store.GetDriverUploadByKeyParams{TenantID: d.TenantID, DriverID: d.UserID, StorageKey: key})
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && row.Kind != kind {
+		return proof.Upload{}, apperror.Invalid(kind, "No such "+kind+" was uploaded by you.")
+	}
+	if err != nil {
+		return proof.Upload{}, err
+	}
+	if !row.StoredAt.Valid {
+		// Put straight into storage: there if storage has it.
+		r, err := u.files.Download(ctx, row.StorageKey)
+		if errors.Is(err, storage.ErrFileNotFound) {
+			return proof.Upload{}, proof.ErrNotStored
+		}
+		if err != nil {
+			return proof.Upload{}, err
+		}
+		_ = r.Close()
+		if err := u.q.MarkUploadStored(ctx, store.MarkUploadStoredParams{TenantID: row.TenantID, ID: row.ID}); err != nil {
+			return proof.Upload{}, err
+		}
+	}
+	return proof.Upload{Key: row.StorageKey, Kind: row.Kind, ContentType: row.ContentType, MD5: row.Md5, Size: row.SizeBytes}, nil
+}
+
 func (u *Uploads) TenantKeys(ctx context.Context, conn database.Conn, tenantID pgtype.UUID) ([]string, error) {
 	return store.New(conn).ListTenantUploadKeys(ctx, tenantID)
 }

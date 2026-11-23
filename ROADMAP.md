@@ -127,8 +127,8 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] M4: the GPS, photo, sync and SMS settings and the map style in
       config.
 - [x] M5: presigned uploads.
-- [ ] M5: deliveries sent by key, with each photo's time and place; and
-      uploads no delivery used, removed after a while.
+- [x] M5: deliveries sent by key, with each photo's time and place.
+- [ ] M5: uploads no delivery used, removed after a while.
 - [ ] M5: push tokens and Expo pushes.
 - [ ] M6: the version gate; each device's health on the driver's page,
       with an alert when recording stops on the road; diagnostics.

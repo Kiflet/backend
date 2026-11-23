@@ -257,4 +257,5 @@ var en = map[string]string{
 	"driver.refusal.not_found":       "This shipment isn't assigned to you.",
 	"driver.refusal.invalid":         "This update couldn't be read.",
 	"driver.refusal.server_error":    "The server couldn't save this. It will be retried.",
+	"driver.refusal.files_missing":   "The photos haven't reached the server yet. They will be sent again.",
 }

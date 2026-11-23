@@ -11,6 +11,34 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getDriverUploadByKey = `-- name: GetDriverUploadByKey :one
+SELECT id, tenant_id, driver_id, kind, storage_key, content_type, size_bytes, md5, created_at, stored_at FROM uploads WHERE tenant_id = $1 AND driver_id = $2 AND storage_key = $3
+`
+
+type GetDriverUploadByKeyParams struct {
+	TenantID   pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	DriverID   pgtype.UUID `db:"driver_id" json:"driver_id"`
+	StorageKey string      `db:"storage_key" json:"storage_key"`
+}
+
+func (q *Queries) GetDriverUploadByKey(ctx context.Context, arg GetDriverUploadByKeyParams) (Upload, error) {
+	row := q.db.QueryRow(ctx, getDriverUploadByKey, arg.TenantID, arg.DriverID, arg.StorageKey)
+	var i Upload
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.DriverID,
+		&i.Kind,
+		&i.StorageKey,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.Md5,
+		&i.CreatedAt,
+		&i.StoredAt,
+	)
+	return i, err
+}
+
 const getUpload = `-- name: GetUpload :one
 SELECT id, tenant_id, driver_id, kind, storage_key, content_type, size_bytes, md5, created_at, stored_at FROM uploads WHERE tenant_id = $1 AND id = $2
 `

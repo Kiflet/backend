@@ -733,13 +733,13 @@ export interface components {
             /** Format: date-time */
             recorded_at?: string;
         };
-        /** @description A proof of delivery. The signature and photos are data URLs. */
+        /** @description A proof of delivery. Its files are either uploaded first (driverPrepareUploads) and named by key, in signature_file and photo_files, with when and where each was taken; or sent inline as data URLs, in signature and photos, as the PWA does. Not both. A delivery naming files not yet in storage is answered files_missing, to be retried. */
         SyncPOD: {
             client_id: string;
             shipment_id: string;
             recipient_name: string;
             recipient_phone?: string;
-            signature: string;
+            signature?: string;
             photos?: string[] | null;
             notes?: string;
             lat?: number | null;
@@ -748,6 +748,21 @@ export interface components {
             location_reason?: string;
             /** Format: date-time */
             recorded_at?: string;
+            signature_file?: components["schemas"]["SyncPODFile"];
+            photo_files?: components["schemas"]["SyncPODFile"][];
+        };
+        /** @description An uploaded file of a delivery. */
+        SyncPODFile: {
+            /** @description Its storage key, as driverPrepareUploads gave it. */
+            key: string;
+            /**
+             * Format: date-time
+             * @description When it was taken.
+             */
+            taken_at?: string;
+            /** @description Where it was taken, with lng. */
+            lat?: number;
+            lng?: number;
         };
         SyncLocation: {
             client_id: string;
@@ -775,7 +790,7 @@ export interface components {
             kind: string;
             ok: boolean;
             retry?: boolean;
-            /** @description Why it was refused, a stable code the app chooses its words by (the config's labels): cancelled (the office cancelled the load), reassigned (it is another driver's now), stale (the office changed it after the move was made, and its decision stands), held_for_review (the delivery is kept for the office to review; nothing more to send), not_found (no such load for this driver), invalid (the item can't be read; the message says why), or server_error (retry is true). Open: a code the app doesn't know is shown by its message. */
+            /** @description Why it was refused, a stable code the app chooses its words by (the config's labels): cancelled (the office cancelled the load), reassigned (it is another driver's now), stale (the office changed it after the move was made, and its decision stands), held_for_review (the delivery is kept for the office to review; nothing more to send), not_found (no such load for this driver), invalid (the item can't be read; the message says why), files_missing (a delivery's uploaded files aren't in storage yet; retry is true, once they are sent), or server_error (retry is true). Open: a code the app doesn't know is shown by its message. */
             code?: string;
             message?: string;
         };

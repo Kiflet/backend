@@ -82,3 +82,8 @@ func EstimateTransit(fromLat, fromLng, toLat, toLng float64, historyHours []floa
 func RoadKM(fromLat, fromLng, toLat, toLng float64) float64 {
 	return DistanceMeters(fromLat, fromLng, toLat, toLng) / 1000 * roadFactor
 }
+
+// Valid reports whether lat and lng are a place on Earth.
+func Valid(lat, lng float64) bool {
+	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
