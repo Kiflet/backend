@@ -153,6 +153,9 @@ var en = map[string]string{
 	// audience's, office. and driver., read by Label. The customer's are
 	// status. and reason. above; where an audience has no words of its own
 	// for a code, Label gives the office's.
+	"office.priority.normal":   "Normal",
+	"office.priority.high":     "High",
+	"office.priority.urgent":   "Urgent",
 	"office.status.pending":    "Pending",
 	"office.status.assigned":   "Assigned",
 	"office.status.in_transit": "In transit",

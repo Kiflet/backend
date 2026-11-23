@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/platform/events"
+	"github.com/kiflet/backend/internal/platform/text"
 	"io"
 	"net"
 	"net/http"
@@ -438,13 +439,10 @@ func (c *core) enqueueWebhooks(ctx context.Context, q *db.Queries, after func(fu
 	if len(types) == 0 || c.webhooks == nil {
 		return
 	}
-	data := map[string]any{
-		"shipment": AsJSON(sh, c.cfg.BaseURL),
-		"event": EventJSON{
-			Type: e.Type, FromStatus: e.From, ToStatus: e.To, Reason: e.Reason, Note: e.Note,
-			Source: a.Source, Actor: a.Name, Lat: e.Lat, Lng: e.Lng, At: at.UTC(),
-		},
-	}
+	// In English: a company's systems have no language of their own.
+	event := NewEventJSON(text.English, e.Type, e.From, e.To, e.Reason)
+	event.Note, event.Source, event.Actor, event.Lat, event.Lng, event.At = e.Note, a.Source, a.Name, e.Lat, e.Lng, at.UTC()
+	data := map[string]any{"shipment": AsJSON(sh, c.cfg.BaseURL, text.English), "event": event}
 	var sent []pgtype.UUID
 	for _, t := range types {
 		ids, err := q.EnqueueWebhooks(ctx, db.EnqueueWebhooksParams{

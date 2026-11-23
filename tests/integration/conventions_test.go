@@ -140,3 +140,55 @@ func TestCreateWithIdempotencyKey(t *testing.T) {
 		t.Errorf("a key of 256 characters: status %d", st)
 	}
 }
+
+// TestShipmentCodesAndActions (FR-046): a shipment's codes come with their
+// words for the office, in the language Accept-Language asks for, and its
+// actions are the operations its status allows, so a client works out
+// nothing for itself.
+func TestShipmentCodesAndActions(t *testing.T) {
+	e := newEnv(t)
+	office := e.company("Labelled Freight")
+	driverID, _, _ := office.addDriver("Tesfaye Bekele")
+	key := office.makeAPIKey("Order system")
+
+	var sh apiShipment
+	if st := e.api(http.MethodPost, "/api/v1/shipments", key, booking(), &sh); st != http.StatusCreated {
+		t.Fatalf("booked: status %d", st)
+	}
+	if sh.Status != (apiCode{"pending", "Pending"}) || sh.Priority != (apiCode{"normal", "Normal"}) || sh.StatusReason != nil ||
+		strings.Join(sh.Actions, " ") != "update assign cancel" || sh.Version != 1 {
+		t.Errorf("booked: %+v %+v %v %v version %d", sh.Status, sh.Priority, sh.StatusReason, sh.Actions, sh.Version)
+	}
+	path := "/api/v1/shipments/" + sh.TrackingNumber
+	amharic := map[string]string{"Accept-Language": "am-ET,am;q=0.9,en;q=0.5"}
+	if st, _ := e.apiSending(http.MethodGet, path, key, amharic, nil, &sh); st != http.StatusOK || sh.Status != (apiCode{"pending", "በመጠባበቅ ላይ"}) {
+		t.Errorf("in Amharic: status %d, %+v", st, sh.Status)
+	}
+
+	// Assigned, the driver can be taken off; cancelled, nothing is left
+	// that the API does (reopening is the dashboard's).
+	if st := e.api(http.MethodPost, path+"/assign", key, map[string]any{"driver_id": driverID}, &sh); st != http.StatusOK ||
+		sh.Status.Code != "assigned" || strings.Join(sh.Actions, " ") != "update assign unassign cancel" {
+		t.Errorf("assigned: status %d, %+v %v", st, sh.Status, sh.Actions)
+	}
+	if st := e.api(http.MethodPost, path+"/cancel", key, map[string]any{"reason": "duplicate"}, &sh); st != http.StatusOK ||
+		sh.Status != (apiCode{"cancelled", "Cancelled"}) || sh.StatusReason == nil || *sh.StatusReason != (apiCode{"duplicate", "Duplicate shipment"}) || len(sh.Actions) != 0 {
+		t.Errorf("cancelled: status %d, %+v %v %v", st, sh.Status, sh.StatusReason, sh.Actions)
+	}
+
+	// The history's codes too.
+	var history struct {
+		Data []struct {
+			Type     string   `json:"type"`
+			ToStatus *apiCode `json:"to_status"`
+			Reason   *apiCode `json:"reason"`
+		} `json:"data"`
+	}
+	if st, _ := e.apiSending(http.MethodGet, path+"/events", key, amharic, nil, &history); st != http.StatusOK || len(history.Data) == 0 {
+		t.Fatalf("history: status %d", st)
+	}
+	last := history.Data[len(history.Data)-1]
+	if last.ToStatus == nil || *last.ToStatus != (apiCode{"cancelled", "ተሰርዟል"}) || last.Reason == nil || *last.Reason != (apiCode{"duplicate", "የተደገመ ጭነት"}) {
+		t.Errorf("the cancellation in the history: %+v %+v", last.ToStatus, last.Reason)
+	}
+}

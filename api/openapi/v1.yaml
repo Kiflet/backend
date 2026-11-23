@@ -21,7 +21,9 @@ tags:
   description: |-
     Book and follow a company's shipments from its own systems. Every request sends one of the company's API keys, made under Settings → API keys: `Authorization: Bearer kf_…`. A key acts for the whole company with the dashboard's rules, and what it does is recorded under the key's name in each shipment's history.
 
-    Each key may make 300 requests a minute; past that, requests are answered 429, with `Retry-After`, until the minute is over. Times are RFC 3339 and answered in UTC. Weights are in kilograms and values in birr.
+    Each key may make 300 requests a minute; past that, requests are answered 429, with `Retry-After`, until the minute is over. Times are RFC 3339 and answered in UTC. Weights are in kilograms and values in santim.
+
+    A code comes with its words, `{"code": "in_transit", "label": "In transit"}`, in the language `Accept-Language` asks for (English or Amharic; English without it): act on the code, show the label, and show a code you don't know by its label. A shipment's `actions` are the operations it allows now; show what they allow rather than working it out.
 
     An error is answered with its HTTP status and `{"error": {"code": …, "message": …, "fields": …, "request_id": …}}`. `code` is in lowercase snake case (`validation_error`, `not_found`); `message` is written to be shown to a person; `fields` names every field at fault, each with its message; `request_id` is the answer's `X-Request-Id`, to quote when asking for help.
 
@@ -876,17 +878,6 @@ components:
               type: string
               description: The request's ID, as in the answer's X-Request-Id, to
                 quote when asking for help.
-    Status:
-      type: string
-      enum:
-      - pending
-      - assigned
-      - in_transit
-      - delayed
-      - arrived
-      - delivered
-      - issue
-      - cancelled
     Priority:
       type: string
       enum:
@@ -963,6 +954,8 @@ components:
       - receiver
       - cargo
       - tracking_url
+      - actions
+      - version
       - created_at
       - updated_at
       properties:
@@ -972,12 +965,31 @@ components:
         tracking_number:
           type: string
         status:
-          $ref: '#/components/schemas/Status'
+          $ref: '#/components/schemas/Code'
+          description: 'pending, assigned, in_transit, delayed, arrived, delivered,
+            issue or cancelled.'
         status_reason:
-          type: string
           description: Why it is delayed, has an issue or was cancelled.
+          anyOf:
+          - $ref: '#/components/schemas/Code'
+          - type: 'null'
         priority:
-          $ref: '#/components/schemas/Priority'
+          $ref: '#/components/schemas/Code'
+          description: normal, high or urgent.
+        actions:
+          type: array
+          description: 'The operations the shipment allows now: update, assign,
+            unassign and cancel. Show what this allows; open, so another may come.'
+          items:
+            type: string
+          examples:
+          - - update
+            - assign
+            - cancel
+        version:
+          type: integer
+          format: int32
+          description: Raised by every change; the ETag, for If-Match.
         origin:
           $ref: '#/components/schemas/Place'
         destination:
@@ -1083,6 +1095,19 @@ components:
           vehicle_id:
             type: string
             format: uuid
+    Code:
+      type: object
+      description: A code with its words for the office, in the language of
+        Accept-Language (English or Amharic; English without it). Act on the
+        code and show the label; show a code you don't know by its label.
+      required:
+      - code
+      - label
+      properties:
+        code:
+          type: string
+        label:
+          type: string
     Event:
       type: object
       required:
@@ -1097,11 +1122,17 @@ components:
             message, pod_recorded, pod_held, pod_accepted, pod_dismissed, customer_confirmed,
             customer_issue and others.
         from_status:
-          type: string
+          anyOf:
+          - $ref: '#/components/schemas/Code'
+          - type: 'null'
         to_status:
-          type: string
+          anyOf:
+          - $ref: '#/components/schemas/Code'
+          - type: 'null'
         reason:
-          type: string
+          anyOf:
+          - $ref: '#/components/schemas/Code'
+          - type: 'null'
         note:
           type: string
         source:
