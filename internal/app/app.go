@@ -13,6 +13,7 @@ import (
 	driversyncapp "github.com/kiflet/backend/internal/modules/driversync/app"
 	fleetapp "github.com/kiflet/backend/internal/modules/fleet/app"
 	identityapp "github.com/kiflet/backend/internal/modules/identity/app"
+	proofapp "github.com/kiflet/backend/internal/modules/proof/app"
 	shipmentsapp "github.com/kiflet/backend/internal/modules/shipments/app"
 	tenancyapp "github.com/kiflet/backend/internal/modules/tenancy/app"
 	"github.com/redis/go-redis/v9"
@@ -163,6 +164,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log zerolog.Logger, opts Option
 		Shipments:     shipmentsapp.New(bus),
 		ShipmentFiles: shipmentsapp.New(bus),
 		Feed:          driversyncapp.New(pool, bus),
+		Uploads:       proofapp.NewUploads(pool, store, cfg.Secret, cfg.PublicURL),
 		Bus:           bus,
 		Pool:          pool, Log: log, Publisher: live, Positions: positions,
 		RemoteWorkers: !roles.Has("worker"), Work: work,

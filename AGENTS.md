@@ -78,7 +78,8 @@ the plan, not from those.
   shipments' tables, rules, documents and charges, and its history,
   which `shipments.History.Record` writes and publishes on the bus as
   `shipment.<type>` (booking, assigning and status changes still in
-  `internal/service`).
+  `internal/service`), driversync's feed, and proof's uploads (the
+  proofs themselves still in `internal/service`).
 - `internal/service`: the business rules not yet in a module. Handlers
   stay thin.
 - `internal/model`: plans and prices, and aliases of what moved to the

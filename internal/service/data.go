@@ -184,6 +184,13 @@ func (s *DataService) DeleteCompany(ctx context.Context, p *Principal, id pgtype
 			return err
 		}
 		keys = append(keys, docs...)
+		if s.uploads != nil {
+			uploaded, err := s.uploads.TenantKeys(ctx, q.Conn(), id)
+			if err != nil {
+				return err
+			}
+			keys = append(keys, uploaded...)
+		}
 		voided, err := q.VoidTenantInvoices(ctx, id)
 		if err != nil {
 			return err

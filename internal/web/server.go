@@ -218,11 +218,15 @@ func (s *Server) Handler() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(driverAddress)
 			r.Get("/driver/config", s.apiDriverConfig)
+			// A file PUT to the API's own upload URL, which is signed; the
+			// app sends no token with it, as with a presigned one.
+			r.Put("/driver/uploads/{id}", s.apiReceiveUpload)
 			r.Group(func(r chi.Router) {
 				r.Use(perDriver, s.decompressBody, s.requireDriver)
 				r.Post("/driver/logout", s.apiDriverLogout)
 				r.Post("/driver/pin", s.apiChangePIN)
 				r.Post("/driver/sync", s.apiSync)
+				r.Post("/driver/uploads", s.apiPrepareUploads)
 			})
 		})
 		// Everything else: signing in, and the public API.

@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kiflet/backend/internal/modules/proof"
 	"github.com/kiflet/backend/internal/service"
 )
 
@@ -265,6 +266,16 @@ func TestDeleteCompany(t *testing.T) {
 	if r := d.pod(service.SyncPOD{ShipmentID: id, RecipientName: "Almaz Kebede", Photos: []string{photoJPEG(t)}}); !r.OK {
 		t.Fatalf("POD: %+v", r)
 	}
+	// A photo uploaded for a delivery not yet sent.
+	photo, _ := uploadFiles(t)
+	var prepared tickets
+	e.api(http.MethodPost, "/api/v1/driver/uploads", d.token, map[string]any{"files": []proof.File{describe(proof.KindPhoto, photo)}}, &prepared)
+	if len(prepared.Uploads) != 1 {
+		t.Fatalf("prepare an upload: %+v", prepared)
+	}
+	if st, body := put(t, prepared.Uploads[0], photo, nil); st != http.StatusNoContent {
+		t.Fatalf("upload: %d %s", st, body)
+	}
 	stays := e.company("Staying Logistics")
 	_, staysTracking := stays.book("Addis Ababa", "Bahir Dar", "")
 	goneID := gone.tenant()
@@ -312,11 +323,13 @@ func TestDeleteCompany(t *testing.T) {
 		`SELECT COUNT(*) FROM shipment_events WHERE tenant_id = $1`,
 		`SELECT COUNT(*) FROM proof_of_deliveries WHERE tenant_id = $1`,
 		`SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1`,
+		`SELECT COUNT(*) FROM uploads WHERE tenant_id = $1`,
 	} {
 		if n := scalar[int64](t, sql, goneID); n != 0 {
 			t.Errorf("%s: %d left", sql, n)
 		}
 	}
+
 	if got := scalar[string](t, `SELECT status FROM invoices WHERE id = $1 AND tenant_id IS NULL`, paid); got != "paid" {
 		t.Errorf("the paid invoice is %q", got)
 	}
@@ -341,7 +354,7 @@ func TestDeleteCompany(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	if files := storedFiles(t, e.files); len(files) != 0 {
-		t.Errorf("photos left behind: %v", files)
+		t.Errorf("photos left behind, uploads among them: %v", files)
 	}
 	if p := stays.get("/app/shipments?q=" + staysTracking); !strings.Contains(p.Body, staysTracking) {
 		t.Error("the other company lost its shipment")

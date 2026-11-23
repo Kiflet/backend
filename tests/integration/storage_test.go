@@ -186,7 +186,7 @@ func TestPresignedURLs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	put, err := store.PutURL(ctx, "tenant/pod/photo.jpg", "image/jpeg")
+	put, err := store.PutURL(ctx, "tenant/pod/photo.jpg", storage.Put{ContentType: "image/jpeg"})
 	if err != nil {
 		t.Fatal(err)
 	}
