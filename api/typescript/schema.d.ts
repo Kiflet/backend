@@ -161,7 +161,7 @@ export interface paths {
         };
         /**
          * What the app needs to work offline
-         * @description The status rules, reason lists and their words, fetched as the app starts and before sign-in. They are derived from the server's rules, so the app never offers a move the server would refuse.
+         * @description The status rules, reason lists and their words, fetched as the app starts and before sign-in. They are derived from the server's rules, so the app never offers a move the server would refuse. Its ETag changes with it, and each sync names the current one (config_etag), so the app fetches it again, with If-None-Match, only when they differ.
          */
         get: operations["getDriverConfig"];
         put?: never;
@@ -539,9 +539,13 @@ export interface components {
             /** @description Where a driver without data sends status texts */
             sms_number: string;
             statuses: components["schemas"]["CodeLabel"][];
-            /** @description For each status, those a driver may move a load to from it. */
+            /** @description For each status, those a driver may move a load to from it, the next step first. */
             transitions: {
                 [key: string]: string[];
+            };
+            /** @description For each status, the driver's buttons, the main one first: the status each leads to (delivered: recording the delivery), and the code of its words in labels.move ("Start trip" and "Back on the road" both lead to in_transit). */
+            moves: {
+                [key: string]: components["schemas"]["DriverMove"][];
             };
             /** @description The statuses a delivery may be recorded from. */
             pod_from: string[];
@@ -549,9 +553,23 @@ export interface components {
             issue_reasons: components["schemas"]["CodeLabel"][];
             /** @description Asked for when a delivery is recorded away from the destination. */
             location_reasons: components["schemas"]["CodeLabel"][];
+            /** @description The driver's words for every code, by language (en, am), kind (status, reason, priority, move, refusal, removal, held) and code, so a code added on the server reads right on a phone not yet updated. The other lists' labels are in English. */
+            labels: {
+                [key: string]: {
+                    [key: string]: {
+                        [key: string]: string;
+                    };
+                };
+            };
             max_photos: number;
             tile_url: string;
             tile_credit: string;
+        };
+        DriverMove: {
+            /** @description The status it leads to; delivered opens the delivery. */
+            to: string;
+            /** @description The code of its words, in the config's labels.move. */
+            move: string;
         };
         SyncRequest: {
             device_id?: string;
@@ -656,6 +674,8 @@ export interface components {
             driver?: components["schemas"]["DriverProfile"];
             /** @description There is more than one response carries; sync again at once. */
             more?: boolean;
+            /** @description The driver config's ETag; when it isn't the one the app holds, the app fetches the config again. */
+            config_etag: string;
         };
         RemovedShipment: {
             id: string;
@@ -801,6 +821,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description The ETag of the copy the app holds; answered 304 when it is still current. */
+        IfNoneMatch: string;
         /** @description The ETag of the copy the change was made from. When the record has changed since, the change is refused 412 with the record as it is now. */
         IfMatch: string;
         /** @description A key of the caller's choosing, one per booking. Sent again within 24 hours with the same request, it gets the first answer without booking again, marked Idempotent-Replayed: true; with another request, 422 idempotency_key_reused; while the first still runs, 409 idempotency_key_in_flight. Only a success is kept. */
@@ -1135,7 +1157,10 @@ export interface operations {
     getDriverConfig: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The ETag of the copy the app holds; answered 304 when it is still current. */
+                "If-None-Match"?: components["parameters"]["IfNoneMatch"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1144,11 +1169,22 @@ export interface operations {
             /** @description The configuration */
             200: {
                 headers: {
+                    /** @description The configuration's version. */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["DriverConfig"];
                 };
+            };
+            /** @description The configuration is the one If-None-Match names. */
+            304: {
+                headers: {
+                    /** @description The configuration's version. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             429: components["responses"]["Error"];
         };

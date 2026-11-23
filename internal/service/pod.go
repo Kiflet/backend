@@ -34,7 +34,12 @@ const (
 	HeldReassigned = "reassigned"
 	HeldUnassigned = "unassigned"
 	HeldDuplicate  = "duplicate"
+	// HeldChanged stands for any other: the shipment changed.
+	HeldChanged = "changed"
 )
+
+// HeldCodes are every reason a proof may be held, for their words.
+var HeldCodes = []string{HeldCancelled, HeldReassigned, HeldUnassigned, HeldDuplicate, HeldChanged}
 
 // HeldReasonLabel explains to the office why a proof was held.
 func HeldReasonLabel(code string) string {
@@ -50,7 +55,7 @@ func heldMessage(code string) string {
 // a reason without its own words is the shipment having changed.
 func heldWords(audience, code string) string {
 	if !text.HasLabel(text.English, audience, text.KindHeld, code) {
-		code = "changed"
+		code = HeldChanged
 	}
 	return text.Label(text.English, audience, text.KindHeld, code)
 }

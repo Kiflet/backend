@@ -142,6 +142,9 @@ type SyncResponse struct {
 	// More says there is more than one response carries: the app syncs
 	// again at once.
 	More bool `json:"more,omitempty"`
+	// ConfigETag is the driver config's ETag: when it isn't the one the
+	// app holds, the app fetches the config again.
+	ConfigETag string `json:"config_etag"`
 }
 
 // RemovedShipment is a load taken off the driver's phone.

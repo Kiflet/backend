@@ -246,6 +246,10 @@ var en = map[string]string{
 	"driver.held.duplicate":  "This shipment already has a delivery record. Yours was kept and the office will review it.",
 	"driver.held.changed":    "The office changed this shipment. Your delivery record was kept and the office will review it.",
 
+	"driver.removal.cancelled":  "This shipment was cancelled.",
+	"driver.removal.reassigned": "This shipment was given to another driver.",
+	"driver.removal.unassigned": "This shipment was taken off you.",
+
 	"driver.refusal.cancelled":       "The office cancelled this shipment.",
 	"driver.refusal.reassigned":      "This shipment is another driver's now.",
 	"driver.refusal.stale":           "The office changed this shipment after your update, and its decision stands.",

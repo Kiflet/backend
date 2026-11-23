@@ -7,6 +7,7 @@ import (
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/modules/driversync"
 	identity "github.com/kiflet/backend/internal/modules/identity/domain"
+	shipdomain "github.com/kiflet/backend/internal/modules/shipments/domain"
 	"github.com/kiflet/backend/internal/platform/text"
 )
 
@@ -18,15 +19,14 @@ func TestEveryCodeHasWords(t *testing.T) {
 	reasons := slices.Concat(model.DelayReasons, model.IssueReasons, model.CancelReasons, model.LocationReasons)
 	// A driver's buttons: the statuses they may move a load to, the
 	// delivery, and going back on the road after a delay.
-	moves := []string{model.StatusDelivered, "resume"}
+	moves := []string{}
 	for _, s := range model.AllStatuses {
-		for _, next := range model.AllowedTransitions(s, model.ActorDriver) {
-			if !slices.Contains(moves, next) {
-				moves = append(moves, next)
+		for _, m := range shipdomain.DriverMoves(s) {
+			if !slices.Contains(moves, m.Move) {
+				moves = append(moves, m.Move)
 			}
 		}
 	}
-	held := []string{HeldCancelled, HeldReassigned, HeldUnassigned, HeldDuplicate, "changed"}
 	roles := []string{identity.RoleDriver, identity.RoleDispatcher, identity.RoleFleetManager, identity.RoleAdmin, identity.RolePlatformAdmin}
 	for _, set := range []struct {
 		audience, kind string
@@ -40,12 +40,13 @@ func TestEveryCodeHasWords(t *testing.T) {
 		{text.Driver, text.KindReason, slices.Concat(model.DelayReasons, model.IssueReasons, model.LocationReasons)},
 		{text.Office, text.KindRole, roles},
 		{text.Office, text.KindAlert, AlertTypes},
-		{text.Office, text.KindHeld, held},
-		{text.Driver, text.KindHeld, held},
+		{text.Office, text.KindHeld, HeldCodes},
+		{text.Driver, text.KindHeld, HeldCodes},
 		{text.Office, text.KindInvoice, InvoiceStates},
 		{text.Office, text.KindPayment, PaymentStates},
 		{text.Driver, text.KindMove, moves},
 		{text.Driver, text.KindRefusal, driversync.Refusals},
+		{text.Driver, text.KindRemoval, []string{driversync.Reassigned, driversync.Unassigned, driversync.Cancelled}},
 		{text.Office, text.KindPriority, model.Priorities},
 	} {
 		for _, code := range set.codes {

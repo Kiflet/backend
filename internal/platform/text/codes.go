@@ -20,6 +20,7 @@ const (
 	KindPayment  = "payment"
 	KindMove     = "move"    // a driver's button for a status
 	KindRefusal  = "refusal" // why the server refused a driver's item
+	KindRemoval  = "removal" // why a load was taken off a driver's phone
 	KindPriority = "priority"
 )
 

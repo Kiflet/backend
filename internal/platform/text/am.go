@@ -253,6 +253,10 @@ var am = map[string]string{
 	"driver.held.duplicate":  "ይህ ጭነት ቀድሞ የርክክብ መዝገብ አለው። የእርስዎም ተቀምጧል፤ ቢሮው ይመለከተዋል።",
 	"driver.held.changed":    "ቢሮው ይህን ጭነት ቀይሮታል። የርክክብ መዝገብዎ ተቀምጧል፤ ቢሮው ይመለከተዋል።",
 
+	"driver.removal.cancelled":  "ይህ ጭነት ተሰርዟል።",
+	"driver.removal.reassigned": "ይህ ጭነት ለሌላ ሹፌር ተሰጥቷል።",
+	"driver.removal.unassigned": "ይህ ጭነት ከእርስዎ ተነስቷል።",
+
 	"driver.refusal.cancelled":       "ቢሮው ይህን ጭነት ሰርዞታል።",
 	"driver.refusal.reassigned":      "ይህ ጭነት አሁን የሌላ ሹፌር ነው።",
 	"driver.refusal.stale":           "ከእርስዎ ለውጥ በኋላ ቢሮው ጭነቱን ቀይሮታል፤ የቢሮው ውሳኔ ይጸናል።",
