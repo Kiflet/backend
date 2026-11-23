@@ -218,6 +218,7 @@ api:
 	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) \
 		-config internal/platform/api/oapi-codegen.yaml api/openapi/v1.yaml
 	cd api/typescript && npm ci --silent && npm run --silent generate
+	go run ./internal/tools/apisurface -document public api/openapi/v1.yaml > internal/web/static/openapi.json
 
 # Breaking changes to the API's specification since BASE (CI: the pull
 # request's base): scripts/api-breaking.sh.

@@ -460,7 +460,8 @@ the code, the specification and the clients' types in step. The design is
    cross-origin check, and the exemption for all of `/api/` goes (A2). The
    providers' callbacks move to `/api/callbacks/*`, checked by their
    signatures, with the sandbox and `docs/deploy.md`.
-6. **The operations there are:** the public API's 8 take the conventions
+6. **The operations there are** (`openapi.json` generated from the
+   specification done): the public API's 8 take the conventions
    (a shipment by its ID or its tracking number), and
    `internal/web/static/openapi.json` gives way to the published `public`
    part; the driver operations (sign-in, PIN and its reset, config, sync,

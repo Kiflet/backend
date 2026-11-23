@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"slices"
@@ -8,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
+
+	"github.com/kiflet/backend/internal/platform/api"
 )
 
 // The OpenAPI document describes the public API as it is: every route and
@@ -34,7 +37,8 @@ func TestOpenAPIMatchesTheAPI(t *testing.T) {
 	}
 
 	// Routes.
-	inCode := map[string]bool{}
+	// The document itself, which needs no key.
+	inCode := map[string]bool{"get /openapi.json": true}
 	for _, r := range publicAPI {
 		inCode[strings.ToLower(r.Method)+" "+r.Path] = true
 	}
@@ -138,59 +142,22 @@ func jsonFields(rt reflect.Type) []string {
 	return out
 }
 
-// The specification of the whole API, api/openapi/v1.yaml, has the public
-// operations as openapi.json describes them, tagged public, with the same
-// schemas, until openapi.json is made from it (docs/migration.md, phase 2).
-func TestSpecificationHasThePublicAPI(t *testing.T) {
-	raw, err := embedded.ReadFile("static/openapi.json")
+// openapi.json, which the public API serves, is the public part of
+// api/openapi/v1.yaml, as make api writes it.
+func TestOpenAPIIsThePublicPart(t *testing.T) {
+	served, err := embedded.ReadFile("static/openapi.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	public, err := openapi3.NewLoader().LoadFromData(raw)
-	if err != nil {
-		t.Fatalf("openapi.json: %v", err)
-	}
-	whole, err := openapi3.NewLoader().LoadFromFile("../../api/openapi/v1.yaml")
+	spec, err := openapi3.NewLoader().LoadFromFile("../../api/openapi/v1.yaml")
 	if err != nil {
 		t.Fatalf("api/openapi/v1.yaml: %v", err)
 	}
-	same := func(what string, a, b any) {
-		t.Helper()
-		x, _ := json.Marshal(a)
-		y, _ := json.Marshal(b)
-		if string(x) != string(y) {
-			t.Errorf("%s differs between openapi.json and api/openapi/v1.yaml:\n%s\n%s", what, x, y)
-		}
+	want, err := api.Document(spec, "public")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for path, item := range public.Paths.Map() {
-		other := whole.Paths.Value(path)
-		if other == nil {
-			t.Errorf("%s is in openapi.json but not api/openapi/v1.yaml", path)
-			continue
-		}
-		for method, op := range item.Operations() {
-			o := other.GetOperation(method)
-			if o == nil {
-				t.Errorf("%s %s is in openapi.json but not api/openapi/v1.yaml", method, path)
-				continue
-			}
-			if !slices.Equal(o.Tags, []string{"public"}) {
-				t.Errorf("%s %s is tagged %v in api/openapi/v1.yaml, want public", method, path, o.Tags)
-			}
-			copied := *o
-			copied.Tags = op.Tags
-			same(method+" "+path, op, copied)
-		}
-		same(path+"'s parameters", item.Parameters, other.Parameters)
+	if !bytes.Equal(served, want) {
+		t.Error("internal/web/static/openapi.json isn't api/openapi/v1.yaml's public part: run make api")
 	}
-	for name, s := range public.Components.Schemas {
-		same("schema "+name, s, whole.Components.Schemas[name])
-	}
-	for name, r := range public.Components.Responses {
-		same("response "+name, r, whole.Components.Responses[name])
-	}
-	for name, p := range public.Components.Parameters {
-		same("parameter "+name, p, whole.Components.Parameters[name])
-	}
-	same("webhooks", public.Webhooks, whole.Webhooks)
 }

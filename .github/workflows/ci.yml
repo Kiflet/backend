@@ -60,14 +60,14 @@ jobs:
           for f in internal/modules/*/store/*.sql.go; do
             test -f "$(dirname "$f")/queries/$(basename "$f" .go)" || { echo "$f: its queries are gone"; exit 1; }
           done
-      - name: The Go and TypeScript code generated from the API's specification are current
+      - name: The Go and TypeScript code and the public API's document generated from the API's specification are current
         run: |
           make api
-          changed=$(git status --porcelain -- internal/platform/api api/typescript)
+          changed=$(git status --porcelain -- internal/platform/api api/typescript internal/web/static/openapi.json)
           if [ -n "$changed" ]; then
             echo "Run make api and commit what it changes:"
             echo "$changed"
-            git diff -- internal/platform/api api/typescript | head -50
+            git diff -- internal/platform/api api/typescript internal/web/static/openapi.json | head -50
             exit 1
           fi
       # A breaking change to a public or driver operation fails; one to an
