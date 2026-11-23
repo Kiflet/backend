@@ -307,6 +307,17 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The driver config has the moves in order, the driver's words and an
+  ETag** (`docs/migration.md`, phase 3, M3). `transitions` lists a
+  driver's next step first (arrived from in transit; the office's stay in
+  lifecycle order), and `moves` gives each status's buttons, main one
+  first, with the code of their words: `resume` for back on the road, and
+  recording the delivery first once arrived (`shipments/domain.DriverMoves`).
+  `labels` has the driver's words for every status, reason, priority,
+  move, refusal, removal and held delivery, in English and Amharic; the
+  removals' words are new. The config's `ETag` is a hash of it, answered
+  `304` to `If-None-Match`, and each sync names it as `config_etag`.
+  `pod_from` comes from `CanRecordDelivery`, as the transition rules do.
 - **The sync's refusals have stable codes** (`docs/migration.md`, phase 3,
   M2), the ones the app chooses its words by: `cancelled` (a move made
   after the office cancelled the load), `reassigned` (the load is another

@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -30,6 +31,10 @@ var embedded embed.FS
 
 // Server holds what the handlers need.
 type Server struct {
+	// driverConfig is the driver app's configuration and its ETag, the
+	// same for as long as the process runs.
+	driverConfig func() ([]byte, string)
+
 	cfg     *config.Config
 	svc     *service.Services
 	log     zerolog.Logger
@@ -73,6 +78,7 @@ func New(cfg *config.Config, svc *service.Services, pool *pgxpool.Pool, hub *web
 		cfg: cfg, svc: svc, log: log, hub: hub, pool: pool, assets: assets, started: time.Now(), redis: rdb,
 		mockSMS: svc.SMS.ProviderName() == "mock", mockMail: svc.Mail.ProviderName() == "mock",
 	}
+	s.driverConfig = sync.OnceValues(s.buildDriverConfig)
 	for _, p := range svc.Billing.Providers() {
 		s.mockPay = s.mockPay || p.Mock()
 	}

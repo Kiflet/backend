@@ -9,6 +9,7 @@ import (
 // the shipments module's (internal/modules/shipments/domain).
 type (
 	Actor           = shipments.Actor
+	Move            = shipments.Move
 	TransitionError = shipments.TransitionError
 )
 
@@ -49,6 +50,8 @@ var (
 	StatusLabel        = shipments.StatusLabel
 	CheckTransition    = shipments.CheckTransition
 	AllowedTransitions = shipments.AllowedTransitions
+	DriverMoves        = shipments.DriverMoves
+	CanRecordDelivery  = shipments.CanRecordDelivery
 	CanCancel          = shipments.CanCancel
 	CanReopen          = shipments.CanReopen
 	CanAssign          = shipments.CanAssign

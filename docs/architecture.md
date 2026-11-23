@@ -1038,9 +1038,15 @@ the app; nothing is lost) or `429` with `Retry-After`.
 `X-App-Version`, `X-App-Build` and `X-App-Platform`.
 `GET /api/v1/driver/config` gives the minimum and recommended versions for
 each platform, the GPS, photo and sync settings, the SMS commands, the map
-style, the status moves in order, and the driver's words for every code in
-English and Amharic (`labels`), so a reason added on the server reads
-right on phones that haven't updated.
+style, the status moves in order (`transitions`, and `moves`: each
+status's buttons, the main one first, with the code of their words, since
+"Start trip" and "Back on the road" both lead to `in_transit` and
+recording the delivery is the main one once arrived), and the driver's
+words for every code in English and Amharic (`labels`, by language, kind
+and code), so a reason added on the server reads right on phones that
+haven't updated. Its `ETag` changes with it; each sync names the current
+one (`config_etag`), and the app fetches it again, with `If-None-Match`,
+only when they differ.
 
 **What stays from today's protocol:** one request with many items; each
 item idempotent by its `client_id`; the phone's clock corrected by

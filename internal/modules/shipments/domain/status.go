@@ -87,14 +87,15 @@ func (e *TransitionError) Error() string {
 		StatusLabel(e.From), StatusLabel(e.To))
 }
 
-// driverMoves is the road lifecycle a driver walks through. "Arrived" can go
-// back on the road because drivers do reach the wrong gate.
+// driverMoves is the road lifecycle a driver walks through, each status's
+// next step first: the driver app's main button (DriverMoves). "Arrived"
+// can go back on the road because drivers do reach the wrong gate.
 var driverMoves = map[string][]string{
 	StatusAssigned:  {StatusInTransit},
-	StatusInTransit: {StatusDelayed, StatusArrived, StatusIssue},
+	StatusInTransit: {StatusArrived, StatusDelayed, StatusIssue},
 	StatusDelayed:   {StatusInTransit, StatusArrived, StatusIssue},
 	StatusIssue:     {StatusInTransit, StatusDelayed, StatusArrived},
-	StatusArrived:   {StatusInTransit, StatusIssue},
+	StatusArrived:   {StatusIssue, StatusInTransit},
 }
 
 // dispatcherMoves adds the office's overrides to the driver lifecycle:
@@ -121,7 +122,7 @@ func CheckTransition(from, to string, actor Actor) error {
 
 	switch actor {
 	case ActorPOD:
-		if IsOnRoad(from) || from == StatusAssigned {
+		if CanRecordDelivery(from) {
 			return nil
 		}
 	case ActorReview:
@@ -129,7 +130,7 @@ func CheckTransition(from, to string, actor Actor) error {
 			return nil
 		}
 	case ActorDriver:
-		if to == StatusDelivered && (IsOnRoad(from) || from == StatusAssigned) {
+		if to == StatusDelivered && CanRecordDelivery(from) {
 			return ErrPODRequired
 		}
 		if slices.Contains(driverMoves[from], to) {
@@ -152,13 +153,59 @@ func CheckTransition(from, to string, actor Actor) error {
 }
 
 // AllowedTransitions lists the statuses actor may move a shipment to next, for
-// building context-aware action buttons (FR-017 AC-017.5).
+// building context-aware action buttons (FR-017 AC-017.5): a driver's in
+// the order of their buttons, the next step first, the others' in
+// lifecycle order.
 func AllowedTransitions(from string, actor Actor) []string {
+	candidates := AllStatuses
+	if actor == ActorDriver || actor == ActorDriverSMS {
+		candidates = slices.Concat(driverMoves[from], AllStatuses)
+	}
 	var out []string
-	for _, to := range AllStatuses {
-		if CheckTransition(from, to, actor) == nil {
+	for _, to := range candidates {
+		if !slices.Contains(out, to) && CheckTransition(from, to, actor) == nil {
 			out = append(out, to)
 		}
+	}
+	return out
+}
+
+// CanRecordDelivery reports whether a driver may record a delivery of a
+// shipment in this status: once it is theirs, before or on the road.
+func CanRecordDelivery(status string) bool {
+	return status == StatusAssigned || IsOnRoad(status)
+}
+
+// MoveResume is the move back on the road from a delay, a problem or the
+// wrong gate: to in_transit, in other words than starting the trip.
+const MoveResume = "resume"
+
+// Move is one of a driver's buttons: the status it leads to, and the code
+// of its words (text.KindMove), which differ from the status's own.
+type Move struct {
+	To   string `json:"to"`
+	Move string `json:"move"`
+}
+
+// DriverMoves are a driver's buttons for a shipment in this status, the
+// main one first (docs/architecture.md, section 11; Kiflet/mobile's
+// docs/design.md, section 5): the statuses they may move it to, and
+// recording the delivery, which is the main one once they have arrived.
+func DriverMoves(from string) []Move {
+	out := []Move{}
+	deliver := Move{To: StatusDelivered, Move: StatusDelivered}
+	if from == StatusArrived {
+		out = append(out, deliver)
+	}
+	for _, to := range AllowedTransitions(from, ActorDriver) {
+		move := to
+		if to == StatusInTransit && from != StatusAssigned {
+			move = MoveResume
+		}
+		out = append(out, Move{To: to, Move: move})
+	}
+	if from != StatusArrived && CanRecordDelivery(from) {
+		out = append(out, deliver)
 	}
 	return out
 }

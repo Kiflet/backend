@@ -472,15 +472,31 @@ paths:
       summary: What the app needs to work offline
       description: The status rules, reason lists and their words, fetched as the
         app starts and before sign-in. They are derived from the server's rules,
-        so the app never offers a move the server would refuse.
+        so the app never offers a move the server would refuse. Its ETag changes
+        with it, and each sync names the current one (config_etag), so the app
+        fetches it again, with If-None-Match, only when they differ.
       security: []
+      parameters:
+      - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: The configuration
+          headers:
+            ETag:
+              description: The configuration's version.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DriverConfig'
+        '304':
+          description: The configuration is the one If-None-Match names.
+          headers:
+            ETag:
+              description: The configuration's version.
+              schema:
+                type: string
         '429':
           $ref: '#/components/responses/Error'
   /driver/login:
@@ -750,6 +766,12 @@ components:
       schema:
         type: string
   parameters:
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      description: The ETag of the copy the app holds; answered 304 when it is still current.
+      schema:
+        type: string
     IfMatch:
       name: If-Match
       in: header
@@ -1239,10 +1261,12 @@ components:
       - sms_number
       - statuses
       - transitions
+      - moves
       - pod_from
       - delay_reasons
       - issue_reasons
       - location_reasons
+      - labels
       - max_photos
       - tile_url
       - tile_credit
@@ -1260,12 +1284,23 @@ components:
           items:
             $ref: '#/components/schemas/CodeLabel'
         transitions:
-          description: For each status, those a driver may move a load to from it.
+          description: For each status, those a driver may move a load to from it,
+            the next step first.
           type: object
           additionalProperties:
             type: array
             items:
               type: string
+        moves:
+          description: 'For each status, the driver''s buttons, the main one first:
+            the status each leads to (delivered: recording the delivery), and
+            the code of its words in labels.move ("Start trip" and "Back on the
+            road" both lead to in_transit).'
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/DriverMove'
         pod_from:
           description: The statuses a delivery may be recorded from.
           type: array
@@ -1284,12 +1319,36 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CodeLabel'
+        labels:
+          description: 'The driver''s words for every code, by language (en, am),
+            kind (status, reason, priority, move, refusal, removal, held) and code,
+            so a code added on the server reads right on a phone not yet updated.
+            The other lists'' labels are in English.'
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: object
+              additionalProperties:
+                type: string
         max_photos:
           type: integer
         tile_url:
           type: string
         tile_credit:
           type: string
+    DriverMove:
+      type: object
+      required:
+      - to
+      - move
+      properties:
+        to:
+          type: string
+          description: The status it leads to; delivered opens the delivery.
+        move:
+          type: string
+          description: The code of its words, in the config's labels.move.
     SyncRequest:
       type: object
       properties:
@@ -1540,6 +1599,7 @@ components:
       - removed
       - removed_shipment_ids
       - messages
+      - config_etag
       properties:
         server_time:
           type: string
@@ -1589,6 +1649,10 @@ components:
         more:
           type: boolean
           description: There is more than one response carries; sync again at once.
+        config_etag:
+          type: string
+          description: The driver config's ETag; when it isn't the one the app
+            holds, the app fetches the config again.
     RemovedShipment:
       type: object
       required:

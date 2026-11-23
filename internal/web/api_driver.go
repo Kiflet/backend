@@ -1,14 +1,19 @@
 package web
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"mime"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/driversync"
+	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/internal/service"
 )
 
@@ -26,10 +31,37 @@ func reasonList(codes []string) []codeLabel {
 }
 
 // apiDriverConfig is what the app needs to work offline: the status rules,
-// reason lists and labels. It mirrors the server's rules so the app never
-// offers a move the server would refuse.
+// reason lists and their words. It mirrors the server's rules so the app
+// never offers a move the server would refuse. Its ETag changes with it,
+// and each sync names it (config_etag), so the app fetches it again only
+// when it has changed.
 func (s *Server) apiDriverConfig(w http.ResponseWriter, r *http.Request) {
+	body, tag := s.driverConfig()
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("ETag", tag)
+	if matchesETag(r.Header.Get("If-None-Match"), tag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(body)
+}
+
+// matchesETag reports whether an If-None-Match header names tag; weakly,
+// as RFC 9110 (13.1.2) has it.
+func matchesETag(header, tag string) bool {
+	for t := range strings.SplitSeq(header, ",") {
+		t = strings.TrimPrefix(strings.TrimSpace(t), "W/")
+		if t == "*" || t == tag {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) buildDriverConfig() ([]byte, string) {
 	transitions := map[string][]string{}
+	moves := map[string][]model.Move{}
 	statuses := make([]codeLabel, 0, len(model.AllStatuses))
 	for _, st := range model.AllStatuses {
 		statuses = append(statuses, codeLabel{st, model.StatusLabel(st)})
@@ -38,23 +70,72 @@ func (s *Server) apiDriverConfig(w http.ResponseWriter, r *http.Request) {
 			next = []string{}
 		}
 		transitions[st] = next
+		moves[st] = model.DriverMoves(st)
 	}
-	w.Header().Set("Cache-Control", "no-cache")
-	writeJSON(w, http.StatusOK, map[string]any{
+	podFrom := []string{}
+	for _, st := range model.AllStatuses {
+		if model.CanRecordDelivery(st) {
+			podFrom = append(podFrom, st)
+		}
+	}
+	body, err := json.Marshal(map[string]any{
 		"app_name":      s.cfg.AppName,
 		"version":       s.version,
 		"sms_number":    s.cfg.SMSNumber,
 		"statuses":      statuses,
 		"transitions":   transitions,
-		"pod_from":      append(append([]string{}, model.OnRoadStatuses...), model.StatusAssigned),
+		"moves":         moves,
+		"pod_from":      podFrom,
 		"delay_reasons": reasonList(model.DelayReasons),
 		"issue_reasons": reasonList(model.IssueReasons),
 		// Asked for when a delivery is recorded away from the destination.
 		"location_reasons": reasonList(model.LocationReasons),
+		"labels":           driverLabels(),
 		"max_photos":       3,
 		"tile_url":         s.cfg.MapTileURL,
 		"tile_credit":      s.cfg.MapTileAttribution,
 	})
+	if err != nil {
+		panic(err) // maps of strings
+	}
+	sum := sha256.Sum256(body)
+	return body, `"` + hex.EncodeToString(sum[:8]) + `"`
+}
+
+// driverLabels are the driver's words for every code they may read, in
+// each language (internal/platform/text): for each language, kind and
+// code. A code added on the server reads right on phones that haven't
+// been updated.
+func driverLabels() map[string]map[string]map[string]string {
+	moveCodes := []string{}
+	for _, st := range model.AllStatuses {
+		for _, m := range model.DriverMoves(st) {
+			if !slices.Contains(moveCodes, m.Move) {
+				moveCodes = append(moveCodes, m.Move)
+			}
+		}
+	}
+	kinds := map[string][]string{
+		text.KindStatus:   model.AllStatuses,
+		text.KindReason:   slices.Concat(model.DelayReasons, model.IssueReasons, model.LocationReasons, model.CancelReasons),
+		text.KindPriority: model.Priorities,
+		text.KindMove:     moveCodes,
+		text.KindRefusal:  driversync.Refusals,
+		text.KindRemoval:  {driversync.Reassigned, driversync.Unassigned, driversync.Cancelled},
+		text.KindHeld:     service.HeldCodes,
+	}
+	out := map[string]map[string]map[string]string{}
+	for _, l := range text.Languages {
+		out[l.Code] = map[string]map[string]string{}
+		for kind, codes := range kinds {
+			words := map[string]string{}
+			for _, c := range codes {
+				words[c] = text.Label(l.Code, text.Driver, kind, c)
+			}
+			out[l.Code][kind] = words
+		}
+	}
+	return out
 }
 
 type driverLoginRequest struct {
@@ -169,6 +250,7 @@ func (s *Server) apiSync(w http.ResponseWriter, r *http.Request) {
 		s.apiError(w, r, err)
 		return
 	}
+	_, resp.ConfigETag = s.driverConfig()
 	writeJSON(w, http.StatusOK, resp)
 }
 

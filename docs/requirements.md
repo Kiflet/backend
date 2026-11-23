@@ -30,7 +30,7 @@ end-to-end test names one; unit tests may.
 | FR-014 Offline Data Storage |  | TestDriverApp, TestDriverAppInABrowser |  |
 | FR-015 Connectivity Detection & Handling |  | TestDriverAppInABrowser |  |
 | FR-016 Shipment List View (Driver) |  | TestDriverAppInABrowser |  |
-| FR-017 Shipment Detail View (Driver) |  | TestDriverAppInABrowser |  |
+| FR-017 Shipment Detail View (Driver) | TestDriverConfig | TestDriverAppInABrowser |  |
 | FR-018 Status Update (Driver) | TestDeliveredStraightFromAssigned, TestDeliveryLifecycle, TestRepeatDelayIsRecorded | TestDelivery, TestDriverAppInABrowser |  |
 | FR-019 GPS Tracking | TestHeadingAwayFromTheDestination, TestPositionsKeptAfterReassignment, TestTrackingPartitions |  |  |
 | FR-020 Proof of Delivery - Signature | TestDeliveredStraightFromAssigned, TestDeliveriesStoredInS3, TestDeliveryLifecycle, TestDeliveryMediaRecorded, TestHeldPODAfterReassignment, TestRecentRecipientsAreSuggested | TestDelivery |  |
@@ -52,7 +52,7 @@ end-to-end test names one; unit tests may.
 | FR-036 Shipment Tracking (Customer) | TestCodeLimitsLookTheSame, TestCodeTriesCannotRace, TestCustomersInAmharic, TestDeliveryLifecycle, TestPublicTrackingIsMinimal, TestTrackingPageDetails | TestDelivery |  |
 | FR-037 SMS Notifications (Customer) | TestConsignee, TestCustomersInAmharic, TestCustomersInEnglishByDefault, TestDeliveryReportBeforeTheTextIsSaved, TestGatewayFaults, TestSMSTexts, TestTextsThroughTheGateway | TestDelivery |  |
 | FR-038 Delivery Confirmation (Customer) | TestDeliveryLifecycle | TestDelivery |  |
-| FR-039 Automatic Sync Protocol | TestFeedBroadcasts, TestFeedDeliversLateCommits, TestFeedFullDownloads, TestFeedPageOfExactlyTheLimit, TestFeedRemovesWithReasons, TestManyMessagesArriveInPages, TestSlowPhoneClock, TestSyncRefusals, TestSyncReplayIsIdempotent |  |  |
+| FR-039 Automatic Sync Protocol | TestDriverConfig, TestFeedBroadcasts, TestFeedDeliversLateCommits, TestFeedFullDownloads, TestFeedPageOfExactlyTheLimit, TestFeedRemovesWithReasons, TestManyMessagesArriveInPages, TestSlowPhoneClock, TestSyncRefusals, TestSyncReplayIsIdempotent |  |  |
 | FR-040 Conflict Resolution | TestHeldPODAfterReassignment, TestHeldPODOnCancelledShipment, TestOfficeDecisionWinsOverStaleDriverUpdate, TestResentSyncIsNotAConflict, TestSyncRefusals, TestVersionsRaisedByEdits |  |  |
 | FR-041 Data Retention | TestExportHoldsEverything, TestRemovePersonDetails, TestRetentionClearsAccountLinks, TestRetentionRemovesOldCustomerDetails |  |  |
 | FR-042 Audit Logging | TestHistoryIsAppendOnly, TestPlatformAuditAndHealth |  |  |

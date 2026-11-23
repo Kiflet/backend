@@ -85,14 +85,46 @@ func TestUnknownStatusRejected(t *testing.T) {
 	}
 }
 
+// A driver's moves come next step first: the app's main button.
 func TestAllowedTransitionsForDriverButtons(t *testing.T) {
 	got := AllowedTransitions(StatusInTransit, ActorDriver)
-	want := []string{StatusDelayed, StatusArrived, StatusIssue}
+	want := []string{StatusArrived, StatusDelayed, StatusIssue}
 	if !slices.Equal(got, want) {
 		t.Errorf("AllowedTransitions = %v, want %v", got, want)
 	}
 	if len(AllowedTransitions(StatusDelivered, ActorDriver)) != 0 {
 		t.Error("nothing should follow delivered")
+	}
+	// The office's stay in lifecycle order.
+	if got := AllowedTransitions(StatusInTransit, ActorDispatcher); !slices.Equal(got, []string{StatusDelayed, StatusArrived, StatusIssue, StatusDelivered}) {
+		t.Errorf("the office's: %v", got)
+	}
+}
+
+// The driver app's buttons, main one first (Kiflet/mobile's
+// docs/design.md, section 5).
+func TestDriverMoves(t *testing.T) {
+	for from, want := range map[string][]Move{
+		StatusAssigned:  {{StatusInTransit, StatusInTransit}, {StatusDelivered, StatusDelivered}},
+		StatusInTransit: {{StatusArrived, StatusArrived}, {StatusDelayed, StatusDelayed}, {StatusIssue, StatusIssue}, {StatusDelivered, StatusDelivered}},
+		StatusDelayed:   {{StatusInTransit, MoveResume}, {StatusArrived, StatusArrived}, {StatusIssue, StatusIssue}, {StatusDelivered, StatusDelivered}},
+		StatusIssue:     {{StatusInTransit, MoveResume}, {StatusDelayed, StatusDelayed}, {StatusArrived, StatusArrived}, {StatusDelivered, StatusDelivered}},
+		StatusArrived:   {{StatusDelivered, StatusDelivered}, {StatusIssue, StatusIssue}, {StatusInTransit, MoveResume}},
+		StatusPending:   {},
+		StatusDelivered: {},
+		StatusCancelled: {},
+	} {
+		if got := DriverMoves(from); !slices.Equal(got, want) {
+			t.Errorf("%s: %v, want %v", from, got, want)
+		}
+	}
+	// Each is one the server takes: a status change, or the delivery.
+	for _, from := range AllStatuses {
+		for _, m := range DriverMoves(from) {
+			if err := CheckTransition(from, m.To, ActorDriver); err != nil && !errors.Is(err, ErrPODRequired) {
+				t.Errorf("%s to %s: %v", from, m.To, err)
+			}
+		}
 	}
 }
 
