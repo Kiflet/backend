@@ -8,7 +8,6 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -212,10 +211,9 @@ func (s *Server) decompressBody(next http.Handler) http.Handler {
 				return
 			}
 			defer gz.Close()
-			r.Body = struct {
-				io.Reader
-				io.Closer
-			}{io.LimitReader(gz, maxUploadBytes), gz}
+			// Bounded after decompression too, and refused past it rather
+			// than cut short.
+			r.Body = http.MaxBytesReader(w, gz, maxUploadBytes)
 			r.Header.Del("Content-Encoding")
 		}
 		next.ServeHTTP(w, r)

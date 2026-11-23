@@ -307,6 +307,27 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The driver config has the moves in order, the driver's words and an
+  ETag** (`docs/migration.md`, phase 3, M3). `transitions` lists a
+  driver's next step first (arrived from in transit; the office's stay in
+  lifecycle order), and `moves` gives each status's buttons, main one
+  first, with the code of their words: `resume` for back on the road, and
+  recording the delivery first once arrived (`shipments/domain.DriverMoves`).
+  `labels` has the driver's words for every status, reason, priority,
+  move, refusal, removal and held delivery, in English and Amharic; the
+  removals' words are new. The config's `ETag` is a hash of it, answered
+  `304` to `If-None-Match`, and each sync names it as `config_etag`.
+  `pod_from` comes from `CanRecordDelivery`, as the transition rules do.
+- **The sync's refusals have stable codes** (`docs/migration.md`, phase 3,
+  M2), the ones the app chooses its words by: `cancelled` (a move made
+  after the office cancelled the load), `reassigned` (the load is another
+  driver's), `stale` (the office changed it after the move was made, or
+  the move no longer fits), `held_for_review` (a delivery kept for the
+  office), `not_found`, `invalid` and `server_error`, in place of the
+  error kinds. A paused company's driver gets `403 tenant_suspended` (an
+  API key too), and a request too large `413 too_large`, also when it is
+  only too large unzipped: a gzipped sync was cut short at 32 MB and
+  answered as bad JSON.
 - **The public API's shipments and webhooks take the conventions**
   (`docs/migration.md`, phase 2, step 6). A shipment's `status`,
   `status_reason` and `priority`, and an event's `from_status`, `to_status`

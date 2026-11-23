@@ -183,7 +183,7 @@ func TestHeldPODAfterReassignment(t *testing.T) {
 	pod := service.SyncPOD{ClientID: clientID(), ShipmentID: shipmentID, RecipientName: "Almaz Desta", RecordedAt: delivered}
 	for i := range 2 { // the second time is a replay
 		r := first.pod(pod)
-		if r.OK || r.Retry || r.Code != "conflict" || !strings.Contains(r.Message, "given to another driver") {
+		if r.OK || r.Retry || r.Code != "held_for_review" || !strings.Contains(r.Message, "given to another driver") {
 			t.Fatalf("attempt %d: %+v, want a final conflict about the handover", i+1, r)
 		}
 	}
@@ -245,7 +245,7 @@ func TestHeldPODOnCancelledShipment(t *testing.T) {
 	office.mustPost("/app/shipments/"+shipmentID+"/cancel", url.Values{"reason": {"returned_to_origin"}})
 
 	r := d.pod(service.SyncPOD{ShipmentID: shipmentID, RecipientName: "Gebre Hailu"})
-	if r.OK || r.Code != "conflict" || !strings.Contains(r.Message, "cancelled") {
+	if r.OK || r.Code != "held_for_review" || !strings.Contains(r.Message, "cancelled") {
 		t.Fatalf("proof on a cancelled shipment: %+v", r)
 	}
 	podID := scalar[string](t, `SELECT id::text FROM proof_of_deliveries WHERE shipment_id = $1 AND status = 'held' AND held_reason = 'cancelled'`, shipmentID)

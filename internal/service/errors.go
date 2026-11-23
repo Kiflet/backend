@@ -1,6 +1,9 @@
 package service
 
 import (
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/kiflet/backend/internal/modules/driversync"
 	"github.com/kiflet/backend/internal/modules/identity"
 	"github.com/kiflet/backend/internal/platform/apperror"
 )
@@ -20,6 +23,7 @@ const (
 	KindUnauthorized = apperror.KindUnauthorized
 	KindLimit        = apperror.KindLimit
 	KindPrecondition = apperror.KindPrecondition
+	KindTooLarge     = apperror.KindTooLarge
 )
 
 var (
@@ -52,3 +56,18 @@ var (
 // suspended is the error for a suspended company's users: they can't sign in
 // to ask on the Help page, so it says where to write.
 func (c *core) suspended() error { return identity.Suspended(c.cfg.SupportEmail) }
+
+// notYours is a driver's item on a load that isn't theirs: another
+// driver's now (driverID, the load's), or no one's (the sync's refusal
+// codes, driversync.Refused*).
+func notYours(driverID pgtype.UUID) error {
+	e := *ErrNotAssigned
+	e.Code = driversync.RefusedNotFound
+	if driverID.Valid {
+		e.Code = driversync.RefusedReassigned
+	}
+	return &e
+}
+
+// errCancelledLoad is a driver's move on a load the office cancelled.
+var errCancelledLoad = &Error{Kind: KindConflict, Code: driversync.RefusedCancelled, Message: "The office cancelled this shipment."}
