@@ -636,7 +636,7 @@ export interface components {
             kind: string;
             ok: boolean;
             retry?: boolean;
-            /** @description Why it was refused; the app chooses its words by it */
+            /** @description Why it was refused, a stable code the app chooses its words by (the config's labels): cancelled (the office cancelled the load), reassigned (it is another driver's now), stale (the office changed it after the move was made, and its decision stands), held_for_review (the delivery is kept for the office to review; nothing more to send), not_found (no such load for this driver), invalid (the item can't be read; the message says why), or server_error (retry is true). Open: a code the app doesn't know is shown by its message. */
             code?: string;
             message?: string;
         };
@@ -745,7 +745,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description An error. 400: the request is wrong (validation_error). 401: no working key (unauthorized). 402: a plan limit (plan_limit). 403: the company is suspended or read-only until an invoice is paid (forbidden). 404: no such shipment for this company (not_found). 409: the shipment is in a status that doesn't allow it (conflict). 429: too many requests (rate_limited). 409 also: the first request with this Idempotency-Key is still running (idempotency_key_in_flight). 412: the shipment changed since the If-Match (version_mismatch). 422: an Idempotency-Key sent again with another request (idempotency_key_reused). */
+        /** @description An error. 400: the request is wrong (validation_error). 401: no working key (unauthorized). 402: a plan limit (plan_limit). 403: the company is suspended or read-only until an invoice is paid (forbidden). 404: no such shipment for this company (not_found). 409: the shipment is in a status that doesn't allow it (conflict). 403 tenant_suspended: the company is paused (a driver's app keeps everything and tries later). 413 too_large: the request is larger than the server takes (send less at a time). 429: too many requests (rate_limited). 409 also: the first request with this Idempotency-Key is still running (idempotency_key_in_flight). 412: the shipment changed since the If-Match (version_mismatch). 422: an Idempotency-Key sent again with another request (idempotency_key_reused). */
         Error: {
             headers: {
                 [name: string]: unknown;

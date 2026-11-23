@@ -81,9 +81,8 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 		}
 	}
 	if a.IsDriver() && cur.DriverID != a.UserID {
-		return cur, ErrNotAssigned
+		return cur, notYours(cur.DriverID)
 	}
-
 	terr := model.CheckTransition(cur.Status, ch.Status, ch.By)
 	if errors.Is(terr, model.ErrSameStatus) {
 		return s.updateStatusDetail(ctx, q, after, a, cur, ch)
@@ -114,6 +113,10 @@ func (s *ShipmentService) applyStatus(ctx context.Context, q *db.Queries, after 
 		return cur, ErrStaleUpdate
 	}
 
+	// Made after the office cancelled the load: the load is gone.
+	if a.IsDriver() && cur.Status == model.StatusCancelled {
+		return cur, errCancelledLoad
+	}
 	switch err := terr; {
 	case err == nil:
 	case errors.Is(err, model.ErrPODRequired):
@@ -360,7 +363,7 @@ func (s *ShipmentService) Note(ctx context.Context, a Actor, id pgtype.UUID, tex
 		}
 		if a.IsDriver() {
 			if sh.DriverID != a.UserID {
-				return ErrNotAssigned
+				return notYours(sh.DriverID)
 			}
 			s.event(ctx, q, after, a, sh, shipments.Change{
 				Type: "message", Note: text, DriverID: a.UserID, VisibleToDriver: true, ClientID: clientID, OccurredAt: at,

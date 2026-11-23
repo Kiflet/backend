@@ -13,6 +13,7 @@ import (
 
 	"github.com/kiflet/backend/internal/db"
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/driversync"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/internal/platform/phone"
@@ -39,6 +40,12 @@ const (
 // HeldReasonLabel explains to the office why a proof was held.
 func HeldReasonLabel(code string) string {
 	return heldWords(text.Office, code)
+}
+
+// heldForReview answers a driver whose proof was held: kept, for the
+// office to review, with nothing more to send.
+func heldForReview(code string) error {
+	return &Error{Kind: KindConflict, Code: driversync.RefusedHeld, Message: heldMessage(code)}
 }
 
 // heldMessage is what the driver's app says about a held proof.
@@ -159,7 +166,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 			switch {
 			case err == nil:
 				if prior.Status != PODAccepted {
-					result = conflict(heldMessage(deref(prior.HeldReason)))
+					result = heldForReview(deref(prior.HeldReason))
 				}
 				return nil
 			case !isNoRows(err):
@@ -182,7 +189,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 				return err
 			}
 			if !had {
-				return ErrNotAssigned
+				return notYours(pgtype.UUID{})
 			}
 		}
 		var held string
@@ -268,7 +275,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 				Type: "pod_held", Lat: in.Lat, Lng: in.Lng, OccurredAt: recorded, DriverID: driverID,
 				Note: "Received by " + in.RecipientName, Details: details,
 			})
-			result = conflict(heldMessage(held))
+			result = heldForReview(held)
 			return nil
 		}
 

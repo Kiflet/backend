@@ -120,7 +120,7 @@ var (
 // Suspended is the error for a suspended company's people: they can't
 // sign in to ask on the Help page, so it says where to write.
 func Suspended(supportEmail string) error {
-	return &apperror.Error{Kind: apperror.KindForbidden, Message: "This company account is suspended. Write to " + supportEmail + " to have it restored."}
+	return &apperror.Error{Kind: apperror.KindForbidden, Code: "tenant_suspended", Message: "This company account is suspended. Write to " + supportEmail + " to have it restored."}
 }
 
 // Session is a signed-in device or browser.
