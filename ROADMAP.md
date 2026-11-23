@@ -124,7 +124,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
       specification; `413` for a request too large.
 - [x] M3: the driver's words for every code (`labels`) and the moves in
       order in config, with an `ETag`.
-- [ ] M4: the GPS, photo, sync and SMS settings and the map style in
+- [x] M4: the GPS, photo, sync and SMS settings and the map style in
       config.
 - [ ] M5: presigned uploads; deliveries sent by key, with each photo's
       time and place; push tokens and Expo pushes.

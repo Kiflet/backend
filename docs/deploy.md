@@ -48,7 +48,10 @@ requests by route pattern (`/app/shipments/{id}`), never by company or ID.
 
 The maps' satellite view uses Esri World Imagery, which needs an ArcGIS
 licence for commercial use. Point `MAP_SATELLITE_URL` at your own imagery
-provider, or set it to `off`.
+provider, or set it to `off`. The driver app's map is drawn in the
+MapLibre styles `MAP_STYLE_URL` (Desk) and `MAP_STYLE_DARK_URL` (Night)
+name; until the platform serves its own tiles they are unset, and the app
+shows distance and direction only.
 
 Point your SMS provider's webhooks at `https://DOMAIN/api/callbacks/sms/inbound`
 (texts from phones) and `https://DOMAIN/api/callbacks/sms/status` (delivery

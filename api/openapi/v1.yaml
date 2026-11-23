@@ -1270,6 +1270,13 @@ components:
       - max_photos
       - tile_url
       - tile_credit
+      - gps
+      - photo_max_px
+      - photo_quality
+      - sync_interval_s
+      - sync_interval_saving_s
+      - sms_commands
+      - sms_fallback_after_s
       properties:
         app_name:
           type: string
@@ -1337,6 +1344,94 @@ components:
           type: string
         tile_credit:
           type: string
+        gps:
+          $ref: '#/components/schemas/DriverGPS'
+        photo_max_px:
+          type: integer
+          description: A photo is resized to this on its long side.
+        photo_quality:
+          type: number
+          description: Its JPEG quality, from 0 to 1.
+        sync_interval_s:
+          type: integer
+          description: How often the app syncs while on screen, in seconds.
+        sync_interval_saving_s:
+          type: integer
+          description: How often in battery saver.
+        sms_commands:
+          description: 'For each status a driver may report by SMS, the text
+            to send to sms_number, {ref} standing for the load''s ref: "ET {ref}
+            3" for arrived.'
+          type: object
+          additionalProperties:
+            type: string
+        sms_fallback_after_s:
+          type: integer
+          description: How long a move may wait for data, in seconds, before
+            the app offers to send it by SMS.
+        map_styles:
+          description: The map's MapLibre styles, Desk (light) and Night (dark).
+            Absent until the platform serves its tiles; the app then shows
+            distance and direction only.
+          type: object
+          required:
+          - light
+          - dark
+          properties:
+            light:
+              type: string
+            dark:
+              type: string
+    DriverGPS:
+      type: object
+      description: How the app records a trip, in metres and seconds.
+      required:
+      - moved_m
+      - interval_s
+      - max_interval_s
+      - parked_after_s
+      - parked_check_s
+      - parked_left_m
+      - max_accuracy_m
+      - saving_below_battery
+      - saving_interval_s
+      - saving_parked_check_s
+      - saving_max_accuracy_m
+      properties:
+        moved_m:
+          type: integer
+          description: Moving means more than this from the last position.
+        interval_s:
+          type: integer
+          description: While moving, at most one position this often.
+        max_interval_s:
+          type: integer
+          description: While moving, at least one this often.
+        parked_after_s:
+          type: integer
+          description: Within moved_m this long is parked; the GPS is off.
+        parked_check_s:
+          type: integer
+          description: Parked, a balanced fix this often.
+        parked_left_m:
+          type: integer
+          description: Parked, a fix this far away is moving again.
+        max_accuracy_m:
+          type: integer
+          description: Fixes vaguer than this are dropped.
+        saving_below_battery:
+          type: number
+          description: Battery saver starts below this charge (0 to 1) when
+            not charging, or when the driver chooses it.
+        saving_interval_s:
+          type: integer
+          description: In battery saver, one position this often.
+        saving_parked_check_s:
+          type: integer
+          description: In battery saver, parked checks this often.
+        saving_max_accuracy_m:
+          type: integer
+          description: In battery saver, fixes up to this vague are kept.
     DriverMove:
       type: object
       required:

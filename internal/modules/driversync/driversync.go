@@ -124,3 +124,55 @@ const (
 
 // Refusals lists them.
 var Refusals = []string{RefusedCancelled, RefusedReassigned, RefusedStale, RefusedHeld, RefusedNotFound, RefusedInvalid, RefusedServerError}
+
+// Settings are the numbers the driver app works by, sent in its config so
+// they can be tuned after the pilot by a deploy rather than a release of
+// the app (Kiflet/mobile's docs/architecture.md, sections 5 to 7).
+type Settings struct {
+	GPS GPS `json:"gps"`
+	// Photos are resized to PhotoMaxPx on the long side, as JPEG at
+	// PhotoQuality: large enough to read a waybill's stamp.
+	PhotoMaxPx   int     `json:"photo_max_px"`
+	PhotoQuality float64 `json:"photo_quality"`
+	// How often the app syncs while on screen, and in battery saver.
+	SyncIntervalS       int `json:"sync_interval_s"`
+	SyncIntervalSavingS int `json:"sync_interval_saving_s"`
+	// How long without data before the app offers to send a move by SMS.
+	SMSFallbackAfterS int `json:"sms_fallback_after_s"`
+}
+
+// GPS is how the app records a trip, today's rules (the PWA's gps.js).
+type GPS struct {
+	// Moving: a position once the truck has moved over MovedM, at most
+	// every IntervalS, and at least every MaxIntervalS.
+	MovedM       int `json:"moved_m"`
+	IntervalS    int `json:"interval_s"`
+	MaxIntervalS int `json:"max_interval_s"`
+	// Parked: within MovedM for ParkedAfterS. The GPS is off, with a
+	// balanced fix every ParkedCheckS; over ParkedLeftM away is moving again.
+	ParkedAfterS int `json:"parked_after_s"`
+	ParkedCheckS int `json:"parked_check_s"`
+	ParkedLeftM  int `json:"parked_left_m"`
+	// Fixes vaguer than this are dropped.
+	MaxAccuracyM int `json:"max_accuracy_m"`
+	// Battery saver, chosen or under SavingBelowBattery (a fraction) and
+	// not charging: a position every SavingIntervalS, parked checks every
+	// SavingParkedCheckS, fixes up to SavingMaxAccuracyM.
+	SavingBelowBattery float64 `json:"saving_below_battery"`
+	SavingIntervalS    int     `json:"saving_interval_s"`
+	SavingParkedCheckS int     `json:"saving_parked_check_s"`
+	SavingMaxAccuracyM int     `json:"saving_max_accuracy_m"`
+}
+
+// DefaultSettings are the numbers the app is sent.
+var DefaultSettings = Settings{
+	GPS: GPS{
+		MovedM: 75, IntervalS: 60, MaxIntervalS: 5 * 60,
+		ParkedAfterS: 10 * 60, ParkedCheckS: 5 * 60, ParkedLeftM: 150,
+		MaxAccuracyM:       500,
+		SavingBelowBattery: 0.2, SavingIntervalS: 15 * 60, SavingParkedCheckS: 15 * 60, SavingMaxAccuracyM: 3000,
+	},
+	PhotoMaxPx: 1280, PhotoQuality: 0.6,
+	SyncIntervalS: 60, SyncIntervalSavingS: 5 * 60,
+	SMSFallbackAfterS: 15 * 60,
+}
