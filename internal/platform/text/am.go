@@ -264,4 +264,5 @@ var am = map[string]string{
 	"driver.refusal.not_found":       "ይህ ጭነት ለእርስዎ አልተመደበም።",
 	"driver.refusal.invalid":         "ይህ ለውጥ ሊነበብ አልቻለም።",
 	"driver.refusal.server_error":    "አገልጋዩ ይህን ማስቀመጥ አልቻለም። እንደገና ይሞከራል።",
+	"driver.refusal.files_missing":   "ፎቶዎቹ ገና አገልጋዩ ላይ አልደረሱም። እንደገና ይላካሉ።",
 }

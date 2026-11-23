@@ -36,4 +36,8 @@ func TestSyncResultClassification(t *testing.T) {
 	if r := resultFor(base, errors.New("connection reset")); r.OK || !r.Retry || r.Code != "server_error" {
 		t.Errorf("internal error should be retried: %+v", r)
 	}
+	// Files not in storage yet: not now, rather than never.
+	if r := resultFor(base, errFilesMissing); r.OK || !r.Retry || r.Code != "files_missing" {
+		t.Errorf("files missing should be retried: %+v", r)
+	}
 }

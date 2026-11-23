@@ -120,10 +120,13 @@ const (
 	RefusedNotFound    = "not_found"
 	RefusedInvalid     = "invalid"
 	RefusedServerError = "server_error"
+	// RefusedFilesMissing is a delivery naming files not yet in storage:
+	// retried, once the app has sent them.
+	RefusedFilesMissing = "files_missing"
 )
 
 // Refusals lists them.
-var Refusals = []string{RefusedCancelled, RefusedReassigned, RefusedStale, RefusedHeld, RefusedNotFound, RefusedInvalid, RefusedServerError}
+var Refusals = []string{RefusedCancelled, RefusedReassigned, RefusedStale, RefusedHeld, RefusedNotFound, RefusedInvalid, RefusedServerError, RefusedFilesMissing}
 
 // Settings are the numbers the driver app works by, sent in its config so
 // they can be tuned after the pilot by a deploy rather than a release of

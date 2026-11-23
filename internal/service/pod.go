@@ -120,6 +120,18 @@ func (in *PODInput) mediaKeys() []string {
 	return keys
 }
 
+// ownedKeys are the files the proof stored itself, which go if it isn't
+// kept; the app's own uploads stay.
+func (in *PODInput) ownedKeys() []string {
+	var keys []string
+	for _, f := range in.files() {
+		if !f.Uploaded && f.Key != "" {
+			keys = append(keys, f.Key)
+		}
+	}
+	return keys
+}
+
 // files are the proof's stored files as pod_media numbers them: the
 // signature at 0, then the photos.
 func (in *PODInput) files() []PODFile {
@@ -138,7 +150,7 @@ func (s *ShipmentService) RecordPOD(ctx context.Context, a Actor, id pgtype.UUID
 	kept := false
 	defer func() {
 		if !kept {
-			s.media.Delete(context.WithoutCancel(ctx), in.mediaKeys()...)
+			s.media.Delete(context.WithoutCancel(ctx), in.ownedKeys()...)
 		}
 	}()
 	if err := in.Check(); err != nil {

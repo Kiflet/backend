@@ -11,6 +11,63 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteUnusedUploads = `-- name: DeleteUnusedUploads :many
+DELETE FROM uploads u
+WHERE u.created_at < $1
+  AND NOT EXISTS (SELECT 1 FROM pod_media m WHERE m.tenant_id = u.tenant_id AND m.storage_key = u.storage_key)
+RETURNING storage_key
+`
+
+// tenant: none, retention, across every company.
+// Uploads past the cut-off that no proof of delivery names.
+func (q *Queries) DeleteUnusedUploads(ctx context.Context, before pgtype.Timestamptz) ([]string, error) {
+	rows, err := q.db.Query(ctx, deleteUnusedUploads, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var storage_key string
+		if err := rows.Scan(&storage_key); err != nil {
+			return nil, err
+		}
+		items = append(items, storage_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDriverUploadByKey = `-- name: GetDriverUploadByKey :one
+SELECT id, tenant_id, driver_id, kind, storage_key, content_type, size_bytes, md5, created_at, stored_at FROM uploads WHERE tenant_id = $1 AND driver_id = $2 AND storage_key = $3
+`
+
+type GetDriverUploadByKeyParams struct {
+	TenantID   pgtype.UUID `db:"tenant_id" json:"tenant_id"`
+	DriverID   pgtype.UUID `db:"driver_id" json:"driver_id"`
+	StorageKey string      `db:"storage_key" json:"storage_key"`
+}
+
+func (q *Queries) GetDriverUploadByKey(ctx context.Context, arg GetDriverUploadByKeyParams) (Upload, error) {
+	row := q.db.QueryRow(ctx, getDriverUploadByKey, arg.TenantID, arg.DriverID, arg.StorageKey)
+	var i Upload
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.DriverID,
+		&i.Kind,
+		&i.StorageKey,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.Md5,
+		&i.CreatedAt,
+		&i.StoredAt,
+	)
+	return i, err
+}
+
 const getUpload = `-- name: GetUpload :one
 SELECT id, tenant_id, driver_id, kind, storage_key, content_type, size_bytes, md5, created_at, stored_at FROM uploads WHERE tenant_id = $1 AND id = $2
 `

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"time"
@@ -13,9 +14,11 @@ import (
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/modules/driversync"
 	"github.com/kiflet/backend/internal/modules/fleet"
+	"github.com/kiflet/backend/internal/modules/proof"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/platform/geo"
 	"github.com/kiflet/backend/pkg/metrics"
+	"github.com/kiflet/backend/pkg/storage"
 )
 
 // SyncService is the driver app's offline sync (FR-009–013): the device
@@ -84,6 +87,21 @@ type SyncPOD struct {
 	// after the app warned them.
 	LocationReason string    `json:"location_reason"`
 	RecordedAt     time.Time `json:"recorded_at"`
+	// SignatureFile and PhotoFiles are the files the app uploaded first
+	// (POST /api/v1/driver/uploads), named by key, the app's way;
+	// Signature and Photos are data URLs, the PWA's. A delivery sends one
+	// or the other.
+	SignatureFile *SyncPODFile  `json:"signature_file,omitempty"`
+	PhotoFiles    []SyncPODFile `json:"photo_files,omitempty"`
+}
+
+// SyncPODFile is an uploaded file of a delivery, with when and where it
+// was taken (AC-021.3, AC-021.4).
+type SyncPODFile struct {
+	Key     string     `json:"key"`
+	TakenAt *time.Time `json:"taken_at,omitempty"`
+	Lat     *float64   `json:"lat,omitempty"`
+	Lng     *float64   `json:"lng,omitempty"`
 }
 
 // SyncLocation is a GPS fix.
@@ -473,13 +491,71 @@ func (s *SyncService) applyPOD(ctx context.Context, a Actor, in SyncPOD, at time
 			return resultFor(r, notYours(pgtype.UUID{}))
 		}
 	}
-	sig, photos, err := s.media.SavePOD(ctx, id.String(), in.Signature, in.Photos)
+	if in.SignatureFile != nil || len(in.PhotoFiles) > 0 {
+		pod.Signature, pod.Photos, err = s.uploadedFiles(ctx, a, in)
+	} else {
+		pod.Signature, pod.Photos, err = s.media.SavePOD(ctx, id.String(), in.Signature, in.Photos)
+	}
 	if err != nil {
 		return resultFor(r, err)
 	}
-	pod.Signature, pod.Photos = sig, photos
 	_, err = s.shipments.RecordPOD(ctx, a, id, pod)
 	return resultFor(r, err)
+}
+
+// errFilesMissing is a delivery naming files not yet in storage.
+var errFilesMissing = &Error{Kind: KindConflict, Code: driversync.RefusedFilesMissing, Message: "The photos haven't reached the server yet. They will be sent again."}
+
+// maxPODPhotos is the most photos a delivery has, as the config tells the
+// app (max_photos).
+const maxPODPhotos = 3
+
+// uploadedFiles are a delivery's files the app uploaded, found by their
+// keys: the driver's own, of the kind named, and in storage.
+func (s *SyncService) uploadedFiles(ctx context.Context, a Actor, in SyncPOD) (PODFile, []PODFile, error) {
+	if in.Signature != "" || len(in.Photos) > 0 {
+		return PODFile{}, nil, invalid("signature_file", "Send a delivery's files by key or inline, not both.")
+	}
+	if in.SignatureFile == nil {
+		return PODFile{}, nil, invalid("signature_file", "The recipient's signature is required.")
+	}
+	if len(in.PhotoFiles) > maxPODPhotos {
+		return PODFile{}, nil, invalid("photo_files", fmt.Sprintf("A delivery has at most %d photos.", maxPODPhotos))
+	}
+	if s.uploads == nil {
+		return PODFile{}, nil, errors.New("uploads are not configured")
+	}
+	d := proof.Driver{TenantID: a.TenantID, UserID: a.UserID}
+	file := func(kind string, f SyncPODFile) (PODFile, error) {
+		u, err := s.uploads.Find(ctx, d, kind, f.Key)
+		if errors.Is(err, proof.ErrNotStored) {
+			return PODFile{}, errFilesMissing
+		}
+		if err != nil {
+			return PODFile{}, err
+		}
+		out := PODFile{File: storage.File{Key: u.Key, ContentType: u.ContentType, Size: u.Size, MD5: u.MD5}, Uploaded: true}
+		if f.TakenAt != nil && !f.TakenAt.After(s.now()) {
+			out.TakenAt = *f.TakenAt
+		}
+		if f.Lat != nil && f.Lng != nil && geo.Valid(*f.Lat, *f.Lng) {
+			out.Lat, out.Lng = f.Lat, f.Lng
+		}
+		return out, nil
+	}
+	sig, err := file(proof.KindSignature, *in.SignatureFile)
+	if err != nil {
+		return PODFile{}, nil, err
+	}
+	photos := make([]PODFile, 0, len(in.PhotoFiles))
+	for _, f := range in.PhotoFiles {
+		p, err := file(proof.KindPhoto, f)
+		if err != nil {
+			return PODFile{}, nil, err
+		}
+		photos = append(photos, p)
+	}
+	return sig, photos, nil
 }
 
 // syncOutcome names a result for /metrics.
@@ -514,6 +590,8 @@ func resultFor(r SyncResult, err error) SyncResult {
 	switch {
 	case slices.Contains(driversync.Refusals, de.Code):
 		r.Code = de.Code
+		// Not yet, rather than not at all.
+		r.Retry = de.Code == driversync.RefusedFilesMissing
 	case errors.Is(err, ErrStaleUpdate), de.Kind == KindConflict:
 		r.Code = driversync.RefusedStale
 	case de.Kind == KindNotFound, de.Kind == KindForbidden:
