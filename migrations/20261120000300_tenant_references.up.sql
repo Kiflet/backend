@@ -62,22 +62,29 @@ ALTER TABLE webhook_deliveries DROP CONSTRAINT IF EXISTS webhook_deliveries_endp
 ALTER TABLE webhook_deliveries DROP CONSTRAINT IF EXISTS webhook_deliveries_shipment_id_fkey;
 ALTER TABLE webhook_endpoints DROP CONSTRAINT IF EXISTS webhook_endpoints_created_by_fkey;
 
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_tenant_key;
-ALTER TABLE users ADD CONSTRAINT users_tenant_key UNIQUE (tenant_id, id);
-ALTER TABLE vehicles DROP CONSTRAINT IF EXISTS vehicles_tenant_key;
-ALTER TABLE vehicles ADD CONSTRAINT vehicles_tenant_key UNIQUE (tenant_id, id);
-ALTER TABLE shipments DROP CONSTRAINT IF EXISTS shipments_tenant_key;
-ALTER TABLE shipments ADD CONSTRAINT shipments_tenant_key UNIQUE (tenant_id, id);
-ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_tenant_key;
-ALTER TABLE invoices ADD CONSTRAINT invoices_tenant_key UNIQUE (tenant_id, id);
-ALTER TABLE support_tickets DROP CONSTRAINT IF EXISTS support_tickets_tenant_key;
-ALTER TABLE support_tickets ADD CONSTRAINT support_tickets_tenant_key UNIQUE (tenant_id, id);
-ALTER TABLE webhook_endpoints DROP CONSTRAINT IF EXISTS webhook_endpoints_tenant_key;
-ALTER TABLE webhook_endpoints ADD CONSTRAINT webhook_endpoints_tenant_key UNIQUE (tenant_id, id);
-ALTER TABLE broadcasts DROP CONSTRAINT IF EXISTS broadcasts_tenant_key;
-ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_tenant_key UNIQUE (tenant_id, id);
-ALTER TABLE driver_feed_heads DROP CONSTRAINT IF EXISTS driver_feed_heads_tenant_key;
-ALTER TABLE driver_feed_heads ADD CONSTRAINT driver_feed_heads_tenant_key UNIQUE (tenant_id, driver_id);
+-- Each key is added only where it is missing, so that a later
+-- migration's reference to one doesn't stop this one running again.
+-- +goose StatementBegin
+DO $$
+DECLARE
+    k record;
+BEGIN
+    FOR k IN SELECT * FROM (VALUES
+        ('users', 'users_tenant_key', 'tenant_id, id'),
+        ('vehicles', 'vehicles_tenant_key', 'tenant_id, id'),
+        ('shipments', 'shipments_tenant_key', 'tenant_id, id'),
+        ('invoices', 'invoices_tenant_key', 'tenant_id, id'),
+        ('support_tickets', 'support_tickets_tenant_key', 'tenant_id, id'),
+        ('webhook_endpoints', 'webhook_endpoints_tenant_key', 'tenant_id, id'),
+        ('broadcasts', 'broadcasts_tenant_key', 'tenant_id, id'),
+        ('driver_feed_heads', 'driver_feed_heads_tenant_key', 'tenant_id, driver_id')
+    ) AS v(tbl, name, cols) LOOP
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = k.name) THEN
+            EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I UNIQUE (%s)', k.tbl, k.name, k.cols);
+        END IF;
+    END LOOP;
+END $$;
+-- +goose StatementEnd
 
 ALTER TABLE alert_rules ADD CONSTRAINT alert_rules_updated_by_fkey FOREIGN KEY (tenant_id, updated_by) REFERENCES users (tenant_id, id) ON DELETE SET NULL (updated_by);
 ALTER TABLE alerts ADD CONSTRAINT alerts_acknowledged_by_fkey FOREIGN KEY (tenant_id, acknowledged_by) REFERENCES users (tenant_id, id) ON DELETE SET NULL (acknowledged_by);

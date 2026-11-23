@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 )
 
 var (
@@ -18,6 +19,21 @@ type Storage interface {
 	Download(ctx context.Context, path string) (io.ReadCloser, error)
 	Delete(ctx context.Context, path string) error
 	GetURL(ctx context.Context, path string) (string, error)
+}
+
+// Presigner is a store a client can upload to directly, by a presigned
+// URL, without the bytes passing through the app.
+type Presigner interface {
+	PutURL(ctx context.Context, path string, p Put) (string, error)
+}
+
+// Put is what a presigned upload must send.
+type Put struct {
+	ContentType string
+	// MD5 is the file's digest, which storage checks.
+	MD5 []byte
+	// Expires is how long the URL works; 15 minutes when zero.
+	Expires time.Duration
 }
 
 type Config struct {

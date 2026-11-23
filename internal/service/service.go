@@ -14,6 +14,7 @@ import (
 	"github.com/kiflet/backend/internal/modules/driversync"
 	"github.com/kiflet/backend/internal/modules/fleet"
 	"github.com/kiflet/backend/internal/modules/identity"
+	"github.com/kiflet/backend/internal/modules/proof"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"github.com/kiflet/backend/internal/modules/tenancy"
 	"github.com/kiflet/backend/internal/platform/events"
@@ -93,7 +94,10 @@ type Deps struct {
 	// ShipmentFiles are shipments' documents and charges.
 	ShipmentFiles shipments.Files
 	// Feed is the driversync module's change feed, which the sync reads.
-	Feed      driversync.Feed
+	Feed driversync.Feed
+	// Uploads are the proof module's: files a driver's app is about to
+	// store.
+	Uploads   proof.Uploads
 	Log       zerolog.Logger
 	Publisher Publisher
 	// Positions, when set, takes GPS fixes for the tracking workers; nil
@@ -139,6 +143,8 @@ type Services struct {
 	Webhooks  *WebhookService
 	// Idempotency remembers the first response to a keyed create.
 	Idempotency *IdempotencyService
+	// Uploads are the proof module's, which the driver API calls.
+	Uploads proof.Uploads
 }
 
 // New wires the services together.
@@ -155,10 +161,10 @@ func New(d Deps) *Services {
 	if d.Publisher == nil {
 		d.Publisher = nopPublisher{}
 	}
-	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments, shipmentFiles: d.ShipmentFiles, feed: d.Feed,
+	c := &core{pool: d.Pool, q: db.New(d.Pool), log: d.Log, pub: d.Publisher, now: d.Now, cfg: d.Settings, auditLog: d.Audit, tenancy: d.Tenancy, sessions: d.Sessions, codes: d.Codes, links: d.Links, signups: d.Signups, users: d.Users, fleet: d.Fleet, shipmentData: d.Shipments, shipmentFiles: d.ShipmentFiles, feed: d.Feed, uploads: d.Uploads,
 		positions: d.Positions, bus: d.Bus, remoteWorkers: d.RemoteWorkers, work: d.Work}
 
-	s := &Services{}
+	s := &Services{Uploads: d.Uploads}
 	s.Audit = &AuditService{core: c}
 	s.Idempotency = &IdempotencyService{core: c}
 	s.SMS = newSMSService(c, d.SMS)
@@ -217,6 +223,7 @@ type core struct {
 	shipmentData  shipments.Shipments
 	shipmentFiles shipments.Files
 	feed          driversync.Feed
+	uploads       proof.Uploads
 	// positions and outbox: see Deps.
 	positions     PositionQueue
 	bus           events.Bus

@@ -1,7 +1,9 @@
 package storage
 
 import (
+	"cmp"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -183,17 +185,23 @@ func (s *S3Storage) GetURL(ctx context.Context, path string) (string, error) {
 	return presignedReq.URL, nil
 }
 
-// PutURL is a presigned URL a phone or browser uploads one file to, of
-// the content type given, for 15 minutes.
-func (s *S3Storage) PutURL(ctx context.Context, path, contentType string) (string, error) {
+// PutURL is a presigned URL a phone or browser uploads one file to, for
+// p.Expires. The upload must send p's Content-Type, and its Content-MD5
+// when p has one: both are signed, and storage refuses a body whose MD5
+// isn't that one.
+func (s *S3Storage) PutURL(ctx context.Context, path string, p Put) (string, error) {
 	if path == "" {
 		return "", ErrInvalidPath
 	}
-	req, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
+	in := &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(strings.TrimPrefix(path, "/")),
-		ContentType: aws.String(contentType),
-	}, s3.WithPresignExpires(15*time.Minute))
+		ContentType: aws.String(p.ContentType),
+	}
+	if len(p.MD5) > 0 {
+		in.ContentMD5 = aws.String(base64.StdEncoding.EncodeToString(p.MD5))
+	}
+	req, err := s.presign.PresignPutObject(ctx, in, s3.WithPresignExpires(cmp.Or(p.Expires, 15*time.Minute)))
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
 	}

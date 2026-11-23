@@ -415,7 +415,9 @@ on our own VMs (image `dxflrs/garage`, pinned to a release; v2.5.0 on
 2026-11-19). The app talks to it through `pkg/storage`'s S3 adapter
 (aws-sdk-go-v2), so no module knows which store it is. The API hands out
 **presigned URLs**: phones upload photos straight to storage and the API
-never carries the bytes. Every object key starts with the tenant ID. Each
+never carries the bytes. (Without S3 storage, in development and the
+tests, `POST /api/v1/driver/uploads` gives the API's own URL instead,
+signed the same way, so the app works the same.) Every object key starts with the tenant ID. Each
 file of a delivery is a row of `pod_media`: its key, size and MD5, and
 when and where it was taken.
 

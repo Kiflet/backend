@@ -558,6 +558,19 @@ type TrackingEvent struct {
 	ClientID       *string            `db:"client_id" json:"client_id"`
 }
 
+type Upload struct {
+	ID          pgtype.UUID        `db:"id" json:"id"`
+	TenantID    pgtype.UUID        `db:"tenant_id" json:"tenant_id"`
+	DriverID    pgtype.UUID        `db:"driver_id" json:"driver_id"`
+	Kind        string             `db:"kind" json:"kind"`
+	StorageKey  string             `db:"storage_key" json:"storage_key"`
+	ContentType string             `db:"content_type" json:"content_type"`
+	SizeBytes   int64              `db:"size_bytes" json:"size_bytes"`
+	Md5         string             `db:"md5" json:"md5"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	StoredAt    pgtype.Timestamptz `db:"stored_at" json:"stored_at"`
+}
+
 type User struct {
 	ID                    pgtype.UUID        `db:"id" json:"id"`
 	TenantID              pgtype.UUID        `db:"tenant_id" json:"tenant_id"`

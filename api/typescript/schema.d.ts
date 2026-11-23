@@ -263,6 +263,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/driver/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get where to upload a delivery's files
+         * @description Before a delivery is sent, the app names each of its files (its kind, size and MD5) and gets back a storage key and a URL to PUT it to, with the headers to send, valid for 15 minutes. With the platform's storage the URL is storage's own, presigned, and the bytes never pass through the API; otherwise it is the API's (driverUploadFile). Either way the file must be the one named: storage refuses a body whose MD5 differs. A file is known by its content, so asking again for the same file gives the same key, with a fresh URL, and stored once it is there; the request needs no Idempotency-Key.
+         */
+        post: operations["driverPrepareUploads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/uploads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload a file to the API, when storage can't take it directly
+         * @description The URL driverPrepareUploads gave, with its token; the app sends no Authorization with it, as with a presigned URL. The body is the file, of the size, MD5 and type named. A file sent again is stored again.
+         */
+        put: operations["driverUploadFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/driver/sync": {
         parameters: {
             query?: never;
@@ -609,6 +649,42 @@ export interface components {
             saving_parked_check_s: number;
             /** @description In battery saver, fixes up to this vague are kept. */
             saving_max_accuracy_m: number;
+        };
+        UploadRequest: {
+            files: components["schemas"]["UploadFile"][];
+        };
+        UploadFile: {
+            /** @description photo (JPEG) or signature (PNG) */
+            kind: string;
+            /**
+             * Format: int64
+             * @description In bytes, at most 5 MB.
+             */
+            size: number;
+            /** @description The file's MD5, in lowercase hex. */
+            md5: string;
+        };
+        UploadTickets: {
+            uploads: components["schemas"]["UploadTicket"][];
+        };
+        UploadTicket: {
+            /** Format: uuid */
+            id: string;
+            /** @description The file's storage key, which the delivery names. */
+            key: string;
+            kind: string;
+            /** @description PUT */
+            method: string;
+            /** @description Where to send the file's bytes, with no Authorization. */
+            url: string;
+            /** @description The headers to send with them, Content-Type and Content-MD5 (base64), which the URL's signature covers. */
+            headers: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            expires_at: string;
+            /** @description The file is in storage already, through the API; there is no need to send it again. */
+            stored: boolean;
         };
         DriverMove: {
             /** @description The status it leads to; delivered opens the delivery. */
@@ -1349,6 +1425,67 @@ export interface operations {
             200: components["responses"]["OK"];
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    driverPrepareUploads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Where to put each file, in the order named */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadTickets"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    driverUploadFile: {
+        parameters: {
+            query: {
+                /** @description The URL's signature, as given. */
+                token: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/*": string;
+            };
+        };
+        responses: {
+            /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             429: components["responses"]["Error"];
         };
     };

@@ -659,6 +659,90 @@ paths:
           $ref: '#/components/responses/Error'
         '429':
           $ref: '#/components/responses/Error'
+  /driver/uploads:
+    post:
+      operationId: driverPrepareUploads
+      tags:
+      - driver
+      summary: Get where to upload a delivery's files
+      description: 'Before a delivery is sent, the app names each of its files
+        (its kind, size and MD5) and gets back a storage key and a URL to PUT it
+        to, with the headers to send, valid for 15 minutes. With the platform''s
+        storage the URL is storage''s own, presigned, and the bytes never pass
+        through the API; otherwise it is the API''s (driverUploadFile). Either
+        way the file must be the one named: storage refuses a body whose MD5
+        differs. A file is known by its content, so asking again for the same
+        file gives the same key, with a fresh URL, and stored once it is there;
+        the request needs no Idempotency-Key.'
+      security:
+      - driverToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadRequest'
+      responses:
+        '200':
+          description: Where to put each file, in the order named
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadTickets'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /driver/uploads/{id}:
+    put:
+      operationId: driverUploadFile
+      tags:
+      - driver
+      summary: Upload a file to the API, when storage can't take it directly
+      description: The URL driverPrepareUploads gave, with its token; the app
+        sends no Authorization with it, as with a presigned URL. The body is the
+        file, of the size, MD5 and type named. A file sent again is stored again.
+      security: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: token
+        in: query
+        required: true
+        description: The URL's signature, as given.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          image/*:
+            schema:
+              type: string
+              format: binary
+              description: The file, as image/jpeg (a photo) or image/png (a signature).
+      responses:
+        '204':
+          description: Stored
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
   /driver/sync:
     post:
       operationId: driverSync
@@ -1432,6 +1516,82 @@ components:
         saving_max_accuracy_m:
           type: integer
           description: In battery saver, fixes up to this vague are kept.
+    UploadRequest:
+      type: object
+      required:
+      - files
+      properties:
+        files:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/UploadFile'
+    UploadFile:
+      type: object
+      required:
+      - kind
+      - size
+      - md5
+      properties:
+        kind:
+          type: string
+          description: photo (JPEG) or signature (PNG)
+        size:
+          type: integer
+          format: int64
+          description: In bytes, at most 5 MB.
+        md5:
+          type: string
+          description: The file's MD5, in lowercase hex.
+    UploadTickets:
+      type: object
+      required:
+      - uploads
+      properties:
+        uploads:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadTicket'
+    UploadTicket:
+      type: object
+      required:
+      - id
+      - key
+      - kind
+      - method
+      - url
+      - headers
+      - expires_at
+      - stored
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          description: The file's storage key, which the delivery names.
+        kind:
+          type: string
+        method:
+          type: string
+          description: PUT
+        url:
+          type: string
+          description: Where to send the file's bytes, with no Authorization.
+        headers:
+          description: The headers to send with them, Content-Type and Content-MD5
+            (base64), which the URL's signature covers.
+          type: object
+          additionalProperties:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+        stored:
+          type: boolean
+          description: The file is in storage already, through the API; there
+            is no need to send it again.
     DriverMove:
       type: object
       required:

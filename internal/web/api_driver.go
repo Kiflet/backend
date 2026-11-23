@@ -14,6 +14,7 @@ import (
 
 	"github.com/kiflet/backend/internal/model"
 	"github.com/kiflet/backend/internal/modules/driversync"
+	"github.com/kiflet/backend/internal/modules/proof"
 	"github.com/kiflet/backend/internal/platform/text"
 	"github.com/kiflet/backend/internal/service"
 )
@@ -395,4 +396,44 @@ func pick(fields map[string]string, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// apiPrepareUploads gives the driver's app a key and a URL for each file
+// of a delivery it is about to send (the proof module's uploads). Asked
+// again for the same files, it gives the same keys, with fresh URLs.
+func (s *Server) apiPrepareUploads(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Files []proof.File `json:"files"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		s.apiError(w, r, err)
+		return
+	}
+	p := principal(r)
+	tickets, err := s.svc.Uploads.Prepare(r.Context(), proof.Driver{TenantID: p.TenantID, UserID: p.UserID}, req.Files)
+	if err != nil {
+		s.apiError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"uploads": tickets})
+}
+
+// apiReceiveUpload stores a file PUT to the API's own upload URL, when
+// storage can't take it directly.
+func (s *Server) apiReceiveUpload(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r, "id")
+	if err != nil {
+		s.apiError(w, r, &service.Error{Kind: service.KindNotFound, Message: "No such upload."})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, proof.MaxSize+1)
+	if err := s.svc.Uploads.Receive(r.Context(), id, r.URL.Query().Get("token"), r.Header.Get("Content-Type"), r.Body); err != nil {
+		if tooLarge(err) {
+			err = errTooLarge
+		}
+		s.apiError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

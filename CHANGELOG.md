@@ -124,6 +124,21 @@ What changed in each release, newest first.
 
 ### Added
 
+- **Uploads for the driver app** (`docs/migration.md`, phase 3, M5):
+  `POST /api/v1/driver/uploads` takes each file of a delivery (its kind,
+  size and MD5) and answers with a storage key, prefixed by the company,
+  and a URL to PUT it to before 15 minutes are out. With S3 storage the
+  URL is presigned with the file's `Content-MD5`, so Garage takes that
+  file only; otherwise it is the API's own, `PUT
+  /api/v1/driver/uploads/{id}`, signed by the server, which checks the
+  size, MD5 and type before storing it. The same file asked for again gets
+  the same key, marked `stored` once it is there. They are the new
+  `proof` module's (`uploads` table); deleting a company removes its
+  uploaded files too.
+  Migration `tenant_references` now adds each company key only where it
+  is missing instead of dropping and adding it, so that it still runs
+  again (`TestMigrations`) with `uploads` referencing `users`; a database
+  built from scratch gets the same schema.
 - **Versions and idempotency keys in the public API** (`docs/migration.md`,
   phase 2, step 4). A shipment's answers carry its version as an `ETag`;
   a change, assignment or cancellation sent with `If-Match` goes ahead only
