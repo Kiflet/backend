@@ -188,6 +188,38 @@ func CanUnassign(status string) bool {
 	return status == StatusAssigned
 }
 
+// What may be done to a shipment, as the API names it in a record's
+// actions (docs/architecture.md, section 11, "Conventions"): the clients
+// show the buttons these allow and work out nothing themselves.
+const (
+	ActionUpdate   = "update"
+	ActionAssign   = "assign"
+	ActionUnassign = "unassign"
+	ActionCancel   = "cancel"
+	ActionReopen   = "reopen"
+)
+
+// Actions are what may be done to a shipment in this status, in the order
+// a client shows them.
+func Actions(status string) []string {
+	out := []string{}
+	for _, a := range []struct {
+		code string
+		ok   bool
+	}{
+		{ActionUpdate, !IsFinalStatus(status)},
+		{ActionAssign, CanAssign(status)},
+		{ActionUnassign, CanUnassign(status)},
+		{ActionCancel, CanCancel(status)},
+		{ActionReopen, CanReopen(status)},
+	} {
+		if a.ok {
+			out = append(out, a.code)
+		}
+	}
+	return out
+}
+
 // Reason codes. Delay reasons are the predefined list drivers pick from
 // (FR-018 AC-018.3); issue and cancellation reasons follow the same pattern.
 var (

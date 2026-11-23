@@ -4,7 +4,8 @@
 // one (api.Surface): scripts/api-breaking.sh compares the public and
 // driver operations, which may not break, on their own. With -document,
 // the published description of the operations with that tag (api.Document):
-// make api writes the public API's openapi.json with it.
+// make api writes the public API's openapi.json with it. -webhooks=false
+// leaves the webhooks out of the -tags part.
 //
 //	go run ./internal/tools/apisurface -tags public,driver api/openapi/v1.yaml
 //	go run ./internal/tools/apisurface -document public api/openapi/v1.yaml
@@ -25,6 +26,7 @@ import (
 func main() {
 	tags := flag.String("tags", "public,driver", "the tags to keep, separated by commas")
 	document := flag.String("document", "", "write the published description of the operations with this tag")
+	webhooks := flag.Bool("webhooks", true, "with -tags, keep the webhooks")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: apisurface [-tags public,driver | -document public] specification.yaml")
@@ -47,6 +49,9 @@ func main() {
 		return
 	}
 	api.Surface(spec, strings.Split(*tags, ","))
+	if !*webhooks {
+		spec.Webhooks = nil
+	}
 	out := json.NewEncoder(os.Stdout)
 	out.SetIndent("", "  ")
 	if err := out.Encode(spec); err != nil {

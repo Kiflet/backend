@@ -11,15 +11,16 @@ const (
 
 // Kinds of codes with words.
 const (
-	KindStatus  = "status"
-	KindReason  = "reason"
-	KindRole    = "role"
-	KindAlert   = "alert"
-	KindHeld    = "held"    // why a delivery was held for review
-	KindInvoice = "invoice" // an invoice's state, and overdue
-	KindPayment = "payment"
-	KindMove    = "move"    // a driver's button for a status
-	KindRefusal = "refusal" // why the server refused a driver's item
+	KindStatus   = "status"
+	KindReason   = "reason"
+	KindRole     = "role"
+	KindAlert    = "alert"
+	KindHeld     = "held"    // why a delivery was held for review
+	KindInvoice  = "invoice" // an invoice's state, and overdue
+	KindPayment  = "payment"
+	KindMove     = "move"    // a driver's button for a status
+	KindRefusal  = "refusal" // why the server refused a driver's item
+	KindPriority = "priority"
 )
 
 // Label is a code's words for an audience, in lang: the audience's own

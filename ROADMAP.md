@@ -116,7 +116,7 @@ milestones, and phase 4 a wave ahead of Kiflet/web's.
 - [x] The providers' callbacks moved to `/api/callbacks/*`.
 - [x] The public API's 8 operations, and the driver's, in the
       specification; `openapi.json` generated from its public part.
-- [ ] The public API's shipments with `{code, label}` and `actions`.
+- [x] The public API's shipments with `{code, label}` and `actions`.
 
 ### Phase 3: the driver API, with Kiflet/mobile
 

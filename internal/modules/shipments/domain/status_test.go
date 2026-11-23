@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -139,6 +140,23 @@ func TestCancelReasonsFollowTheRoad(t *testing.T) {
 			if !slices.Contains(CancelReasons, r) || ReasonLabel(r) == r {
 				t.Errorf("%s: reason %q must be in CancelReasons and have a label", st, r)
 			}
+		}
+	}
+}
+
+// A shipment's actions follow its status: assigned is the only one a
+// driver can be taken off without a handover, a delivered one has nothing
+// left, and a cancelled one can only be reopened.
+func TestActions(t *testing.T) {
+	for status, want := range map[string]string{
+		StatusPending:   "update assign cancel",
+		StatusAssigned:  "update assign unassign cancel",
+		StatusInTransit: "update assign cancel",
+		StatusDelivered: "",
+		StatusCancelled: "reopen",
+	} {
+		if got := strings.Join(Actions(status), " "); got != want {
+			t.Errorf("%s: %q, want %q", status, got, want)
 		}
 	}
 }
