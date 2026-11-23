@@ -564,6 +564,51 @@ export interface components {
             max_photos: number;
             tile_url: string;
             tile_credit: string;
+            gps: components["schemas"]["DriverGPS"];
+            /** @description A photo is resized to this on its long side. */
+            photo_max_px: number;
+            /** @description Its JPEG quality, from 0 to 1. */
+            photo_quality: number;
+            /** @description How often the app syncs while on screen, in seconds. */
+            sync_interval_s: number;
+            /** @description How often in battery saver. */
+            sync_interval_saving_s: number;
+            /** @description For each status a driver may report by SMS, the text to send to sms_number, {ref} standing for the load's ref: "ET {ref} 3" for arrived. */
+            sms_commands: {
+                [key: string]: string;
+            };
+            /** @description How long a move may wait for data, in seconds, before the app offers to send it by SMS. */
+            sms_fallback_after_s: number;
+            /** @description The map's MapLibre styles, Desk (light) and Night (dark). Absent until the platform serves its tiles; the app then shows distance and direction only. */
+            map_styles?: {
+                light: string;
+                dark: string;
+            };
+        };
+        /** @description How the app records a trip, in metres and seconds. */
+        DriverGPS: {
+            /** @description Moving means more than this from the last position. */
+            moved_m: number;
+            /** @description While moving, at most one position this often. */
+            interval_s: number;
+            /** @description While moving, at least one this often. */
+            max_interval_s: number;
+            /** @description Within moved_m this long is parked; the GPS is off. */
+            parked_after_s: number;
+            /** @description Parked, a balanced fix this often. */
+            parked_check_s: number;
+            /** @description Parked, a fix this far away is moving again. */
+            parked_left_m: number;
+            /** @description Fixes vaguer than this are dropped. */
+            max_accuracy_m: number;
+            /** @description Battery saver starts below this charge (0 to 1) when not charging, or when the driver chooses it. */
+            saving_below_battery: number;
+            /** @description In battery saver, one position this often. */
+            saving_interval_s: number;
+            /** @description In battery saver, parked checks this often. */
+            saving_parked_check_s: number;
+            /** @description In battery saver, fixes up to this vague are kept. */
+            saving_max_accuracy_m: number;
         };
         DriverMove: {
             /** @description The status it leads to; delivered opens the delivery. */

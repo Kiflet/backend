@@ -418,6 +418,17 @@ var smsCodes = map[string]string{
 	"5": model.StatusIssue,
 }
 
+// SMSCommands are the texts a driver may send for each status, {ref}
+// standing for the load's ref (ShortRef): the driver app fills one in when
+// a move has waited too long for data (ParseSMSCommand reads them).
+func SMSCommands() map[string]string {
+	out := map[string]string{}
+	for code, status := range smsCodes {
+		out[status] = "ET {ref} " + code
+	}
+	return out
+}
+
 // SMSCommand is a parsed inbound message.
 type SMSCommand struct {
 	Keyword string // STOP, START, HELP, or "" for a status report

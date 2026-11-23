@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
@@ -78,7 +79,8 @@ func (s *Server) buildDriverConfig() ([]byte, string) {
 			podFrom = append(podFrom, st)
 		}
 	}
-	body, err := json.Marshal(map[string]any{
+	settings := driversync.DefaultSettings
+	config := map[string]any{
 		"app_name":      s.cfg.AppName,
 		"version":       s.version,
 		"sms_number":    s.cfg.SMSNumber,
@@ -94,7 +96,20 @@ func (s *Server) buildDriverConfig() ([]byte, string) {
 		"max_photos":       3,
 		"tile_url":         s.cfg.MapTileURL,
 		"tile_credit":      s.cfg.MapTileAttribution,
-	})
+
+		"gps":                    settings.GPS,
+		"photo_max_px":           settings.PhotoMaxPx,
+		"photo_quality":          settings.PhotoQuality,
+		"sync_interval_s":        settings.SyncIntervalS,
+		"sync_interval_saving_s": settings.SyncIntervalSavingS,
+		"sms_commands":           service.SMSCommands(),
+		"sms_fallback_after_s":   settings.SMSFallbackAfterS,
+	}
+	if light := s.cfg.MapStyleURL; light != "" {
+		dark := cmp.Or(s.cfg.MapStyleDarkURL, light)
+		config["map_styles"] = map[string]string{"light": light, "dark": dark}
+	}
+	body, err := json.Marshal(config)
 	if err != nil {
 		panic(err) // maps of strings
 	}

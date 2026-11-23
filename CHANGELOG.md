@@ -307,6 +307,17 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The driver config has the app's settings** (`docs/migration.md`,
+  phase 3, M4), so they can be tuned by a deploy rather than a release of
+  the app: `gps` (today's rules from the PWA's `gps.js`: 75 m, a position
+  a minute and at least every 5 minutes, parked after 10 minutes, battery
+  saver under 20%), `photo_max_px` (1280) and `photo_quality` (0.6),
+  `sync_interval_s` (60) and `sync_interval_saving_s` (300),
+  `sms_commands` (`ET {ref} 3` for arrived, from the codes the server
+  reads) and `sms_fallback_after_s` (15 minutes), from
+  `driversync.DefaultSettings`; and `map_styles`, the MapLibre styles
+  named by the new `MAP_STYLE_URL` and `MAP_STYLE_DARK_URL`, absent until
+  they are set.
 - **The driver config has the moves in order, the driver's words and an
   ETag** (`docs/migration.md`, phase 3, M3). `transitions` lists a
   driver's next step first (arrived from in transit; the office's stay in

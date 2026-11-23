@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kiflet/backend/internal/model"
+	"github.com/kiflet/backend/internal/modules/driversync"
 	"github.com/kiflet/backend/internal/service"
 )
 
@@ -23,6 +24,9 @@ func TestDriverConfig(t *testing.T) {
 		Moves       map[string][]model.Move                 `json:"moves"`
 		PODFrom     []string                                `json:"pod_from"`
 		Labels      map[string]map[string]map[string]string `json:"labels"`
+		driversync.Settings
+		SMSCommands map[string]string  `json:"sms_commands"`
+		MapStyles   *map[string]string `json:"map_styles"`
 	}
 	st, h := e.apiWithHeaders(http.MethodGet, "/api/v1/driver/config", "", nil, &config)
 	tag := h.Get("ETag")
@@ -69,6 +73,20 @@ func TestDriverConfig(t *testing.T) {
 		}
 	}
 
+	// The numbers the app works by, and the texts it offers without data.
+	if config.Settings != driversync.DefaultSettings {
+		t.Errorf("settings: %+v", config.Settings)
+	}
+	if config.GPS.MovedM != 75 || config.SMSFallbackAfterS != 900 {
+		t.Errorf("gps %+v, SMS after %d s", config.GPS, config.SMSFallbackAfterS)
+	}
+	if got := config.SMSCommands[model.StatusArrived]; got != "ET {ref} 3" {
+		t.Errorf("the SMS for arrived: %q", got)
+	}
+	if config.MapStyles != nil {
+		t.Errorf("no map style is set, yet the config names %v", *config.MapStyles)
+	}
+
 	// Fetched again: unchanged.
 	if st, h := e.apiSending(http.MethodGet, "/api/v1/driver/config", "", map[string]string{"If-None-Match": tag}, nil, nil); st != http.StatusNotModified || h.Get("ETag") != tag {
 		t.Errorf("config with its own ETag: status %d, ETag %q", st, h.Get("ETag"))
@@ -83,5 +101,18 @@ func TestDriverConfig(t *testing.T) {
 	resp, code := e.signIn(phone, pin).sync(service.SyncRequest{})
 	if code != http.StatusOK || resp.ConfigETag != tag {
 		t.Errorf("sync: status %d, config_etag %q, want %q", code, resp.ConfigETag, tag)
+	}
+}
+
+// TestDriverMapStyles (operations): the driver app's map is drawn in the
+// styles the deployment names, the dark one the light unless set.
+func TestDriverMapStyles(t *testing.T) {
+	e := newEnv(t, func(s *setup) { s.cfg.MapStyleURL = "https://tiles.example/desk.json" })
+	var config struct {
+		MapStyles map[string]string `json:"map_styles"`
+	}
+	if st := e.api(http.MethodGet, "/api/v1/driver/config", "", nil, &config); st != http.StatusOK ||
+		config.MapStyles["light"] != "https://tiles.example/desk.json" || config.MapStyles["dark"] != "https://tiles.example/desk.json" {
+		t.Errorf("status %d, map styles %v", st, config.MapStyles)
 	}
 }

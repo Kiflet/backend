@@ -102,3 +102,20 @@ func firstRunes(s string, n int) string {
 	}
 	return string(r)
 }
+
+// The texts the driver app fills in when it has no data are ones the
+// server reads back as the same move, for each status a driver may report.
+func TestSMSCommandsParseBack(t *testing.T) {
+	cmds := SMSCommands()
+	for _, status := range []string{model.StatusInTransit, model.StatusDelayed, model.StatusArrived, model.StatusDelivered, model.StatusIssue} {
+		tpl, ok := cmds[status]
+		if !ok {
+			t.Errorf("no command for %s", status)
+			continue
+		}
+		cmd, err := ParseSMSCommand(strings.ReplaceAll(tpl, "{ref}", ShortRef("ET-2026-7K3M")))
+		if err != nil || cmd.Status != status || cmd.Ref != "7K3M" {
+			t.Errorf("%s: %q parsed as %+v, %v", status, tpl, cmd, err)
+		}
+	}
+}

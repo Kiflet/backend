@@ -47,6 +47,11 @@ type Config struct {
 
 	MapTileURL         string
 	MapTileAttribution string
+	// MapStyleURL and MapStyleDarkURL are the MapLibre styles the driver app
+	// draws its map in, Desk and Night: the platform's own tiles once they
+	// are served (ROADMAP). Unset, the app shows distance and direction.
+	MapStyleURL     string
+	MapStyleDarkURL string
 	// MapSatelliteURL is the imagery offered as a satellite view on the maps;
 	// "off" leaves the maps without one.
 	MapSatelliteURL         string
@@ -204,6 +209,8 @@ func Load() (*Config, error) {
 		MetricsToken:            getEnv("METRICS_TOKEN", ""),
 		MapTileURL:              getEnv("MAP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
 		MapTileAttribution:      getEnv("MAP_TILE_ATTRIBUTION", `&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors`),
+		MapStyleURL:             getEnv("MAP_STYLE_URL", ""),
+		MapStyleDarkURL:         getEnv("MAP_STYLE_DARK_URL", ""),
 		MapSatelliteURL:         getEnv("MAP_SATELLITE_URL", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"),
 		MapSatelliteAttribution: getEnv("MAP_SATELLITE_ATTRIBUTION", "Imagery &copy; Esri, Maxar, Earthstar Geographics"),
 		StorageType:             getEnv("STORAGE_TYPE", "local"),

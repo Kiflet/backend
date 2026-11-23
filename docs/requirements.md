@@ -74,6 +74,7 @@ end-to-end test names one; unit tests may.
 |:--|:--|
 | TestBackupAndRestore | end to end |
 | TestBrokerRetries | integration |
+| TestDriverMapStyles | integration |
 | TestEdge | end to end |
 | TestGarageSetup | integration |
 | TestMetrics | integration |
