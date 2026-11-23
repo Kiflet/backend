@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"github.com/kiflet/backend/internal/modules/shipments"
 	"net/http"
 	"strconv"
@@ -197,10 +196,10 @@ func decodeAPI(r *http.Request, v any) error {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		msg := "The request body is not valid JSON."
-		var tooBig *http.MaxBytesError
-		if errors.As(err, &tooBig) {
-			msg = "The request body is larger than the API takes (64 KB)."
-		} else if f, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+		if tooLarge(err) {
+			return &service.Error{Kind: service.KindTooLarge, Message: "The request body is larger than the API takes (64 KB)."}
+		}
+		if f, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
 			msg = "The request has a field the API doesn't know: " + f + "."
 		}
 		return &service.Error{Kind: service.KindInvalid, Message: msg}

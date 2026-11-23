@@ -52,8 +52,8 @@ end-to-end test names one; unit tests may.
 | FR-036 Shipment Tracking (Customer) | TestCodeLimitsLookTheSame, TestCodeTriesCannotRace, TestCustomersInAmharic, TestDeliveryLifecycle, TestPublicTrackingIsMinimal, TestTrackingPageDetails | TestDelivery |  |
 | FR-037 SMS Notifications (Customer) | TestConsignee, TestCustomersInAmharic, TestCustomersInEnglishByDefault, TestDeliveryReportBeforeTheTextIsSaved, TestGatewayFaults, TestSMSTexts, TestTextsThroughTheGateway | TestDelivery |  |
 | FR-038 Delivery Confirmation (Customer) | TestDeliveryLifecycle | TestDelivery |  |
-| FR-039 Automatic Sync Protocol | TestFeedBroadcasts, TestFeedDeliversLateCommits, TestFeedFullDownloads, TestFeedPageOfExactlyTheLimit, TestFeedRemovesWithReasons, TestManyMessagesArriveInPages, TestSlowPhoneClock, TestSyncReplayIsIdempotent |  |  |
-| FR-040 Conflict Resolution | TestHeldPODAfterReassignment, TestHeldPODOnCancelledShipment, TestOfficeDecisionWinsOverStaleDriverUpdate, TestResentSyncIsNotAConflict, TestVersionsRaisedByEdits |  |  |
+| FR-039 Automatic Sync Protocol | TestFeedBroadcasts, TestFeedDeliversLateCommits, TestFeedFullDownloads, TestFeedPageOfExactlyTheLimit, TestFeedRemovesWithReasons, TestManyMessagesArriveInPages, TestSlowPhoneClock, TestSyncRefusals, TestSyncReplayIsIdempotent |  |  |
+| FR-040 Conflict Resolution | TestHeldPODAfterReassignment, TestHeldPODOnCancelledShipment, TestOfficeDecisionWinsOverStaleDriverUpdate, TestResentSyncIsNotAConflict, TestSyncRefusals, TestVersionsRaisedByEdits |  |  |
 | FR-041 Data Retention | TestExportHoldsEverything, TestRemovePersonDetails, TestRetentionClearsAccountLinks, TestRetentionRemovesOldCustomerDetails |  |  |
 | FR-042 Audit Logging | TestHistoryIsAppendOnly, TestPlatformAuditAndHealth |  |  |
 | FR-043 Subscription Plans | TestCancelSubscription, TestCancelWithRenewalUnpaid, TestDowngradeWaitsForTheEndOfThePeriod, TestEnterpriseTerms, TestPayingForAPlan, TestTrialEndMakesTheAccountReadOnly, TestTrialNotices, TestUpgradeIsProrated |  |  |

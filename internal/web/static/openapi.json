@@ -46,7 +46,7 @@
             }
           }
         },
-        "description": "An error. 400: the request is wrong (validation_error). 401: no working key (unauthorized). 402: a plan limit (plan_limit). 403: the company is suspended or read-only until an invoice is paid (forbidden). 404: no such shipment for this company (not_found). 409: the shipment is in a status that doesn't allow it (conflict). 429: too many requests (rate_limited). 409 also: the first request with this Idempotency-Key is still running (idempotency_key_in_flight). 412: the shipment changed since the If-Match (version_mismatch). 422: an Idempotency-Key sent again with another request (idempotency_key_reused)."
+        "description": "An error. 400: the request is wrong (validation_error). 401: no working key (unauthorized). 402: a plan limit (plan_limit). 403: the company is suspended or read-only until an invoice is paid (forbidden). 404: no such shipment for this company (not_found). 409: the shipment is in a status that doesn't allow it (conflict). 403 tenant_suspended: the company is paused (a driver's app keeps everything and tries later). 413 too_large: the request is larger than the server takes (send less at a time). 429: too many requests (rate_limited). 409 also: the first request with this Idempotency-Key is still running (idempotency_key_in_flight). 412: the shipment changed since the If-Match (version_mismatch). 422: an Idempotency-Key sent again with another request (idempotency_key_reused)."
       },
       "ShipmentVersionMismatch": {
         "content": {

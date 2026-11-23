@@ -3,6 +3,8 @@
 package integration
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -328,5 +330,68 @@ func TestFleetMapKeepsTheNewestPosition(t *testing.T) {
 	exec(t, `UPDATE driver_positions SET recorded_at = NOW() - INTERVAL '8 days' WHERE driver_id = $1`, driverID)
 	if _, _, n := pin1(); n != 0 {
 		t.Error("a position more than a week old should be off the map")
+	}
+}
+
+// TestSyncRefusals (FR-039, FR-040): each item the server refuses carries
+// a stable code the app chooses its words by, and the whole request is
+// answered 413 when too large and 403 tenant_suspended when the company is
+// paused, so the app knows to halve its batches, or to keep everything and
+// wait.
+func TestSyncRefusals(t *testing.T) {
+	e := newEnv(t)
+	office := e.company("Refusing Freight")
+	driverID, phone, pin := office.addDriver("Mulu Getachew")
+	otherID, _, _ := office.addDriver("Yonas Alemu")
+	d := e.signIn(phone, pin)
+
+	cancelled, _ := office.book("Addis Ababa", "Adama", driverID)
+	office.mustPost("/app/shipments/"+cancelled+"/cancel", url.Values{"reason": {"duplicate"}})
+	given, _ := office.book("Addis Ababa", "Hawassa", driverID)
+	office.mustPost("/app/shipments/"+given+"/assign", url.Values{"driver_id": {otherID}})
+	nobodys, _ := office.book("Addis Ababa", "Dire Dawa", "")
+	mine, _ := office.book("Addis Ababa", "Bahir Dar", driverID)
+
+	for _, c := range []struct {
+		why, shipment, status, code string
+	}{
+		{"a cancelled load", cancelled, "in_transit", "cancelled"},
+		{"a load given to another driver", given, "in_transit", "reassigned"},
+		{"a load no one has", nobodys, "in_transit", "not_found"},
+		{"no such load", "00000000-0000-0000-0000-000000000000", "in_transit", "not_found"},
+		{"a status that doesn't exist", mine, "teleported", "invalid"},
+	} {
+		if r := d.status(clientID(), c.shipment, c.status); r.OK || r.Retry || r.Code != c.code || r.Message == "" {
+			t.Errorf("%s: %+v, want %s", c.why, r, c.code)
+		}
+	}
+
+	// Too large, even once it is unzipped.
+	var gz bytes.Buffer
+	w := gzip.NewWriter(&gz)
+	_, _ = w.Write([]byte(`{"statuses": [], "pad": "`))
+	_, _ = w.Write(bytes.Repeat([]byte("x"), 33<<20))
+	_, _ = w.Write([]byte(`"}`))
+	_ = w.Close()
+	req, _ := http.NewRequest(http.MethodPost, e.srv.URL+"/api/v1/driver/sync", &gz)
+	req.Header.Set("Authorization", "Bearer "+d.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fail apiFailure
+	_ = json.NewDecoder(res.Body).Decode(&fail)
+	res.Body.Close()
+	if res.StatusCode != http.StatusRequestEntityTooLarge || fail.Error.Code != "too_large" {
+		t.Errorf("a sync of 33 MB unzipped: status %d %q", res.StatusCode, fail.Error.Code)
+	}
+
+	// A paused company.
+	exec(t, `UPDATE tenants SET is_active = false WHERE id = (SELECT tenant_id FROM users WHERE id = $1)`, driverID)
+	fail = apiFailure{}
+	if st := e.api(http.MethodPost, "/api/v1/driver/sync", d.token, service.SyncRequest{DeviceID: "d"}, &fail); st != http.StatusForbidden || fail.Error.Code != "tenant_suspended" {
+		t.Errorf("a suspended company's driver: status %d %q", st, fail.Error.Code)
 	}
 }

@@ -486,7 +486,7 @@ tests.
 
 | Kiflet/mobile needs it by | This repository delivers | Modules moved |
 |---|---|---|
-| M2: the database and the sync engine | the sync's new response (the feed, `full`, removals with their reasons) in the specification; stable refusal codes (`cancelled`, `reassigned`, `stale`, `held_for_review`, `invalid`; `tenant_suspended` for a paused company); `413` for a request too large | driversync |
+| M2: the database and the sync engine (done) | the sync's new response (the feed, `full`, removals with their reasons) in the specification; stable refusal codes (`cancelled`, `reassigned`, `stale`, `held_for_review`, `invalid`; `tenant_suspended` for a paused company); `413` for a request too large | driversync |
 | M3: the screens | in config: the driver's words for every code in English and Amharic (`labels`); `transitions` in order, the first being the main button; an `ETag` | |
 | M4: GPS with the screen off | in config: the GPS numbers (`gps`), photo size and quality, the sync intervals, the SMS commands and when to offer them, the map's style | tracking |
 | M5: delivery, uploads, push | `POST /api/v1/driver/uploads`: presigned PUTs to Garage, bound to the company and the driver, checked by size and MD5 (`uploads`); deliveries sent with storage keys and each photo's time and place (into `pod_media`), inline data still accepted from the PWA; `POST /api/v1/driver/push-token` (`push_tokens`) and a notify worker sending Expo pushes for a new load, a change, a cancellation and a message, the outbox's first consumer (D9) | proof, messaging, notify (push) |

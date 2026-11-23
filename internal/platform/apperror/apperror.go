@@ -63,6 +63,8 @@ const (
 	// KindPrecondition is a change made from a copy that is no longer
 	// current (If-Match).
 	KindPrecondition
+	// KindTooLarge is a request larger than the server takes.
+	KindTooLarge
 )
 
 // HTTPStatus maps a Kind to a status code.
@@ -80,6 +82,8 @@ func (k Kind) HTTPStatus() int {
 		return http.StatusPaymentRequired
 	case KindPrecondition:
 		return http.StatusPreconditionFailed
+	case KindTooLarge:
+		return http.StatusRequestEntityTooLarge
 	default:
 		return http.StatusBadRequest
 	}
@@ -101,6 +105,8 @@ func (k Kind) Code() string {
 		return "plan_limit"
 	case KindPrecondition:
 		return "version_mismatch"
+	case KindTooLarge:
+		return "too_large"
 	default:
 		return "validation_error"
 	}

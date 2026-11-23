@@ -368,7 +368,19 @@ func (s *Server) apiError(w http.ResponseWriter, r *http.Request, err error) {
 func decodeJSON(r *http.Request, v any) error {
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(v); err != nil {
+		if tooLarge(err) {
+			return errTooLarge
+		}
 		return &service.Error{Kind: service.KindInvalid, Message: "The request body is not valid JSON."}
 	}
 	return nil
+}
+
+// errTooLarge is a body past the limit: 413, so the driver app halves its
+// batches (docs/architecture.md, section 11, "The driver sync").
+var errTooLarge = &service.Error{Kind: service.KindTooLarge, Message: "The request is larger than the server takes. Send less at a time."}
+
+func tooLarge(err error) bool {
+	var e *http.MaxBytesError
+	return errors.As(err, &e)
 }

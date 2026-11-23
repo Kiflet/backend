@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"time"
 
@@ -449,7 +450,7 @@ func (s *SyncService) applyPOD(ctx context.Context, a Actor, in SyncPOD, at time
 		prior, err := s.q.GetPODByClientID(ctx, db.GetPODByClientIDParams{TenantID: a.TenantID, DriverID: a.UserID, ClientID: &in.ClientID})
 		if err == nil {
 			if prior.Status != PODAccepted {
-				return resultFor(r, conflict(heldMessage(deref(prior.HeldReason))))
+				return resultFor(r, heldForReview(deref(prior.HeldReason)))
 			}
 			return r
 		}
@@ -466,7 +467,7 @@ func (s *SyncService) applyPOD(ctx context.Context, a Actor, in SyncPOD, at time
 			return resultFor(r, err)
 		}
 		if !had {
-			return resultFor(r, ErrNotAssigned)
+			return resultFor(r, notYours(pgtype.UUID{}))
 		}
 	}
 	sig, photos, err := s.media.SavePOD(ctx, id.String(), in.Signature, in.Photos)
@@ -478,8 +479,6 @@ func (s *SyncService) applyPOD(ctx context.Context, a Actor, in SyncPOD, at time
 	return resultFor(r, err)
 }
 
-// resultFor classifies an outcome: domain errors are final, anything else is
-// a fault on our side the device should retry.
 // syncOutcome names a result for /metrics.
 func syncOutcome(r SyncResult) string {
 	switch {
@@ -491,21 +490,34 @@ func syncOutcome(r SyncResult) string {
 	return "refused"
 }
 
+// resultFor classifies an outcome by the sync's refusal codes
+// (driversync.Refused*; docs/architecture.md, section 11, "Refused
+// items"): an error that names one keeps it; otherwise a missing or
+// forbidden load is not_found, a move the load's state no longer allows
+// (the office changed it meanwhile) stale, and other bad input invalid.
+// These are final; anything else is a fault on our side, retried.
 func resultFor(r SyncResult, err error) SyncResult {
 	if err == nil {
 		return r
 	}
 	r.OK = false
-	if errors.Is(err, ErrStaleUpdate) {
-		r.Code, r.Message = "stale", ErrStaleUpdate.Message
+	de, ok := AsError(err)
+	if !ok {
+		r.Retry = true
+		r.Code, r.Message = driversync.RefusedServerError, "The server couldn't save this. It will be retried."
 		return r
 	}
-	if de, ok := AsError(err); ok {
-		r.Code, r.Message = de.Kind.Code(), de.Message
-		return r
+	r.Message = de.Message
+	switch {
+	case slices.Contains(driversync.Refusals, de.Code):
+		r.Code = de.Code
+	case errors.Is(err, ErrStaleUpdate), de.Kind == KindConflict:
+		r.Code = driversync.RefusedStale
+	case de.Kind == KindNotFound, de.Kind == KindForbidden:
+		r.Code = driversync.RefusedNotFound
+	default:
+		r.Code = driversync.RefusedInvalid
 	}
-	r.Retry = true
-	r.Code, r.Message = "server_error", "The server couldn't save this. It will be retried."
 	return r
 }
 

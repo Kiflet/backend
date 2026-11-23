@@ -307,6 +307,16 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The sync's refusals have stable codes** (`docs/migration.md`, phase 3,
+  M2), the ones the app chooses its words by: `cancelled` (a move made
+  after the office cancelled the load), `reassigned` (the load is another
+  driver's), `stale` (the office changed it after the move was made, or
+  the move no longer fits), `held_for_review` (a delivery kept for the
+  office), `not_found`, `invalid` and `server_error`, in place of the
+  error kinds. A paused company's driver gets `403 tenant_suspended` (an
+  API key too), and a request too large `413 too_large`, also when it is
+  only too large unzipped: a gzipped sync was cut short at 32 MB and
+  answered as bad JSON.
 - **The public API's `openapi.json` is generated** from
   `api/openapi/v1.yaml` (`docs/migration.md`, phase 2, step 6): `make api`
   writes its public operations, the webhooks and the components they use,
