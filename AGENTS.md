@@ -166,10 +166,10 @@ make lint                          # golangci-lint, node --check, gitleaks over 
   needs the pull request's `api-break` label.
 - The public API (`api_public.go`) acts as its key's `service.Actor`
   through the same services as the dashboard; it has no rules of its own.
-  `static/openapi.json` describes it, and `TestOpenAPIMatchesTheAPI` checks
-  that the two have the same routes and fields: change them together, and
-  with `api/openapi/v1.yaml`, which must have the same public operations
-  until `openapi.json` is made from it.
+  `static/openapi.json`, which it serves, is `api/openapi/v1.yaml`'s
+  public part, written by `make api` (never by hand), and
+  `TestOpenAPIMatchesTheAPI` checks that it has the code's routes and
+  fields.
 - Webhooks subscribe to `shipment.*` on the bus and are written with the
   shipment's history: a new kind of event reaches them by adding it to
   `webhookTypes` in `internal/service/webhooks.go`. Their payload is the

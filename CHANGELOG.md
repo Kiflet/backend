@@ -307,6 +307,13 @@ What changed in each release, newest first.
 
 ### Changed
 
+- **The public API's `openapi.json` is generated** from
+  `api/openapi/v1.yaml` (`docs/migration.md`, phase 2, step 6): `make api`
+  writes its public operations, the webhooks and the components they use,
+  with the `public` tag's text as the description (`api.Document`,
+  `apisurface -document public`). It is what was written by hand, and it
+  now lists `GET /openapi.json` itself. CI fails when it isn't current, as
+  does `TestOpenAPIIsThePublicPart`.
 - **The API's errors take the conventions** (`docs/migration.md`, phase 2,
   step 4). Codes are lowercase snake case (`validation_error`,
   `not_found`, `rate_limited`; they were upper case) and open: the
