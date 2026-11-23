@@ -211,6 +211,19 @@ func (u *Uploads) Find(ctx context.Context, d proof.Driver, kind, key string) (p
 	return proof.Upload{Key: row.StorageKey, Kind: row.Kind, ContentType: row.ContentType, MD5: row.Md5, Size: row.SizeBytes}, nil
 }
 
+func (u *Uploads) Expire(ctx context.Context, before time.Time) (int, error) {
+	keys, err := u.q.DeleteUnusedUploads(ctx, pgtype.Timestamptz{Time: before, Valid: true})
+	if err != nil {
+		return 0, err
+	}
+	for _, k := range keys {
+		if err := u.files.Delete(ctx, k); err != nil && !errors.Is(err, storage.ErrFileNotFound) {
+			return len(keys), fmt.Errorf("delete %s: %w", k, err)
+		}
+	}
+	return len(keys), nil
+}
+
 func (u *Uploads) TenantKeys(ctx context.Context, conn database.Conn, tenantID pgtype.UUID) ([]string, error) {
 	return store.New(conn).ListTenantUploadKeys(ctx, tenantID)
 }

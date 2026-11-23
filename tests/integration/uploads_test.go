@@ -331,6 +331,29 @@ func TestDeliveryByUploadedFiles(t *testing.T) {
 			t.Errorf("%s: %+v", why, r)
 		}
 	}
+
+	// A month on, the uploads no delivery used go, with their files; those
+	// the delivery uses stay, and so do recent ones.
+	unused := d.prepare(describe(proof.KindPhoto, append(append([]byte{}, photo...), 0xFF, 0xD9, 0xFF, 0xD9)))[0]
+	recent := d.prepare(describe(proof.KindPhoto, append(append([]byte{}, photo...), 0xFF, 0xD9, 0xFF, 0xD9, 0xFF, 0xD9)))[0]
+	if st, body := put(t, unused, append(append([]byte{}, photo...), 0xFF, 0xD9, 0xFF, 0xD9), nil); st != http.StatusNoContent {
+		t.Fatalf("upload the unused photo: %d %s", st, body)
+	}
+	exec(t, `UPDATE uploads SET created_at = now() - interval '31 days' WHERE storage_key = ANY($1)`, []string{unused.Key, tk[1].Key})
+	if err := e.svc.Jobs.Retention(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]int64{unused.Key: 0, tk[1].Key: 1, recent.Key: 1} {
+		if n := scalar[int64](t, `SELECT COUNT(*) FROM uploads WHERE storage_key = $1`, key); n != want {
+			t.Errorf("upload %s: %d rows, want %d", key, n, want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(e.files, tk[1].Key)); err != nil {
+		t.Errorf("retention removed a delivery's photo: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(e.files, unused.Key)); !os.IsNotExist(err) {
+		t.Errorf("the unused photo is still stored: %v", err)
+	}
 }
 
 // TestDeliveryByPresignedFiles (FR-021): a delivery naming files put

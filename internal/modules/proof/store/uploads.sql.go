@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteUnusedUploads = `-- name: DeleteUnusedUploads :many
+DELETE FROM uploads u
+WHERE u.created_at < $1
+  AND NOT EXISTS (SELECT 1 FROM pod_media m WHERE m.tenant_id = u.tenant_id AND m.storage_key = u.storage_key)
+RETURNING storage_key
+`
+
+// tenant: none, retention, across every company.
+// Uploads past the cut-off that no proof of delivery names.
+func (q *Queries) DeleteUnusedUploads(ctx context.Context, before pgtype.Timestamptz) ([]string, error) {
+	rows, err := q.db.Query(ctx, deleteUnusedUploads, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var storage_key string
+		if err := rows.Scan(&storage_key); err != nil {
+			return nil, err
+		}
+		items = append(items, storage_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getDriverUploadByKey = `-- name: GetDriverUploadByKey :one
 SELECT id, tenant_id, driver_id, kind, storage_key, content_type, size_bytes, md5, created_at, stored_at FROM uploads WHERE tenant_id = $1 AND driver_id = $2 AND storage_key = $3
 `

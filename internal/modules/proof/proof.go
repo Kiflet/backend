@@ -40,6 +40,10 @@ const MaxFiles = 10
 // Expires is how long an upload's URL works.
 const Expires = 15 * time.Minute
 
+// Retention is how long an upload no delivery used is kept: long enough
+// for a driver offline for days to send the delivery that names it.
+const Retention = 30 * 24 * time.Hour
+
 // Uploads is what other modules and the API may call.
 type Uploads interface {
 	// Prepare records the files a driver is about to upload, or finds
@@ -53,6 +57,9 @@ type Uploads interface {
 	// names it: theirs, of the kind given, and in storage, or ErrNotStored
 	// when it hasn't reached storage yet.
 	Find(ctx context.Context, d Driver, kind, key string) (Upload, error)
+	// Expire removes the uploads no delivery used that were prepared
+	// before the cut-off, and their files, and says how many.
+	Expire(ctx context.Context, before time.Time) (int, error)
 	// TenantKeys are a company's files, read within the transaction that
 	// deletes it (conn), to be removed from storage once it commits; its
 	// rows go with it.

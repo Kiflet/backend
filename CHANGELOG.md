@@ -133,6 +133,9 @@ What changed in each release, newest first.
   of refusing the delivery. The files become the proof's `pod_media` with
   their size, MD5, time and place (AC-021.3, AC-021.4), and a refused or
   replayed proof leaves them where they are. `geo.Valid` checks a place.
+  Uploads no delivery names are removed, with their files, by the hourly
+  retention 30 days after they were prepared (`proof.Retention`), long
+  enough for a driver offline for days.
 - **Uploads for the driver app** (`docs/migration.md`, phase 3, M5):
   `POST /api/v1/driver/uploads` takes each file of a delivery (its kind,
   size and MD5) and answers with a storage key, prefixed by the company,
